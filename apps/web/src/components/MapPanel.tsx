@@ -182,10 +182,20 @@ function spawnSeismicRing(
   }, lifeMs);
 }
 
-function spawnWavefront(viewer: Viewer, longitude: number, latitude: number, depthKm: number | null): void {
+function spawnWavefront(
+  viewer: Viewer,
+  longitude: number,
+  latitude: number,
+  depthKm: number | null,
+  magnitude: number | null
+): void {
   const depthM = Math.max(0, (depthKm ?? 0) * 1000);
-  spawnSeismicRing(viewer, longitude, latitude, WAVE_P_COLOR, VP_MPS, depthM, 2);
-  spawnSeismicRing(viewer, longitude, latitude, WAVE_S_COLOR, VS_MPS, depthM, 3);
+  const magColor = Color.fromCssColorString(magnitudeCssColor(magnitude));
+
+  // Onda P (primaria, más rápida)
+  spawnSeismicRing(viewer, longitude, latitude, magColor, VP_MPS, depthM, 2);
+  // Onda S (secundaria, más lenta pero con borde un poco más grueso)
+  spawnSeismicRing(viewer, longitude, latitude, magColor, VS_MPS, depthM, 3);
 }
 
 function setupBasemap(viewer: Viewer): void {
@@ -472,14 +482,20 @@ export function MapPanel({
           maximumHeight,
           easingFunction: EasingFunction.QUADRATIC_IN_OUT
         });
-        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm);
+        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm, event.magnitude);
         selectionWaveTimerRef.current = window.setInterval(() => {
           if (viewer.isDestroyed()) return;
           const activeId = selectedIdRef.current;
           if (!activeId) return;
           const activeEvent = eventMapRef.current.get(activeId);
           if (!activeEvent) return;
-          spawnWavefront(viewer, activeEvent.longitude, activeEvent.latitude, activeEvent.depthKm);
+          spawnWavefront(
+            viewer,
+            activeEvent.longitude,
+            activeEvent.latitude,
+            activeEvent.depthKm,
+            activeEvent.magnitude
+          );
         }, SELECTION_WAVE_INTERVAL_MS);
       }
     }
