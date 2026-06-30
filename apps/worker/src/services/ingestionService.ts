@@ -40,11 +40,31 @@ const SOURCE_INTERVALS_MS: Record<OperationalSourceCode, number> = {
   NOAA_NTWC: 120_000
 };
 
+const STALE_RUNNING_GRACE_MS = 15 * 60_000;
+const STALE_RUNNING_MESSAGE = "Sanitized stale running entry: worker stopped before marking completion";
+
 export type SourceRunSummary = RunStats & {
   source: OperationalSourceCode;
   status: "success" | "error";
   errorMessage: string | null;
 };
+
+async function sanitizeStaleRuns(now = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - STALE_RUNNING_GRACE_MS);
+  const result = await pool.query(
+    `
+      UPDATE ingestion_runs
+      SET
+        finished_at = COALESCE(finished_at, NOW()),
+        status = 'error',
+        error_message = COALESCE(error_message, $2)
+      WHERE status = 'running'
+        AND started_at < $1
+    `,
+    [cutoff, STALE_RUNNING_MESSAGE]
+  );
+  return result.rowCount ?? 0;
+}
 
 async function isSourceDue(source: OperationalSourceCode): Promise<boolean> {
   if (env.runOnce) return true;
@@ -245,6 +265,13 @@ async function runAuxiliaryProviders(): Promise<SourceRunSummary[]> {
 }
 
 export async function runIngestion(): Promise<SourceRunSummary[]> {
+  const sanitizedRuns = await sanitizeStaleRuns();
+  if (sanitizedRuns > 0) {
+    console.warn(
+      `Sanitized ${sanitizedRuns} stale ingestion run(s) older than ${STALE_RUNNING_GRACE_MS / 60_000} minutes.`
+    );
+  }
+
   const seismicProviders = [
     usgsProvider,
     emscProvider,

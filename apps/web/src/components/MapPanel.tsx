@@ -32,10 +32,10 @@ type MapPanelProps = {
   onSelect: (eventId: string) => void;
 };
 
-const SELECTED_COLOR = Color.fromCssColorString("#f97316");
-const WAVE_P_COLOR = Color.fromCssColorString("#38bdf8");
-const WAVE_S_COLOR = Color.fromCssColorString("#f97316");
+const WAVE_P_COLOR = Color.fromCssColorString("#2563eb");
+const WAVE_S_COLOR = Color.fromCssColorString("#facc15");
 const FRESH_WINDOW_MS = 10 * 60 * 1000;
+const SELECTION_WAVE_INTERVAL_MS = 2_200;
 const DISASTER_PREFIX = "context:";
 
 const PLATE_COLORS: Record<string, string> = {
@@ -73,18 +73,18 @@ function magnitudeSize(magnitude: number | null): number {
 function styleEntity(entity: Entity, event: SeismicEvent, selected: boolean): void {
   if (!entity.point) return;
 
-  const base = selected ? SELECTED_COLOR : magnitudeColor(event.magnitude);
+  const base = magnitudeColor(event.magnitude);
   const baseSize = magnitudeSize(event.magnitude);
 
   entity.point.color = new ConstantProperty(base.withAlpha(selected ? 1 : 0.92));
   entity.point.outlineColor = new ConstantProperty(
-    selected ? Color.WHITE : Color.fromCssColorString("#0b1220").withAlpha(0.9)
+    selected ? Color.WHITE.withAlpha(0.96) : Color.fromCssColorString("#0b1220").withAlpha(0.9)
   );
-  entity.point.outlineWidth = new ConstantProperty(selected ? 2.5 : 1.5);
+  entity.point.outlineWidth = new ConstantProperty(selected ? 3 : 1.5);
 
   if (selected) {
     entity.point.pixelSize = new CallbackProperty(
-      () => baseSize + 6 + Math.sin(Date.now() / 240) * 4,
+      () => baseSize + 2.4 + Math.sin(Date.now() / 180) * 1.6,
       false
     );
   } else {
@@ -113,22 +113,34 @@ function spawnRing(
   outlineWidth: number
 ): void {
   const start = performance.now();
-  const progress = () => Math.min(1, (performance.now() - start) / durationMs);
-  const radius = () => Math.max(1, progress() * maxRadiusM);
+  let currentRadius = 1;
+  const radiusMajor = () => {
+    const progress = Math.min(1, (performance.now() - start) / durationMs);
+    currentRadius = Math.max(1, progress * maxRadiusM);
+    return currentRadius;
+  };
+
+  const radiusMinor = () => {
+    // Retornamos el radio actual con un levísimo decremento para asegurar
+    // que NUNCA sea mayor que el semiMajorAxis, evitando el DeveloperError de Cesium.
+    return Math.max(1, currentRadius - 0.001);
+  };
+
+  const progressProp = () => Math.min(1, (performance.now() - start) / durationMs);
 
   const ring = viewer.entities.add({
     id: `ripple-${start}-${color.toCssHexString()}-${Math.random().toString(36).slice(2)}`,
     position: Cartesian3.fromDegrees(longitude, latitude),
     ellipse: {
       height: 0,
-      semiMajorAxis: new CallbackProperty(radius, false),
-      semiMinorAxis: new CallbackProperty(radius, false),
+      semiMajorAxis: new CallbackProperty(radiusMajor, false),
+      semiMinorAxis: new CallbackProperty(radiusMinor, false),
       fill: true,
       material: new ColorMaterialProperty(
-        new CallbackProperty(() => color.withAlpha((1 - progress()) * 0.08), false)
+        new CallbackProperty(() => color.withAlpha((1 - progressProp()) * 0.08), false)
       ),
       outline: true,
-      outlineColor: new CallbackProperty(() => color.withAlpha((1 - progress()) * 0.95), false),
+      outlineColor: new CallbackProperty(() => color.withAlpha((1 - progressProp()) * 0.95), false),
       outlineWidth
     }
   });
@@ -193,6 +205,7 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
   const initializedRef = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedEventId);
   const stopSpinRef = useRef<(() => void) | null>(null);
+  const selectionWaveTimerRef = useRef<number | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const [hover, setHover] = useState<
@@ -260,11 +273,21 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
 
       if (event) {
         const rect = canvas.getBoundingClientRect();
-        setHover({ kind: "event", event, x: rect.left + movement.endPosition.x, y: rect.top + movement.endPosition.y });
+        setHover({
+          kind: "event",
+          event,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
         canvas.style.cursor = "pointer";
       } else if (context) {
         const rect = canvas.getBoundingClientRect();
-        setHover({ kind: "disaster", context, x: rect.left + movement.endPosition.x, y: rect.top + movement.endPosition.y });
+        setHover({
+          kind: "disaster",
+          context,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
         canvas.style.cursor = "pointer";
       } else {
         setHover((prev) => (prev ? null : prev));
@@ -279,6 +302,10 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
     void loadPlateBoundaries(viewer);
 
     return () => {
+      if (selectionWaveTimerRef.current !== null) {
+        window.clearInterval(selectionWaveTimerRef.current);
+        selectionWaveTimerRef.current = null;
+      }
       stopSpin();
       stopSpinRef.current = null;
       canvas.removeEventListener("pointerleave", clearHover);
@@ -300,7 +327,11 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
     collection.suspendEvents();
 
     for (const entity of [...collection.values]) {
-      if (typeof entity.id === "string" && (entity.id.startsWith("ripple-") || entity.id.startsWith(DISASTER_PREFIX))) continue;
+      if (
+        typeof entity.id === "string" &&
+        (entity.id.startsWith("ripple-") || entity.id.startsWith(DISASTER_PREFIX))
+      )
+        continue;
       if (typeof entity.id === "string" && !nextMap.has(entity.id)) {
         collection.remove(entity);
       }
@@ -372,6 +403,11 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
     const viewer = viewerRef.current;
     if (!viewer) return;
 
+    if (selectionWaveTimerRef.current !== null) {
+      window.clearInterval(selectionWaveTimerRef.current);
+      selectionWaveTimerRef.current = null;
+    }
+
     for (const entity of viewer.entities.values) {
       if (typeof entity.id !== "string" || entity.id.startsWith("ripple-")) continue;
       const event = eventMapRef.current.get(entity.id);
@@ -389,6 +425,15 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
           orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
           duration: 1.0
         });
+        spawnWavefront(viewer, event.longitude, event.latitude);
+        selectionWaveTimerRef.current = window.setInterval(() => {
+          if (viewer.isDestroyed()) return;
+          const activeId = selectedIdRef.current;
+          if (!activeId) return;
+          const activeEvent = eventMapRef.current.get(activeId);
+          if (!activeEvent) return;
+          spawnWavefront(viewer, activeEvent.longitude, activeEvent.latitude);
+        }, SELECTION_WAVE_INTERVAL_MS);
       }
     }
   }, [selectedEventId]);
@@ -409,7 +454,9 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
       {hover?.kind === "disaster" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>{hover.context.title}</strong>
-          <span>GDACS {hover.context.alertLevel ?? "N/D"} · score {hover.context.alertScore ?? "N/D"}</span>
+          <span>
+            GDACS {hover.context.alertLevel ?? "N/D"} · score {hover.context.alertScore ?? "N/D"}
+          </span>
           <span>{formatUtcDateTime(hover.context.eventTimeUtc)} UTC</span>
         </div>
       ) : null}
