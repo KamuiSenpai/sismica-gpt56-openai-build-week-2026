@@ -1,6 +1,7 @@
 import { type SeismicEvent } from "@sismica/shared";
 
 import {
+  EVENT_STATUS_LEGEND,
   formatDepth,
   formatMagnitude,
   formatUtcDateTime,
@@ -22,13 +23,24 @@ export function EventList({ events, selectedEventId, onSelect }: EventListProps)
         <span>{events.length} eventos</span>
       </header>
 
+      <div className="feed-status-legend" aria-label="Leyenda de estados del feed">
+        {EVENT_STATUS_LEGEND.map((item) => (
+          <span className="feed-status-legend-item" key={item.label} title={item.description}>
+            <span className={`feed-status ${item.tone}`}>{item.label}</span>
+            <small>{item.description}</small>
+          </span>
+        ))}
+      </div>
+
       <div className="event-feed">
         {events.map((event) => {
           const status = getEventStatusBadge(event.status);
           return (
             <button
               key={event.eventId}
-              className={event.eventId === selectedEventId ? "event-feed-item is-selected" : "event-feed-item"}
+              className={
+                event.eventId === selectedEventId ? "event-feed-item is-selected" : "event-feed-item"
+              }
               onClick={() => onSelect(event.eventId)}
               type="button"
             >

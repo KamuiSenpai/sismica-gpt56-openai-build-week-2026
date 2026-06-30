@@ -1,4 +1,4 @@
-export type SourceCode = "USGS" | "EMSC" | "IGP" | "FUNVISIS" | "GEOFON" | "GEONET";
+export type SourceCode = "USGS" | "EMSC" | "IGP" | "FUNVISIS" | "GEOFON" | "GEONET" | "BMKG" | "JMA" | "CWA";
 export type OperationalSourceCode = SourceCode | "GDACS" | "NOAA_PTWC" | "NOAA_NTWC";
 
 export type SeismicEvent = {
@@ -154,7 +154,10 @@ export function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-export function normalizeUsgsFeature(feature: UsgsFeature, ingestedAt = new Date().toISOString()): SeismicEvent {
+export function normalizeUsgsFeature(
+  feature: UsgsFeature,
+  ingestedAt = new Date().toISOString()
+): SeismicEvent {
   const [longitude, latitude, depthKm] = feature.geometry.coordinates;
   const props = feature.properties;
 

@@ -20,6 +20,9 @@ const CONFIGURED_SOURCES: OperationalSourceCode[] = [
   "FUNVISIS",
   "GEOFON",
   "GEONET",
+  "BMKG",
+  "JMA",
+  "CWA",
   "GDACS",
   "NOAA_PTWC",
   "NOAA_NTWC"

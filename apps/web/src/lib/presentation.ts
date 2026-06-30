@@ -2,6 +2,12 @@ import { type SeismicEvent } from "@sismica/shared";
 
 type EventQualityTone = "quality-a" | "quality-b" | "quality-c" | "quality-v";
 
+type EventStatusBadge = {
+  label: string;
+  tone: EventQualityTone;
+  description: string;
+};
+
 const MAGNITUDE_PREFIX = /^M\s*\d+(?:\.\d+)?\s*-\s*/i;
 
 function pad(value: number): string {
@@ -51,11 +57,16 @@ export function getEventPlace(title: string): string {
   return normalized || title;
 }
 
-export function getEventStatusBadge(status: SeismicEvent["status"]): {
-  label: string;
-  tone: EventQualityTone;
-  description: string;
-} {
+export const EVENT_STATUS_LEGEND: EventStatusBadge[] = [
+  { label: "A", tone: "quality-c", description: "Automatico" },
+  { label: "O", tone: "quality-a", description: "Oficial" },
+  { label: "R", tone: "quality-a", description: "Revisado" },
+  { label: "P", tone: "quality-b", description: "Preliminar" },
+  { label: "V", tone: "quality-v", description: "Validation" },
+  { label: "?", tone: "quality-b", description: "Sin estado" }
+];
+
+export function getEventStatusBadge(status: SeismicEvent["status"]): EventStatusBadge {
   const normalized = status?.toLowerCase();
   switch (normalized) {
     case "reviewed":
@@ -73,10 +84,6 @@ export function getEventStatusBadge(status: SeismicEvent["status"]): {
   }
 }
 
-export function formatMetric(
-  value: number | null | undefined,
-  unit = "",
-  decimals = 1
-): string {
+export function formatMetric(value: number | null | undefined, unit = "", decimals = 1): string {
   return typeof value === "number" ? `${value.toFixed(decimals)}${unit}` : "N/D";
 }

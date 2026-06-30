@@ -4,12 +4,15 @@ import { type OperationalSourceCode } from "@sismica/shared";
 
 import { env } from "../config/env.js";
 import { pool } from "../db/pool.js";
+import { bmkgProvider } from "../providers/bmkgProvider.js";
+import { cwaProvider } from "../providers/cwaProvider.js";
 import { emscProvider } from "../providers/emscProvider.js";
 import { funvisisProvider } from "../providers/funvisisProvider.js";
 import { gdacsProvider } from "../providers/gdacsProvider.js";
 import { geofonProvider } from "../providers/geofonProvider.js";
 import { geoNetProvider } from "../providers/geoNetProvider.js";
 import { igpProvider } from "../providers/igpProvider.js";
+import { jmaProvider } from "../providers/jmaProvider.js";
 import { noaaNtwcProvider, noaaPtwcProvider } from "../providers/noaaProvider.js";
 import { type AuxiliaryProvider, type SeismicProvider } from "../providers/types.js";
 import { usgsProvider } from "../providers/usgsProvider.js";
@@ -29,6 +32,9 @@ const SOURCE_INTERVALS_MS: Record<OperationalSourceCode, number> = {
   FUNVISIS: 120_000,
   GEOFON: 120_000,
   GEONET: 120_000,
+  BMKG: 120_000,
+  JMA: 120_000,
+  CWA: 120_000,
   GDACS: 360_000,
   NOAA_PTWC: 120_000,
   NOAA_NTWC: 120_000
@@ -48,7 +54,8 @@ async function isSourceDue(source: OperationalSourceCode): Promise<boolean> {
   );
   const last = result.rows[0];
   if (!last) return true;
-  const interval = last.status === "error" ? Math.min(60_000, SOURCE_INTERVALS_MS[source]) : SOURCE_INTERVALS_MS[source];
+  const interval =
+    last.status === "error" ? Math.min(60_000, SOURCE_INTERVALS_MS[source]) : SOURCE_INTERVALS_MS[source];
   return Date.now() - last.started_at.getTime() >= interval;
 }
 
@@ -126,7 +133,9 @@ async function persistAuxiliary<T>(
   provider: AuxiliaryProvider<T>,
   runId: string,
   records: Awaited<ReturnType<AuxiliaryProvider<T>["fetchItems"]>>,
-  persist: (records: Awaited<ReturnType<AuxiliaryProvider<T>["fetchItems"]>>) => Promise<AuxiliaryIngestionStats>
+  persist: (
+    records: Awaited<ReturnType<AuxiliaryProvider<T>["fetchItems"]>>
+  ) => Promise<AuxiliaryIngestionStats>
 ): Promise<SourceRunSummary> {
   try {
     const stats = await persist(records);
@@ -146,7 +155,9 @@ async function persistAuxiliary<T>(
 }
 
 async function runSeismicProviders(providers: SeismicProvider[]): Promise<SourceRunSummary[]> {
-  const jobs = await Promise.all(providers.map(async (provider) => ({ provider, ...(await startRun(provider.code)) })));
+  const jobs = await Promise.all(
+    providers.map(async (provider) => ({ provider, ...(await startRun(provider.code)) }))
+  );
   const fetched = await Promise.allSettled(jobs.map(({ provider }) => provider.fetchEvents()));
   const summaries: SourceRunSummary[] = [];
 
@@ -173,7 +184,9 @@ async function runSeismicProviders(providers: SeismicProvider[]): Promise<Source
 
 async function runAuxiliaryProvider<T>(
   provider: AuxiliaryProvider<T>,
-  ingest: (records: Awaited<ReturnType<AuxiliaryProvider<T>["fetchItems"]>>) => Promise<AuxiliaryIngestionStats>
+  ingest: (
+    records: Awaited<ReturnType<AuxiliaryProvider<T>["fetchItems"]>>
+  ) => Promise<AuxiliaryIngestionStats>
 ): Promise<SourceRunSummary | null> {
   if (!(await isSourceDue(provider.code))) return null;
   const { runId } = await startRun(provider.code);
@@ -238,7 +251,10 @@ export async function runIngestion(): Promise<SourceRunSummary[]> {
     igpProvider,
     funvisisProvider,
     geofonProvider,
-    geoNetProvider
+    geoNetProvider,
+    bmkgProvider,
+    jmaProvider,
+    cwaProvider
   ];
   const dueSeismicProviders: SeismicProvider[] = [];
   for (const provider of seismicProviders) {

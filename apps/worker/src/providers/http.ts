@@ -2,11 +2,14 @@ import { env } from "../config/env.js";
 
 const MAX_RESPONSE_BYTES = 15 * 1024 * 1024;
 
-async function fetchResponse(url: string, accept: string): Promise<Response> {
+type FetchHeaderMap = Record<string, string>;
+
+async function fetchResponse(url: string, accept: string, headers?: FetchHeaderMap): Promise<Response> {
   const response = await fetch(url, {
     headers: {
       Accept: accept,
-      "User-Agent": "Plataforma-Visualizacion-Sismica/1.0"
+      "User-Agent": "Plataforma-Visualizacion-Sismica/1.0",
+      ...headers
     },
     signal: AbortSignal.timeout(env.sourceTimeoutMs)
   });
@@ -25,9 +28,10 @@ async function fetchResponse(url: string, accept: string): Promise<Response> {
 
 export async function fetchJson<T>(
   url: string,
-  accept = "application/json, application/geo+json;q=0.9"
+  accept = "application/json, application/geo+json;q=0.9",
+  headers?: FetchHeaderMap
 ): Promise<T> {
-  const response = await fetchResponse(url, accept);
+  const response = await fetchResponse(url, accept, headers);
   const text = await response.text();
   if (text.length > MAX_RESPONSE_BYTES) {
     throw new Error(`Source response exceeds ${MAX_RESPONSE_BYTES} bytes`);

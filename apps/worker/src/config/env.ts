@@ -15,11 +15,21 @@ const urlEnv = (fallback: string) => z.string().url().default(fallback);
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   USGS_FEED_URL: urlEnv("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"),
+  CWA_AUTHORIZATION: z.string().min(1).optional(),
+  CWA_EARTHQUAKE_URL: urlEnv(
+    "https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0016-002?format=JSON&limit=100"
+  ),
   EMSC_FDSN_URL: urlEnv("https://www.seismicportal.eu/fdsnws/event/1/query"),
   GEOFON_FDSN_URL: urlEnv("https://geofon.gfz.de/fdsnws/event/1/query"),
   GEONET_QUAKE_URL: urlEnv("https://api.geonet.org.nz/quake?MMI=-1"),
+  BMKG_LATEST_URL: urlEnv("https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json"),
+  BMKG_FELT_URL: urlEnv("https://data.bmkg.go.id/DataMKG/TEWS/gempadirasakan.json"),
+  JMA_LIST_URL: urlEnv("https://www.jma.go.jp/bosai/quake/data/list.json"),
   // Template con marcador {year}; no es una URL completa valida, se valida como texto.
-  IGP_FEED_URL_TEMPLATE: z.string().min(1).default("https://ultimosismo.igp.gob.pe/api/ultimo-sismo/ajaxb/{year}"),
+  IGP_FEED_URL_TEMPLATE: z
+    .string()
+    .min(1)
+    .default("https://ultimosismo.igp.gob.pe/api/ultimo-sismo/ajaxb/{year}"),
   FUNVISIS_FEED_URL: urlEnv("http://www.funvisis.gob.ve/maravilla.json"),
   GDACS_API_URL: urlEnv("https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"),
   NOAA_PTWC_CAP_URL: urlEnv("https://www.tsunami.gov/events/xml/PHEBCAP.xml"),
@@ -45,9 +55,14 @@ if (!parsed.success) {
 export const env = {
   databaseUrl: parsed.data.DATABASE_URL,
   usgsFeedUrl: parsed.data.USGS_FEED_URL,
+  cwaAuthorization: parsed.data.CWA_AUTHORIZATION,
+  cwaEarthquakeUrl: parsed.data.CWA_EARTHQUAKE_URL,
   emscFdsnUrl: parsed.data.EMSC_FDSN_URL,
   geofonFdsnUrl: parsed.data.GEOFON_FDSN_URL,
   geoNetQuakeUrl: parsed.data.GEONET_QUAKE_URL,
+  bmkgLatestUrl: parsed.data.BMKG_LATEST_URL,
+  bmkgFeltUrl: parsed.data.BMKG_FELT_URL,
+  jmaListUrl: parsed.data.JMA_LIST_URL,
   igpFeedUrlTemplate: parsed.data.IGP_FEED_URL_TEMPLATE,
   funvisisFeedUrl: parsed.data.FUNVISIS_FEED_URL,
   gdacsApiUrl: parsed.data.GDACS_API_URL,

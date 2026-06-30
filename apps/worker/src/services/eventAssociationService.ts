@@ -59,6 +59,9 @@ const PERU_BOUNDS = { minLat: -19.5, maxLat: 0.5, minLon: -82.5, maxLon: -68.5 }
 const VENEZUELA_BOUNDS = { minLat: 0, maxLat: 13.5, minLon: -74.5, maxLon: -58.5 };
 const NEW_ZEALAND_BOUNDS = { minLat: -49, maxLat: -28, minLon: 160, maxLon: 180 };
 const KERMADEC_BOUNDS = { minLat: -37, maxLat: -20, minLon: -180, maxLon: -170 };
+const INDONESIA_BOUNDS = { minLat: -11.5, maxLat: 6.5, minLon: 94, maxLon: 142 };
+const JAPAN_BOUNDS = { minLat: 24, maxLat: 46, minLon: 122, maxLon: 154 };
+const TAIWAN_BOUNDS = { minLat: 20, maxLat: 27, minLon: 118, maxLon: 123 };
 export const DEDUPLICATION_LIMITS = {
   timeSeconds: 60,
   distanceKm: 100,
@@ -70,30 +73,59 @@ export function isAssociationCandidate(
   distanceKm: number,
   magnitudeDelta: number | null
 ): boolean {
-  return timeDeltaSeconds <= DEDUPLICATION_LIMITS.timeSeconds
-    && distanceKm < DEDUPLICATION_LIMITS.distanceKm
-    && (magnitudeDelta === null || magnitudeDelta < DEDUPLICATION_LIMITS.magnitudeDelta);
+  return (
+    timeDeltaSeconds <= DEDUPLICATION_LIMITS.timeSeconds &&
+    distanceKm < DEDUPLICATION_LIMITS.distanceKm &&
+    (magnitudeDelta === null || magnitudeDelta < DEDUPLICATION_LIMITS.magnitudeDelta)
+  );
 }
 
 function withinBounds(latitude: number, longitude: number, bounds: typeof PERU_BOUNDS): boolean {
-  return latitude >= bounds.minLat && latitude <= bounds.maxLat
-    && longitude >= bounds.minLon && longitude <= bounds.maxLon;
+  return (
+    latitude >= bounds.minLat &&
+    latitude <= bounds.maxLat &&
+    longitude >= bounds.minLon &&
+    longitude <= bounds.maxLon
+  );
 }
 
 export function sourcePriority(source: SourceCode, latitude: number, longitude: number): number {
   if (withinBounds(latitude, longitude, PERU_BOUNDS)) {
-    return { IGP: 100, USGS: 80, GEOFON: 75, EMSC: 70, FUNVISIS: 40, GEONET: 40 }[source];
+    return { IGP: 100, USGS: 80, GEOFON: 75, EMSC: 70, FUNVISIS: 40, GEONET: 40, BMKG: 40, JMA: 40, CWA: 40 }[
+      source
+    ];
   }
   if (withinBounds(latitude, longitude, VENEZUELA_BOUNDS)) {
-    return { FUNVISIS: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, GEONET: 40 }[source];
+    return { FUNVISIS: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, GEONET: 40, BMKG: 40, JMA: 40, CWA: 40 }[
+      source
+    ];
   }
   if (
-    withinBounds(latitude, longitude, NEW_ZEALAND_BOUNDS)
-    || withinBounds(latitude, longitude, KERMADEC_BOUNDS)
+    withinBounds(latitude, longitude, NEW_ZEALAND_BOUNDS) ||
+    withinBounds(latitude, longitude, KERMADEC_BOUNDS)
   ) {
-    return { GEONET: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40 }[source];
+    return { GEONET: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, BMKG: 40, JMA: 40, CWA: 40 }[
+      source
+    ];
   }
-  return { USGS: 80, GEOFON: 75, EMSC: 70, IGP: 50, FUNVISIS: 50, GEONET: 50 }[source];
+  if (withinBounds(latitude, longitude, INDONESIA_BOUNDS)) {
+    return { BMKG: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, GEONET: 40, JMA: 40, CWA: 40 }[
+      source
+    ];
+  }
+  if (withinBounds(latitude, longitude, TAIWAN_BOUNDS)) {
+    return { CWA: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, GEONET: 40, BMKG: 40, JMA: 40 }[
+      source
+    ];
+  }
+  if (withinBounds(latitude, longitude, JAPAN_BOUNDS)) {
+    return { JMA: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, GEONET: 40, BMKG: 40, CWA: 40 }[
+      source
+    ];
+  }
+  return { USGS: 80, GEOFON: 75, EMSC: 70, IGP: 50, FUNVISIS: 50, GEONET: 50, BMKG: 50, JMA: 50, CWA: 50 }[
+    source
+  ];
 }
 
 function canonicalParams(event: SeismicEvent, rawPayload: unknown, priority: number): unknown[] {
@@ -205,11 +237,7 @@ async function updateCanonical(
   );
 }
 
-async function upsertReference(
-  client: PoolClient,
-  eventId: string,
-  record: SeismicRecord
-): Promise<void> {
+async function upsertReference(client: PoolClient, eventId: string, record: SeismicRecord): Promise<void> {
   const event = record.event;
   await client.query(
     `
@@ -317,17 +345,29 @@ async function findMatch(client: PoolClient, event: SeismicEvent): Promise<Match
   return result.rows[0] ?? null;
 }
 
+type CanonicalPreference = {
+  source: SourceCode;
+  preferred_source_priority: number;
+};
+
+async function loadCanonicalPreference(
+  client: PoolClient,
+  eventId: string
+): Promise<CanonicalPreference | null> {
+  const result = await client.query<{ source: SourceCode; preferred_source_priority: number }>(
+    `SELECT source, preferred_source_priority FROM seismic_events WHERE event_id = $1`,
+    [eventId]
+  );
+  return result.rows[0] ?? null;
+}
+
 async function shouldReplaceCanonical(
   client: PoolClient,
   eventId: string,
   source: SourceCode,
   priority: number
 ): Promise<boolean> {
-  const result = await client.query<{ source: SourceCode; preferred_source_priority: number }>(
-    `SELECT source, preferred_source_priority FROM seismic_events WHERE event_id = $1`,
-    [eventId]
-  );
-  const current = result.rows[0];
+  const current = await loadCanonicalPreference(client, eventId);
   return !current || current.source === source || priority > current.preferred_source_priority;
 }
 
@@ -441,6 +481,18 @@ export async function ingestSeismicRecords(
 
     if (existingReference) {
       if (existingReference.unchanged) {
+        const current = await loadCanonicalPreference(client, existingReference.event_id);
+        const needsRefresh =
+          current &&
+          ((current.source === event.source && current.preferred_source_priority !== priority) ||
+            (current.source !== event.source && priority > current.preferred_source_priority));
+        if (needsRefresh) {
+          await updateCanonical(client, existingReference.event_id, event, record.rawPayload, priority);
+          if (current.source !== event.source) {
+            await notifyEvent(client, streamChannel, "event.updated", existingReference.event_id);
+          }
+          stats.updated += 1;
+        }
         continue;
       }
       await upsertReference(client, existingReference.event_id, record);

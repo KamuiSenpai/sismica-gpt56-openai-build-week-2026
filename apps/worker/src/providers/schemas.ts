@@ -38,5 +38,63 @@ export const funvisisResponseSchema = featureCollectionSchema;
 export const gdacsResponseSchema = featureCollectionSchema;
 export const geoNetResponseSchema = featureCollectionSchema;
 
+export const bmkgResponseSchema = z
+  .object({
+    Infogempa: z.object({
+      gempa: z.array(
+        z
+          .object({
+            DateTime: z.string(),
+            Coordinates: z.string()
+          })
+          .passthrough()
+      )
+    })
+  })
+  .passthrough();
+
+export const cwaResponseSchema = z
+  .object({
+    success: z.string(),
+    records: z
+      .object({
+        Earthquake: z.array(
+          z
+            .object({
+              Web: z.string().optional(),
+              IssueTime: z.string(),
+              EarthquakeInfo: z
+                .object({
+                  OriginTime: z.string(),
+                  Epicenter: z
+                    .object({
+                      EpicenterLatitude: z.number(),
+                      EpicenterLongitude: z.number()
+                    })
+                    .passthrough(),
+                  EarthquakeMagnitude: z
+                    .object({
+                      MagnitudeValue: z.number()
+                    })
+                    .passthrough()
+                })
+                .passthrough()
+            })
+            .passthrough()
+        )
+      })
+      .passthrough()
+  })
+  .passthrough();
+
+// JMA (bosai): arreglo de reportes en la raiz; cada item con eid (id de evento).
+export const jmaListSchema = z.array(
+  z
+    .object({
+      eid: z.string()
+    })
+    .passthrough()
+);
+
 // IGP devuelve un arreglo de registros en la raiz.
 export const igpResponseSchema = z.array(z.object({}).passthrough());
