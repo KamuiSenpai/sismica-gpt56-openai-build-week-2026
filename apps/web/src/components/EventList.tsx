@@ -1,4 +1,5 @@
 import { type SeismicEvent } from "@sismica/shared";
+import { CountryFlag } from "./CountryFlag";
 
 import {
   EVENT_STATUS_LEGEND,
@@ -6,7 +7,8 @@ import {
   formatMagnitude,
   formatUtcDateTime,
   getEventPlace,
-  getEventStatusBadge
+  getEventStatusBadge,
+  magnitudeCssColor
 } from "../lib/presentation";
 
 type EventListProps = {
@@ -63,11 +65,20 @@ export function EventList({ events, selectedEventId, onSelect }: EventListProps)
             >
               <span className="feed-source-mark">{SOURCE_MARK_LABEL[event.source]}</span>
               <span className="feed-event-copy">
-                <strong>{getEventPlace(event.title)}</strong>
+                <strong style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CountryFlag
+                    event={event}
+                    className="feed-flag"
+                    style={{ width: "18px", height: "13px", borderRadius: "2px", objectFit: "cover" }}
+                  />
+                  {getEventPlace(event.title)}
+                </strong>
                 <small>{formatUtcDateTime(event.eventTimeUtc)} UTC</small>
               </span>
               <span className="feed-event-values">
-                <strong>{formatMagnitude(event.magnitude)}</strong>
+                <strong style={{ color: magnitudeCssColor(event.magnitude) }}>
+                  {formatMagnitude(event.magnitude)}
+                </strong>
                 <small>{formatDepth(event.depthKm)}</small>
               </span>
               <span className={`feed-status ${status.tone}`} title={status.description}>
