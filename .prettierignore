@@ -1,0 +1,8 @@
+node_modules
+**/dist
+**/*.d.ts
+**/*.js.map
+package-lock.json
+apps/web/public/data
+output
+tmp

@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: sismica-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sismica
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # Host 5433 para coincidir con DATABASE_URL del .env
+      # (alternativa a un PostgreSQL+PostGIS nativo en 5433).
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
