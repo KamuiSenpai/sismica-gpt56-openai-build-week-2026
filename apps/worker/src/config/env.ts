@@ -25,6 +25,11 @@ const envSchema = z.object({
   BMKG_LATEST_URL: urlEnv("https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json"),
   BMKG_FELT_URL: urlEnv("https://data.bmkg.go.id/DataMKG/TEWS/gempadirasakan.json"),
   JMA_LIST_URL: urlEnv("https://www.jma.go.jp/bosai/quake/data/list.json"),
+  INGV_FDSN_URL: urlEnv("https://webservices.ingv.it/fdsnws/event/1/query"),
+  SGC_FIVE_DAYS_ALL_URL: urlEnv("https://archive.sgc.gov.co/feed/v1.0.1/summary/five_days_all.json"),
+  IGN_EARTHQUAKES_JS_URL: urlEnv("https://www.ign.es/web/resources/sismologia/tproximos/terremotos.js"),
+  SSN_RSS_URL: urlEnv("http://www.ssn.unam.mx/rss/ultimos-sismos.xml"),
+  CSN_HOME_URL: urlEnv("https://www.sismologia.cl/"),
   // Template con marcador {year}; no es una URL completa valida, se valida como texto.
   IGP_FEED_URL_TEMPLATE: z
     .string()
@@ -63,6 +68,11 @@ export const env = {
   bmkgLatestUrl: parsed.data.BMKG_LATEST_URL,
   bmkgFeltUrl: parsed.data.BMKG_FELT_URL,
   jmaListUrl: parsed.data.JMA_LIST_URL,
+  ingvFdsnUrl: parsed.data.INGV_FDSN_URL,
+  sgcFiveDaysAllUrl: parsed.data.SGC_FIVE_DAYS_ALL_URL,
+  ignEarthquakesJsUrl: parsed.data.IGN_EARTHQUAKES_JS_URL,
+  ssnRssUrl: parsed.data.SSN_RSS_URL,
+  csnHomeUrl: parsed.data.CSN_HOME_URL,
   igpFeedUrlTemplate: parsed.data.IGP_FEED_URL_TEMPLATE,
   funvisisFeedUrl: parsed.data.FUNVISIS_FEED_URL,
   gdacsApiUrl: parsed.data.GDACS_API_URL,

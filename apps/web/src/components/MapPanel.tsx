@@ -4,10 +4,13 @@ import { type DisasterContext, type SeismicEvent } from "@sismica/shared";
 import {
   CallbackProperty,
   Cartesian3,
+  Cartographic,
   Color,
   ColorMaterialProperty,
   ConstantPositionProperty,
   ConstantProperty,
+  EasingFunction,
+  EllipsoidGeodesic,
   Entity,
   GeoJsonDataSource,
   Ion,
@@ -21,7 +24,19 @@ import {
 } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
-import { formatDepth, formatMagnitude, formatUtcDateTime, getEventPlace } from "../lib/presentation";
+import {
+  formatDepth,
+  formatMagnitude,
+  formatUtcDateTime,
+  magnitudeCssColor,
+  normalizedPlace,
+  estimatedIntensity,
+  intensityCssColor,
+  INTENSITY_BANDS,
+  normalizedIntensity
+} from "../lib/presentation";
+import { resolveCountryCode } from "../lib/countryGeocoder";
+import { CountryFlag } from "./CountryFlag";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? "";
 
@@ -30,10 +45,18 @@ type MapPanelProps = {
   events: SeismicEvent[];
   selectedEventId: string | null;
   onSelect: (eventId: string) => void;
+  tourPaused: boolean;
+  onToggleTour: () => void;
 };
 
 const WAVE_P_COLOR = Color.fromCssColorString("#2563eb");
 const WAVE_S_COLOR = Color.fromCssColorString("#facc15");
+// Velocidades sismicas medias en la corteza (m/s). El frente P es mas rapido que el S.
+const VP_MPS = 6500;
+const VS_MPS = 3750; // ≈ Vp / 1.73
+// La propagacion real tarda minutos; aceleramos: 1 s de animacion ≈ WAVE_TIME_ACCEL s reales.
+const WAVE_TIME_ACCEL = 75;
+const WAVE_MAX_RADIUS_M = 1_500_000;
 const FRESH_WINDOW_MS = 10 * 60 * 1000;
 const SELECTION_WAVE_INTERVAL_MS = 2_200;
 const DISASTER_PREFIX = "context:";
@@ -73,7 +96,8 @@ function magnitudeSize(magnitude: number | null): number {
 function styleEntity(entity: Entity, event: SeismicEvent, selected: boolean): void {
   if (!entity.point) return;
 
-  const base = magnitudeColor(event.magnitude);
+  const mmi = estimatedIntensity(event);
+  const base = Color.fromCssColorString(intensityCssColor(mmi));
   const baseSize = magnitudeSize(event.magnitude);
 
   entity.point.color = new ConstantProperty(base.withAlpha(selected ? 1 : 0.92));
@@ -103,58 +127,65 @@ function disasterColor(level: string | null): Color {
   }
 }
 
-function spawnRing(
+// Frente de onda con FISICA real: el frente es una esfera de radio v·t que nace en el
+// hipocentro (profundidad h). Su traza en superficie es un circulo de radio
+// R(t) = sqrt((v·t)^2 - h^2), que recien aparece cuando v·t >= h (retardo = h/v).
+function spawnSeismicRing(
   viewer: Viewer,
   longitude: number,
   latitude: number,
   color: Color,
-  maxRadiusM: number,
-  durationMs: number,
+  velocityMps: number,
+  depthM: number,
   outlineWidth: number
 ): void {
   const start = performance.now();
-  let currentRadius = 1;
-  const radiusMajor = () => {
-    const progress = Math.min(1, (performance.now() - start) / durationMs);
-    currentRadius = Math.max(1, progress * maxRadiusM);
-    return currentRadius;
+  let radius = 0;
+
+  const surfaceRadius = () => {
+    const realSeconds = ((performance.now() - start) / 1000) * WAVE_TIME_ACCEL;
+    const sphere = velocityMps * realSeconds; // radio del frente esferico (m)
+    if (sphere <= depthM) return 0; // la onda aun no llega a la superficie
+    return Math.min(WAVE_MAX_RADIUS_M, Math.sqrt(sphere * sphere - depthM * depthM));
   };
 
-  const radiusMinor = () => {
-    // Retornamos el radio actual con un levísimo decremento para asegurar
-    // que NUNCA sea mayor que el semiMajorAxis, evitando el DeveloperError de Cesium.
-    return Math.max(1, currentRadius - 0.001);
+  const semiMajorAxis = () => {
+    radius = surfaceRadius();
+    return Math.max(1, radius);
   };
-
-  const progressProp = () => Math.min(1, (performance.now() - start) / durationMs);
+  // Levisimo decremento para garantizar semiMinor <= semiMajor (evita DeveloperError).
+  const semiMinorAxis = () => Math.max(1, radius - 0.001);
+  const fade = () => (radius <= 0 ? 0 : 1 - radius / WAVE_MAX_RADIUS_M);
 
   const ring = viewer.entities.add({
     id: `ripple-${start}-${color.toCssHexString()}-${Math.random().toString(36).slice(2)}`,
     position: Cartesian3.fromDegrees(longitude, latitude),
     ellipse: {
       height: 0,
-      semiMajorAxis: new CallbackProperty(radiusMajor, false),
-      semiMinorAxis: new CallbackProperty(radiusMinor, false),
+      semiMajorAxis: new CallbackProperty(semiMajorAxis, false),
+      semiMinorAxis: new CallbackProperty(semiMinorAxis, false),
       fill: true,
-      material: new ColorMaterialProperty(
-        new CallbackProperty(() => color.withAlpha((1 - progressProp()) * 0.08), false)
-      ),
+      material: new ColorMaterialProperty(new CallbackProperty(() => color.withAlpha(fade() * 0.07), false)),
       outline: true,
-      outlineColor: new CallbackProperty(() => color.withAlpha((1 - progressProp()) * 0.95), false),
+      outlineColor: new CallbackProperty(() => color.withAlpha(fade() * 0.95), false),
       outlineWidth
     }
   });
 
+  // Vida (en tiempo de animacion) hasta que el frente alcanza el radio maximo.
+  const lifeMs =
+    (Math.sqrt(WAVE_MAX_RADIUS_M ** 2 + depthM ** 2) / velocityMps / WAVE_TIME_ACCEL) * 1000 + 250;
   window.setTimeout(() => {
     if (!viewer.isDestroyed()) {
       viewer.entities.remove(ring);
     }
-  }, durationMs + 120);
+  }, lifeMs);
 }
 
-function spawnWavefront(viewer: Viewer, longitude: number, latitude: number): void {
-  spawnRing(viewer, longitude, latitude, WAVE_P_COLOR, 520_000, 1800, 2);
-  spawnRing(viewer, longitude, latitude, WAVE_S_COLOR, 300_000, 2800, 3);
+function spawnWavefront(viewer: Viewer, longitude: number, latitude: number, depthKm: number | null): void {
+  const depthM = Math.max(0, (depthKm ?? 0) * 1000);
+  spawnSeismicRing(viewer, longitude, latitude, WAVE_P_COLOR, VP_MPS, depthM, 2);
+  spawnSeismicRing(viewer, longitude, latitude, WAVE_S_COLOR, VS_MPS, depthM, 3);
 }
 
 function setupBasemap(viewer: Viewer): void {
@@ -196,7 +227,14 @@ async function loadPlateBoundaries(viewer: Viewer): Promise<void> {
   }
 }
 
-export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPanelProps) {
+export function MapPanel({
+  disasters,
+  events,
+  selectedEventId,
+  onSelect,
+  tourPaused,
+  onToggleTour
+}: MapPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const eventMapRef = useRef<Map<string, SeismicEvent>>(new Map());
@@ -359,7 +397,7 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
       seenIdsRef.current.add(event.eventId);
       const isFresh = Date.now() - Date.parse(event.eventTimeUtc) < FRESH_WINDOW_MS;
       if (!firstLoad && isNew && isFresh) {
-        spawnWavefront(viewer, event.longitude, event.latitude);
+        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm);
       }
     }
 
@@ -420,30 +458,44 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
       const event = eventMapRef.current.get(selectedEventId);
       if (event) {
         stopSpinRef.current?.();
+        // Pull-back adaptativo: cuanto mas lejos esta el siguiente sismo, mas se aleja
+        // la camara en el trayecto para ver hacia donde viaja (en vez de arrastrarse).
+        const destination = Cartographic.fromDegrees(event.longitude, event.latitude);
+        const surfaceDistance = new EllipsoidGeodesic(viewer.camera.positionCartographic, destination)
+          .surfaceDistance;
+        const maximumHeight = CesiumMath.clamp(surfaceDistance * 0.5, 500_000, 9_000_000);
         void viewer.camera.flyTo({
-          destination: Cartesian3.fromDegrees(event.longitude, event.latitude, 1_800_000),
+          // Altitud baja (~450 km) en el destino para ver el lugar: costa, ciudades y etiquetas.
+          destination: Cartesian3.fromDegrees(event.longitude, event.latitude, 450_000),
           orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
-          duration: 1.0
+          duration: 3.2,
+          maximumHeight,
+          easingFunction: EasingFunction.QUADRATIC_IN_OUT
         });
-        spawnWavefront(viewer, event.longitude, event.latitude);
+        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm);
         selectionWaveTimerRef.current = window.setInterval(() => {
           if (viewer.isDestroyed()) return;
           const activeId = selectedIdRef.current;
           if (!activeId) return;
           const activeEvent = eventMapRef.current.get(activeId);
           if (!activeEvent) return;
-          spawnWavefront(viewer, activeEvent.longitude, activeEvent.latitude);
+          spawnWavefront(viewer, activeEvent.longitude, activeEvent.latitude, activeEvent.depthKm);
         }, SELECTION_WAVE_INTERVAL_MS);
       }
     }
   }, [selectedEventId]);
+
+  const tourEvent =
+    (selectedEventId ? events.find((event) => event.eventId === selectedEventId) : undefined) ??
+    events[0] ??
+    null;
 
   return (
     <div className="map-shell">
       <div ref={containerRef} className="map-canvas cesium-canvas" />
       {hover?.kind === "event" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
-          <strong>{getEventPlace(hover.event.title)}</strong>
+          <strong>{normalizedPlace(hover.event, resolveCountryCode(hover.event))}</strong>
           <span>
             {formatMagnitude(hover.event.magnitude)} | Prof. {formatDepth(hover.event.depthKm)}
           </span>
@@ -458,6 +510,47 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
             GDACS {hover.context.alertLevel ?? "N/D"} · score {hover.context.alertScore ?? "N/D"}
           </span>
           <span>{formatUtcDateTime(hover.context.eventTimeUtc)} UTC</span>
+        </div>
+      ) : null}
+      {tourEvent ? (
+        <div className="tour-card">
+          <div className="tour-card-top">
+            <CountryFlag event={tourEvent} className="tour-flag" />
+            <strong className="tour-title">
+              <span style={{ color: magnitudeCssColor(tourEvent.magnitude) }}>
+                {formatMagnitude(tourEvent.magnitude)}
+              </span>{" "}
+              — {normalizedPlace(tourEvent, resolveCountryCode(tourEvent))}
+            </strong>
+            <button
+              type="button"
+              className="tour-toggle"
+              onClick={onToggleTour}
+              title={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
+              aria-label={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
+            >
+              {tourPaused ? "▶" : "⏸"}
+            </button>
+          </div>
+          <div
+            className="tour-card-meta"
+            style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" }}
+          >
+            {formatUtcDateTime(tourEvent.eventTimeUtc)} UTC • Prof: {formatDepth(tourEvent.depthKm)} •
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <i
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "2px",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: intensityCssColor(estimatedIntensity(tourEvent))
+                }}
+              />
+              {normalizedIntensity(tourEvent)}
+            </span>
+          </div>
+          <span className="tour-card-source">Datos: {tourEvent.source}</span>
         </div>
       ) : null}
       <div className="map-legend">
@@ -483,14 +576,45 @@ export function MapPanel({ disasters, events, selectedEventId, onSelect }: MapPa
           Contexto GDACS
         </span>
       </div>
-      <div className="map-legend legend-intensity">
-        <span className="legend-title">Magnitud</span>
-        {MAG_BANDS.map((band) => (
-          <span className="legend-row" key={band.label}>
-            <i className="legend-swatch" style={{ background: band.color }} />
-            {band.label}
-          </span>
-        ))}
+      <div
+        className="map-legend legend-intensity"
+        style={{ width: "auto", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "5px 24px" }}
+      >
+        <div style={{ display: "grid", gap: "5px" }}>
+          <span className="legend-title">Intensidad MMI (Color)</span>
+          {INTENSITY_BANDS.map((band) => (
+            <span className="legend-row" key={band.label}>
+              <i className="legend-swatch" style={{ background: band.color }} />
+              {band.label}
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "grid", gap: "5px", alignContent: "start" }}>
+          <span className="legend-title">Magnitud (Tamaño)</span>
+          {MAG_BANDS.map((band) => {
+            const mag = band.max === Infinity ? 7.5 : band.max - 0.5;
+            const size = Math.min(16, magnitudeSize(mag));
+            return (
+              <span className="legend-row" key={band.label}>
+                <div
+                  style={{
+                    width: 16,
+                    height: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  <i
+                    className="legend-point"
+                    style={{ background: "#94a3b8", width: size, height: size, margin: 0, border: "none" }}
+                  />
+                </div>
+                {band.label}
+              </span>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

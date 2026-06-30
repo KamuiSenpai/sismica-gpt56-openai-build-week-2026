@@ -5,15 +5,20 @@ import { type OperationalSourceCode } from "@sismica/shared";
 import { env } from "../config/env.js";
 import { pool } from "../db/pool.js";
 import { bmkgProvider } from "../providers/bmkgProvider.js";
+import { csnProvider } from "../providers/csnProvider.js";
 import { cwaProvider } from "../providers/cwaProvider.js";
 import { emscProvider } from "../providers/emscProvider.js";
 import { funvisisProvider } from "../providers/funvisisProvider.js";
 import { gdacsProvider } from "../providers/gdacsProvider.js";
 import { geofonProvider } from "../providers/geofonProvider.js";
 import { geoNetProvider } from "../providers/geoNetProvider.js";
+import { ignProvider } from "../providers/ignProvider.js";
 import { igpProvider } from "../providers/igpProvider.js";
+import { ingvProvider } from "../providers/ingvProvider.js";
 import { jmaProvider } from "../providers/jmaProvider.js";
 import { noaaNtwcProvider, noaaPtwcProvider } from "../providers/noaaProvider.js";
+import { sgcProvider } from "../providers/sgcProvider.js";
+import { ssnProvider } from "../providers/ssnProvider.js";
 import { type AuxiliaryProvider, type SeismicProvider } from "../providers/types.js";
 import { usgsProvider } from "../providers/usgsProvider.js";
 import {
@@ -30,6 +35,11 @@ const SOURCE_INTERVALS_MS: Record<OperationalSourceCode, number> = {
   EMSC: 60_000,
   IGP: 120_000,
   FUNVISIS: 120_000,
+  SGC: 120_000,
+  IGN: 180_000,
+  SSN: 120_000,
+  CSN: 180_000,
+  INGV: 180_000,
   GEOFON: 120_000,
   GEONET: 120_000,
   BMKG: 120_000,
@@ -277,6 +287,11 @@ export async function runIngestion(): Promise<SourceRunSummary[]> {
     emscProvider,
     igpProvider,
     funvisisProvider,
+    sgcProvider,
+    ignProvider,
+    ssnProvider,
+    csnProvider,
+    ingvProvider,
     geofonProvider,
     geoNetProvider,
     bmkgProvider,

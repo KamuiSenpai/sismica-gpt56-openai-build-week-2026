@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { DEFAULT_HOURS, DEFAULT_MIN_MAGNITUDE, clampNumber, type SeismicEvent } from "@sismica/shared";
@@ -22,12 +22,16 @@ import {
   formatMetric,
   formatUtcClock,
   formatUtcDateTime,
-  getEventPlace,
-  getEventStatusBadge
+  getEventStatusBadge,
+  magnitudeCssColor,
+  normalizedIntensity,
+  normalizedPlace
 } from "./lib/presentation";
+import { resolveCountryCode, useCountryGeocoder } from "./lib/countryGeocoder";
+import { CountryFlag } from "./components/CountryFlag";
 
 function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | null): SeismicEvent | null {
-  return selectedEventId ? events.find((event) => event.eventId === selectedEventId) ?? null : null;
+  return selectedEventId ? (events.find((event) => event.eventId === selectedEventId) ?? null) : null;
 }
 
 function MagnitudeScale({ magnitude }: { magnitude: number | null }) {
@@ -35,7 +39,9 @@ function MagnitudeScale({ magnitude }: { magnitude: number | null }) {
   return (
     <div className="magnitude-scale" aria-label={`Escala de magnitud ${magnitude ?? "no disponible"}`}>
       <div className="magnitude-scale-numbers">
-        {[9, 8, 7, 6, 5, 4, 3, 2, 1].map((value) => <span key={value}>{value}</span>)}
+        {[9, 8, 7, 6, 5, 4, 3, 2, 1].map((value) => (
+          <span key={value}>{value}</span>
+        ))}
       </div>
       <div className="magnitude-scale-track">
         <i style={{ height }} />
@@ -46,13 +52,17 @@ function MagnitudeScale({ magnitude }: { magnitude: number | null }) {
 
 export default function App() {
   const queryClient = useQueryClient();
+  useCountryGeocoder();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [utcNow, setUtcNow] = useState(() => new Date());
+  const [tourPaused, setTourPaused] = useState(false);
   const minMagnitude = DEFAULT_MIN_MAGNITUDE;
   const hours = DEFAULT_HOURS;
 
   const eventsQuery = useEventsQuery(minMagnitude, hours);
   const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
   const statuses = useSourceStatusesQuery().data ?? [];
   const disasters = useDisastersQuery().data ?? [];
   const tsunamiProducts = useTsunamiQuery().data ?? [];
@@ -65,20 +75,33 @@ export default function App() {
   const selectedEvent = useMemo(() => findSelectedEvent(events, selectedEventId), [events, selectedEventId]);
   const focusEvent = selectedEvent ?? events[0] ?? null;
   const focusStatus = focusEvent ? getEventStatusBadge(focusEvent.status) : null;
-  const focusContext = focusEvent ? disasters.find((context) => context.eventId === focusEvent.eventId) ?? null : null;
+  const focusContext = focusEvent
+    ? (disasters.find((context) => context.eventId === focusEvent.eventId) ?? null)
+    : null;
   const primaryStatus = statuses.find((status) => status.source === "USGS") ?? statuses[0] ?? null;
-  const activeTsunami = tsunamiProducts.find((product) => (
-    product.status.toLowerCase() === "actual"
-    && (!product.expiresAtUtc || Date.parse(product.expiresAtUtc) >= utcNow.getTime())
-  )) ?? null;
+  const activeTsunami =
+    tsunamiProducts.find(
+      (product) =>
+        product.status.toLowerCase() === "actual" &&
+        (!product.expiresAtUtc || Date.parse(product.expiresAtUtc) >= utcNow.getTime())
+    ) ?? null;
 
   const handleIncomingEvent = useCallback(
     (incomingEvent: SeismicEvent) => {
-      queryClient.setQueryData(eventsQueryKey(minMagnitude, hours), (current: SeismicEvent[] | undefined) =>
-        mergeIncomingEvent(current, incomingEvent, minMagnitude)
+      const key = eventsQueryKey(minMagnitude, hours);
+      const current = queryClient.getQueryData<SeismicEvent[]>(key) ?? [];
+      const isNewLive =
+        !current.some((item) => item.eventId === incomingEvent.eventId) &&
+        (incomingEvent.magnitude === null || incomingEvent.magnitude >= minMagnitude);
+      queryClient.setQueryData(key, (existing: SeismicEvent[] | undefined) =>
+        mergeIncomingEvent(existing, incomingEvent, minMagnitude)
       );
+      // Un sismo EN VIVO (nuevo) interrumpe el recorrido y se muestra de inmediato.
+      if (isNewLive && !tourPaused) {
+        setSelectedEventId(incomingEvent.eventId);
+      }
     },
-    [queryClient, minMagnitude, hours]
+    [queryClient, minMagnitude, hours, tourPaused]
   );
 
   const connectionState = useEventStream(handleIncomingEvent);
@@ -88,11 +111,38 @@ export default function App() {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  const toggleTour = useCallback(() => setTourPaused((paused) => !paused), []);
+
+  // Arranca el recorrido: selecciona el primer sismo en cuanto hay datos.
+  useEffect(() => {
+    if (selectedEventId === null && events.length > 0) {
+      setSelectedEventId(events[0].eventId);
+    }
+  }, [events, selectedEventId]);
+
+  // Auto-recorrido: cada ~18 s (15 s de visualizacion + ~3 s de vuelo) pasa al siguiente
+  // de los ultimos 10 sismos. El timer es estable (no se reinicia con cada refresco de
+  // datos); lee la lista vigente desde una ref.
+  useEffect(() => {
+    if (tourPaused) return;
+    const intervalId = window.setInterval(() => {
+      const tour = eventsRef.current.slice(0, 10);
+      if (tour.length === 0) return;
+      setSelectedEventId((current) => {
+        const index = tour.findIndex((event) => event.eventId === current);
+        return tour[(index + 1) % tour.length].eventId;
+      });
+    }, 18_200);
+    return () => window.clearInterval(intervalId);
+  }, [tourPaused]);
+
   return (
     <main className={activeTsunami ? "monitor-shell has-tsunami" : "monitor-shell"}>
       <header className="monitor-topbar">
         <strong className="topbar-brand">SISMICA // MONITOR MULTIFUENTE</strong>
-        <div className="topbar-center">UTC · ultimos eventos M{minMagnitude.toFixed(1)}+ · datos oficiales normalizados</div>
+        <div className="topbar-center">
+          UTC · ultimos eventos M{minMagnitude.toFixed(1)}+ · datos oficiales normalizados
+        </div>
         <div className="topbar-meta">
           <span className={`connection-state state-${connectionState}`}>{connectionState.toUpperCase()}</span>
           <span className="topbar-clock">{formatUtcClock(utcNow)} UTC</span>
@@ -100,8 +150,14 @@ export default function App() {
       </header>
 
       {activeTsunami ? (
-        <a className="tsunami-banner" href={activeTsunami.sourceUrl ?? undefined} rel="noreferrer" target="_blank">
-          {activeTsunami.source.replace("NOAA_", "NOAA ")} · {activeTsunami.event} · {activeTsunami.severity ?? "sin severidad"}
+        <a
+          className="tsunami-banner"
+          href={activeTsunami.sourceUrl ?? undefined}
+          rel="noreferrer"
+          target="_blank"
+        >
+          {activeTsunami.source.replace("NOAA_", "NOAA ")} · {activeTsunami.event} ·{" "}
+          {activeTsunami.severity ?? "sin severidad"}
         </a>
       ) : null}
 
@@ -111,13 +167,30 @@ export default function App() {
           events={events}
           selectedEventId={selectedEventId}
           onSelect={setSelectedEventId}
+          tourPaused={tourPaused}
+          onToggleTour={toggleTour}
         />
 
         <section className="overlay-column overlay-left">
           <article className="event-console">
             <header className="event-console-title">
-              <strong>{focusEvent ? `${formatMagnitude(focusEvent.magnitude)} Evento sismico detectado` : "Sin eventos"}</strong>
-              <span>{focusEvent ? `${Math.max(1, events.findIndex((event) => event.eventId === focusEvent.eventId) + 1)}/${events.length}` : "0/0"}</span>
+              <strong>
+                {focusEvent ? (
+                  <>
+                    <span style={{ color: magnitudeCssColor(focusEvent.magnitude) }}>
+                      {formatMagnitude(focusEvent.magnitude)}
+                    </span>{" "}
+                    Evento sismico detectado
+                  </>
+                ) : (
+                  "Sin eventos"
+                )}
+              </strong>
+              <span>
+                {focusEvent
+                  ? `${Math.max(1, events.findIndex((event) => event.eventId === focusEvent.eventId) + 1)}/${events.length}`
+                  : "0/0"}
+              </span>
             </header>
 
             {focusEvent ? (
@@ -125,16 +198,24 @@ export default function App() {
                 <div className="event-identity">
                   <div className="intensity-box">
                     <small>Intensidad</small>
-                    <strong>{focusEvent.intensityText ?? formatMetric(focusEvent.mmi, "", 1)}</strong>
-                    <span>MMI</span>
+                    <strong>{normalizedIntensity(focusEvent)}</strong>
                   </div>
                   <div className="event-headline">
-                    <strong>{getEventPlace(focusEvent.title)}</strong>
+                    <strong>
+                      <CountryFlag event={focusEvent} className="event-flag" />{" "}
+                      {normalizedPlace(focusEvent, resolveCountryCode(focusEvent))}
+                    </strong>
                     <span>{formatUtcDateTime(focusEvent.eventTimeUtc)} UTC</span>
-                    <span>lat: {formatCoordinate(focusEvent.latitude, "lat")} lon: {formatCoordinate(focusEvent.longitude, "lon")}</span>
+                    <span>
+                      lat: {formatCoordinate(focusEvent.latitude, "lat")} lon:{" "}
+                      {formatCoordinate(focusEvent.longitude, "lon")}
+                    </span>
                     <span>Profundidad: {formatDepth(focusEvent.depthKm)}</span>
                   </div>
-                  <span className={`event-status-badge ${focusStatus?.tone}`} title="Estado publicado por la fuente">
+                  <span
+                    className={`event-status-badge ${focusStatus?.tone}`}
+                    title="Estado publicado por la fuente"
+                  >
                     {focusStatus?.label}
                   </span>
                 </div>
@@ -146,27 +227,68 @@ export default function App() {
                       <span>Fuentes</span>
                       <strong>{focusEvent.sources.join(" + ")}</strong>
                     </div>
-                    <div className="technical-row"><span>Estaciones usadas</span><strong>{formatMetric(focusEvent.stationCount, "", 0)}</strong></div>
-                    <div className="technical-row"><span>Estado</span><strong>{focusStatus?.description ?? "N/D"}</strong></div>
-                    <div className="technical-row"><span>Gap azimutal</span><strong>{formatMetric(focusEvent.azimuthalGapDeg, "°", 0)}</strong></div>
-                    <div className="technical-row"><span>Dmin</span><strong>{formatMetric(focusEvent.nearestStationDeg, "°", 2)}</strong></div>
-                    <div className="technical-row"><span>RMS</span><strong>{formatMetric(focusEvent.rmsSec, " s", 2)}</strong></div>
-                    <div className="technical-row"><span>CDI</span><strong>{formatMetric(focusEvent.cdi, "", 1)}</strong></div>
-                    <div className="technical-row"><span>Significancia</span><strong>{formatMetric(focusEvent.significance, "", 0)}</strong></div>
-                    <div className="technical-row"><span>Reportes sentidos</span><strong>{formatMetric(focusEvent.feltReports, "", 0)}</strong></div>
-                    <div className="technical-row"><span>PAGER</span><strong>{focusEvent.alertLevel?.toUpperCase() ?? "N/D"}</strong></div>
-                    <div className="technical-row"><span>Tsunami USGS</span><strong>{focusEvent.tsunami ? "INDICADO" : "NO"}</strong></div>
+                    <div className="technical-row">
+                      <span>Estaciones usadas</span>
+                      <strong>{formatMetric(focusEvent.stationCount, "", 0)}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>Estado</span>
+                      <strong>{focusStatus?.description ?? "N/D"}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>Gap azimutal</span>
+                      <strong>{formatMetric(focusEvent.azimuthalGapDeg, "°", 0)}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>Dmin</span>
+                      <strong>{formatMetric(focusEvent.nearestStationDeg, "°", 2)}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>RMS</span>
+                      <strong>{formatMetric(focusEvent.rmsSec, " s", 2)}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>CDI</span>
+                      <strong>{formatMetric(focusEvent.cdi, "", 1)}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>Significancia</span>
+                      <strong>{formatMetric(focusEvent.significance, "", 0)}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>Reportes sentidos</span>
+                      <strong>{formatMetric(focusEvent.feltReports, "", 0)}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>PAGER</span>
+                      <strong>{focusEvent.alertLevel?.toUpperCase() ?? "N/D"}</strong>
+                    </div>
+                    <div className="technical-row">
+                      <span>Tsunami USGS</span>
+                      <strong>{focusEvent.tsunami ? "INDICADO" : "NO"}</strong>
+                    </div>
                   </div>
                 </div>
 
                 {focusContext ? (
-                  <a className={`gdacs-context level-${focusContext.alertLevel?.toLowerCase() ?? "green"}`} href={focusContext.sourceUrl ?? undefined} rel="noreferrer" target="_blank">
-                    GDACS {focusContext.alertLevel ?? "N/D"} · score {formatMetric(focusContext.alertScore, "", 1)}
+                  <a
+                    className={`gdacs-context level-${focusContext.alertLevel?.toLowerCase() ?? "green"}`}
+                    href={focusContext.sourceUrl ?? undefined}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    GDACS {focusContext.alertLevel ?? "N/D"} · score{" "}
+                    {formatMetric(focusContext.alertScore, "", 1)}
                   </a>
                 ) : null}
 
                 {focusEvent.sourceUrl ? (
-                  <a className="official-source-link" href={focusEvent.sourceUrl} rel="noreferrer" target="_blank">
+                  <a
+                    className="official-source-link"
+                    href={focusEvent.sourceUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
                     Abrir reporte oficial {focusEvent.source}
                   </a>
                 ) : null}
@@ -186,11 +308,17 @@ export default function App() {
 
         <footer className="monitor-footer">
           <span>Primaria: {primaryStatus?.source ?? "USGS"}</span>
-          <span>Ingesta: {formatUtcDateTime(primaryStatus?.lastRunFinishedAt ?? focusEvent?.ingestedAt ?? null)}</span>
-          <span>{events.length} eventos / {hours} h</span>
+          <span>
+            Ingesta: {formatUtcDateTime(primaryStatus?.lastRunFinishedAt ?? focusEvent?.ingestedAt ?? null)}
+          </span>
+          <span>
+            {events.length} eventos / {hours} h
+          </span>
           <span>{disasters.length} contextos GDACS</span>
           <span>{tsunamiProducts.length} productos NOAA recientes</span>
-          <span className="footer-disclaimer">Informativo. Confirme decisiones con autoridades oficiales.</span>
+          <span className="footer-disclaimer">
+            Informativo. Confirme decisiones con autoridades oficiales.
+          </span>
         </footer>
       </section>
     </main>

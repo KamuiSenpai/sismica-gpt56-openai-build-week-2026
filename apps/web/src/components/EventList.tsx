@@ -15,6 +15,23 @@ type EventListProps = {
   onSelect: (eventId: string) => void;
 };
 
+const SOURCE_MARK_LABEL: Record<SeismicEvent["source"], string> = {
+  USGS: "US",
+  EMSC: "EM",
+  IGP: "PE",
+  FUNVISIS: "FU",
+  GEOFON: "GF",
+  GEONET: "GN",
+  BMKG: "BM",
+  JMA: "JM",
+  CWA: "TW",
+  SGC: "CO",
+  IGN: "ES",
+  SSN: "MX",
+  CSN: "CL",
+  INGV: "IT"
+};
+
 export function EventList({ events, selectedEventId, onSelect }: EventListProps) {
   return (
     <section className="feed-card">
@@ -44,7 +61,7 @@ export function EventList({ events, selectedEventId, onSelect }: EventListProps)
               onClick={() => onSelect(event.eventId)}
               type="button"
             >
-              <span className="feed-source-mark">{event.source.slice(0, 2)}</span>
+              <span className="feed-source-mark">{SOURCE_MARK_LABEL[event.source]}</span>
               <span className="feed-event-copy">
                 <strong>{getEventPlace(event.title)}</strong>
                 <small>{formatUtcDateTime(event.eventTimeUtc)} UTC</small>

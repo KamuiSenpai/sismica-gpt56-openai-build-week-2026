@@ -37,6 +37,7 @@ export const emscResponseSchema = featureCollectionSchema;
 export const funvisisResponseSchema = featureCollectionSchema;
 export const gdacsResponseSchema = featureCollectionSchema;
 export const geoNetResponseSchema = featureCollectionSchema;
+export const sgcResponseSchema = featureCollectionSchema;
 
 export const bmkgResponseSchema = z
   .object({

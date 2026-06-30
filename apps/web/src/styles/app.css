@@ -683,6 +683,99 @@ button {
   flex: 0 0 auto;
 }
 
+/* Tarjeta del auto-recorrido, justo encima de la leyenda Magnitud. */
+.tour-card {
+  position: absolute;
+  right: 300px;
+  bottom: 280px;
+  z-index: 22;
+  width: 360px;
+  max-width: calc(100vw - 360px);
+  display: grid;
+  gap: 7px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(6, 12, 20, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.tour-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tour-flag {
+  font-size: 1.35rem;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.flag-img {
+  width: 26px;
+  height: 19px;
+  border-radius: 3px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  vertical-align: middle;
+}
+
+.event-flag.flag-img {
+  width: 22px;
+  height: 16px;
+}
+
+.tour-title {
+  flex: 1 1 auto;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+.tour-toggle {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6ebef;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.tour-toggle:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.tour-card-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.tour-card-source {
+  justify-self: start;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(80, 200, 255, 0.14);
+  color: var(--cyan);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 980px) {
+  .tour-card {
+    right: 8px;
+    bottom: auto;
+    top: 64px;
+    width: min(340px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+  }
+}
+
 .monitor-footer {
   position: absolute;
   left: 0;

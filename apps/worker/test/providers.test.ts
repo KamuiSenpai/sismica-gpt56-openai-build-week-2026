@@ -8,15 +8,28 @@ import {
   mergeBmkgRecords,
   normalizeBmkgRecord
 } from "../src/providers/bmkgProvider.js";
+import {
+  extractCsnHomeEntries,
+  normalizeCsnDetail,
+  parseCsnDetailPage
+} from "../src/providers/csnProvider.js";
 import { buildCwaSourceEventId, normalizeCwaRecord } from "../src/providers/cwaProvider.js";
 import { normalizeEmscFeature } from "../src/providers/emscProvider.js";
 import { normalizeFunvisisFeature } from "../src/providers/funvisisProvider.js";
 import { normalizeGdacsFeature } from "../src/providers/gdacsProvider.js";
 import { normalizeGeoNetFeature } from "../src/providers/geoNetProvider.js";
 import { normalizeGeofonRecord, parseFdsnText } from "../src/providers/geofonProvider.js";
+import { extractNamedJsonObject, normalizeIgnFeature } from "../src/providers/ignProvider.js";
 import { normalizeIgpRecord } from "../src/providers/igpProvider.js";
+import {
+  buildIngvQueryWindows,
+  formatIngvUtcDateTime,
+  normalizeIngvRecord
+} from "../src/providers/ingvProvider.js";
 import { consolidateJmaRecords, normalizeJmaRecord } from "../src/providers/jmaProvider.js";
 import { parseNoaaCap } from "../src/providers/noaaProvider.js";
+import { normalizeSgcFeature } from "../src/providers/sgcProvider.js";
+import { normalizeSsnItem } from "../src/providers/ssnProvider.js";
 import { isAssociationCandidate, sourcePriority } from "../src/services/eventAssociationService.js";
 
 const INGESTED_AT = "2026-06-30T06:00:00.000Z";
@@ -133,6 +146,216 @@ test("normaliza GeoNet y descarta registros eliminados", () => {
   assert.equal(active.mmi, 3);
   assert.equal(active.status, "best");
   assert.equal(deleted, null);
+});
+
+test("extrae coleccion oficial IGN desde javascript publicado", () => {
+  const collection = extractNamedJsonObject(
+    [
+      'var dias3 = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[-9.0702,38.3665]},"properties":{"evid":"es2026mrygt","mag":"1.9","magtype":"mbLg","intensidad":" ","depth":"0","fecha":"2026-06-30 13:04:09","loc":"SE SESIMBRA.POR"}}]};',
+      'var dias10 = {"type":"FeatureCollection","features":[]};'
+    ].join("\n"),
+    "dias3"
+  ) as { features: Array<{ properties: { evid: string } }> };
+
+  assert.equal(collection.features.length, 1);
+  assert.equal(collection.features[0].properties.evid, "es2026mrygt");
+});
+
+test("normaliza evento oficial IGN", () => {
+  const event = normalizeIgnFeature(
+    {
+      geometry: { coordinates: [-9.0702, 38.3665] },
+      properties: {
+        evid: "es2026mrygt",
+        mag: "1.9",
+        magtype: "mbLg",
+        intensidad: " ",
+        depth: "0",
+        fecha: "2026-06-30 13:04:09",
+        loc: "SE SESIMBRA.POR"
+      }
+    },
+    INGESTED_AT
+  );
+
+  assert.ok(event);
+  assert.equal(event.source, "IGN");
+  assert.equal(event.eventTimeUtc, "2026-06-30T13:04:09.000Z");
+  assert.equal(event.magnitude, 1.9);
+  assert.equal(
+    event.sourceUrl,
+    "https://www.ign.es/web/ign/portal/ultimos-terremotos/-/ultimos-terremotos/getDetails?evid=es2026mrygt"
+  );
+});
+
+test("normaliza evento oficial SGC con coordenadas del feed regional", () => {
+  const event = normalizeSgcFeature(
+    {
+      id: "SGC2026mtpzgy",
+      geometry: {
+        coordinates: [11.072833333333334, -73.44583333333334, 20]
+      },
+      properties: {
+        agency: "SGC",
+        cdi: 0,
+        felt: 0,
+        gap: 132,
+        mag: 3.2,
+        magType: "MLr_4",
+        mmi: 0,
+        nst: 28,
+        place: "Dibulla - la Guajira, Colombia",
+        rms: 0.5,
+        status: "manual",
+        type: "earthquake",
+        updated: "2026-06-30 10:50:55",
+        utcTime: "2026-06-30 15:43"
+      }
+    },
+    INGESTED_AT
+  );
+
+  assert.ok(event);
+  assert.equal(event.source, "SGC");
+  assert.equal(event.latitude, 11.072833333333334);
+  assert.equal(event.longitude, -73.44583333333334);
+  assert.equal(event.depthKm, 20);
+  assert.equal(event.status, "official");
+  assert.equal(event.updatedAtUtc, "2026-06-30T15:50:55.000Z");
+  assert.equal(event.sourceUrl, "https://www.sgc.gov.co/detallesismo/SGC2026mtpzgy");
+});
+
+test("normaliza evento oficial SSN desde RSS", () => {
+  const event = normalizeSsnItem(
+    {
+      title: "3.3, 16 km al SUR de PETATLAN, GRO",
+      description:
+        " <p>Fecha:2026-06-30 04:50:59 (Hora de M&eacute;xico)<br/>Lat/Lon: 17.393/-101.287<br/>Profundidad: 18.9 km </p> ",
+      link: " http://www2.ssn.unam.mx:8080/jsp/localizacion-de-sismo.jsp?latitud=17.393&longitud=-101.287&prf=18.9 km&ma=3.3&fecha=2026-06-30&hora=04:50:59&loc=16 km al SUR de PETATLAN, GRO&evento=1 ",
+      lat: 17.393,
+      long: -101.287
+    },
+    INGESTED_AT
+  );
+
+  assert.ok(event);
+  assert.equal(event.source, "SSN");
+  assert.equal(event.eventTimeUtc, "2026-06-30T10:50:59.000Z");
+  assert.equal(event.magnitude, 3.3);
+  assert.equal(event.depthKm, 18.9);
+  assert.equal(event.latitude, 17.393);
+  assert.equal(event.longitude, -101.287);
+  assert.equal(event.status, "official");
+  assert.ok(event.sourceUrl?.includes("localizacion-de-sismo.jsp"));
+});
+
+test("extrae informes recientes oficiales desde portada CSN", () => {
+  const entries = extractCsnHomeEntries(
+    [
+      "<tr>",
+      '  <td><a href="/sismicidad/informes/2026/06/372151.html">2026-06-30 14:19:22</a><br>',
+      "      31 km al SO de Pica",
+      "  </td>",
+      "  <td>48 km</td>",
+      '  <td class="magnitud">3.8</td>',
+      "</tr>",
+      "<tr>",
+      '  <td><a href="/sismicidad/informes/2026/06/372144.html">2026-06-30 13:38:14</a><br>',
+      "      112 km al O de Caldera",
+      "  </td>",
+      "  <td>25 km</td>",
+      '  <td class="magnitud">2.6</td>',
+      "</tr>"
+    ].join("\n")
+  );
+
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].sourceEventId, "372151");
+  assert.equal(entries[1].path, "/sismicidad/informes/2026/06/372144.html");
+});
+
+test("parsea y normaliza detalle oficial CSN", () => {
+  const detail = parseCsnDetailPage(
+    [
+      "<table>",
+      "  <tbody>",
+      "    <tr><td>Referencia</td><td>112 km al O de Caldera</td></tr>",
+      "    <tr><td>Hora Local</td><td>13:38:14 30/06/2026</td></tr>",
+      "    <tr><td>Hora UTC</td><td>17:38:14 30/06/2026</td></tr>",
+      "    <tr><td>Latitud</td><td>-27.21</td></tr>",
+      "    <tr><td>Longitud</td><td>-71.95</td></tr>",
+      "    <tr><td>Profundidad</td><td>25 km</td></tr>",
+      "    <tr><td>Magnitud</td><td>2.6 MLv</td></tr>",
+      "  </tbody>",
+      "</table>"
+    ].join("\n"),
+    "https://www.sismologia.cl/sismicidad/informes/2026/06/372144.html"
+  );
+
+  assert.ok(detail);
+  assert.equal(detail.sourceEventId, "372144");
+  assert.equal(detail.eventTimeUtc, "2026-06-30T17:38:14.000Z");
+  assert.equal(detail.latitude, -27.21);
+  assert.equal(detail.longitude, -71.95);
+  assert.equal(detail.depthKm, 25);
+  assert.equal(detail.magnitude, 2.6);
+  assert.equal(detail.magnitudeType, "MLv");
+
+  const event = normalizeCsnDetail(detail, INGESTED_AT);
+  assert.equal(event.source, "CSN");
+  assert.equal(event.title, "M2.6 - 112 km al O de Caldera");
+  assert.equal(event.sourceUrl, "https://www.sismologia.cl/sismicidad/informes/2026/06/372144.html");
+});
+
+test("formatea fechas INGV en UTC sin sufijo Z y genera ventanas diarias", () => {
+  assert.equal(formatIngvUtcDateTime(new Date("2026-06-30T18:45:12.345Z")), "2026-06-30T18:45:12");
+
+  const windows = buildIngvQueryWindows(new Date("2026-06-30T18:45:12.345Z"), 72);
+  assert.deepEqual(windows, [
+    { starttime: "2026-06-27T00:00:00", endtime: "2026-06-27T23:59:59" },
+    { starttime: "2026-06-28T00:00:00", endtime: "2026-06-28T23:59:59" },
+    { starttime: "2026-06-29T00:00:00", endtime: "2026-06-29T23:59:59" },
+    { starttime: "2026-06-30T00:00:00", endtime: "2026-06-30T23:59:59" }
+  ]);
+});
+
+test("normaliza evento oficial INGV y descarta eventos fuera de la region operativa", () => {
+  const event = normalizeIngvRecord(
+    {
+      EventID: "46371332",
+      Time: "2026-06-29T05:35:29.400000",
+      Latitude: "40.7303",
+      Longitude: "15.1643",
+      "Depth/Km": "10.1",
+      Author: "SURVEY-INGV",
+      Magnitude: "2.5",
+      MagType: "ML",
+      EventLocationName: "4 km W Senerchia (AV)",
+      EventType: "earthquake"
+    },
+    INGESTED_AT
+  );
+
+  assert.ok(event);
+  assert.equal(event.source, "INGV");
+  assert.equal(event.eventTimeUtc, "2026-06-29T05:35:29.400Z");
+  assert.equal(event.title, "M2.5 - 4 km W Senerchia (AV)");
+  assert.equal(event.sourceUrl, "https://terremoti.ingv.it/event/46371332?timezone=UTC");
+
+  assert.equal(
+    normalizeIngvRecord(
+      {
+        EventID: "46375212",
+        Time: "2026-06-29T11:35:36.082000",
+        Latitude: "43.5305",
+        Longitude: "-126.997",
+        Magnitude: "5.5",
+        EventLocationName: "Off coast of Oregon, United States [Sea: United States]"
+      },
+      INGESTED_AT
+    ),
+    null
+  );
 });
 
 test("normaliza evento oficial BMKG con intensidad y sin falso tsunami", () => {
@@ -475,6 +698,11 @@ test("parsea producto CAP-TSU de NOAA", () => {
 test("aplica prioridad regional a Peru y Venezuela", () => {
   assert.ok(sourcePriority("IGP", -12, -77) > sourcePriority("USGS", -12, -77));
   assert.ok(sourcePriority("FUNVISIS", 10.5, -67) > sourcePriority("USGS", 10.5, -67));
+  assert.ok(sourcePriority("SGC", 4.6, -74.1) > sourcePriority("USGS", 4.6, -74.1));
+  assert.ok(sourcePriority("IGN", 40.4, -3.7) > sourcePriority("USGS", 40.4, -3.7));
+  assert.ok(sourcePriority("SSN", 17.4, -101.3) > sourcePriority("USGS", 17.4, -101.3));
+  assert.ok(sourcePriority("CSN", -29.9, -71.3) > sourcePriority("USGS", -29.9, -71.3));
+  assert.ok(sourcePriority("INGV", 40.7, 15.1) > sourcePriority("USGS", 40.7, 15.1));
   assert.ok(sourcePriority("USGS", 35, 140) > sourcePriority("EMSC", 35, 140));
   assert.ok(sourcePriority("GEONET", -41.2, 174.8) > sourcePriority("USGS", -41.2, 174.8));
   assert.ok(sourcePriority("BMKG", -6.2, 106.8) > sourcePriority("USGS", -6.2, 106.8));

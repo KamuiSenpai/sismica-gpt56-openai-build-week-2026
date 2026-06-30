@@ -56,12 +56,17 @@ type CanonicalRow = {
 };
 
 const PERU_BOUNDS = { minLat: -19.5, maxLat: 0.5, minLon: -82.5, maxLon: -68.5 };
-const VENEZUELA_BOUNDS = { minLat: 0, maxLat: 13.5, minLon: -74.5, maxLon: -58.5 };
+const VENEZUELA_BOUNDS = { minLat: 0, maxLat: 13.5, minLon: -73.3, maxLon: -58.5 };
+const COLOMBIA_BOUNDS = { minLat: -4.5, maxLat: 14.5, minLon: -82.5, maxLon: -66 };
+const MEXICO_BOUNDS = { minLat: 14, maxLat: 33.5, minLon: -119, maxLon: -85.5 };
+const CHILE_BOUNDS = { minLat: -57, maxLat: -17, minLon: -80.5, maxLon: -66 };
+const ITALY_BOUNDS = { minLat: 34, maxLat: 48.5, minLon: 5, maxLon: 20.5 };
 const NEW_ZEALAND_BOUNDS = { minLat: -49, maxLat: -28, minLon: 160, maxLon: 180 };
 const KERMADEC_BOUNDS = { minLat: -37, maxLat: -20, minLon: -180, maxLon: -170 };
 const INDONESIA_BOUNDS = { minLat: -11.5, maxLat: 6.5, minLon: 94, maxLon: 142 };
 const JAPAN_BOUNDS = { minLat: 24, maxLat: 46, minLon: 122, maxLon: 154 };
 const TAIWAN_BOUNDS = { minLat: 20, maxLat: 27, minLon: 118, maxLon: 123 };
+const IGN_REGION_BOUNDS = { minLat: 24, maxLat: 45, minLon: -19, maxLon: 6 };
 export const DEDUPLICATION_LIMITS = {
   timeSeconds: 60,
   distanceKm: 100,
@@ -91,41 +96,222 @@ function withinBounds(latitude: number, longitude: number, bounds: typeof PERU_B
 
 export function sourcePriority(source: SourceCode, latitude: number, longitude: number): number {
   if (withinBounds(latitude, longitude, PERU_BOUNDS)) {
-    return { IGP: 100, USGS: 80, GEOFON: 75, EMSC: 70, FUNVISIS: 40, GEONET: 40, BMKG: 40, JMA: 40, CWA: 40 }[
-      source
-    ];
+    return {
+      IGP: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      FUNVISIS: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      SGC: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
   }
   if (withinBounds(latitude, longitude, VENEZUELA_BOUNDS)) {
-    return { FUNVISIS: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, GEONET: 40, BMKG: 40, JMA: 40, CWA: 40 }[
-      source
-    ];
+    return {
+      FUNVISIS: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      SGC: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
+  }
+  if (withinBounds(latitude, longitude, COLOMBIA_BOUNDS)) {
+    return {
+      SGC: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
+  }
+  if (withinBounds(latitude, longitude, MEXICO_BOUNDS)) {
+    return {
+      SSN: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      SGC: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      IGN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
+  }
+  if (withinBounds(latitude, longitude, CHILE_BOUNDS)) {
+    return {
+      CSN: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      SGC: 40,
+      SSN: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      IGN: 40,
+      INGV: 40
+    }[source];
+  }
+  if (withinBounds(latitude, longitude, ITALY_BOUNDS)) {
+    return {
+      INGV: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      SGC: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40
+    }[source];
   }
   if (
     withinBounds(latitude, longitude, NEW_ZEALAND_BOUNDS) ||
     withinBounds(latitude, longitude, KERMADEC_BOUNDS)
   ) {
-    return { GEONET: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, BMKG: 40, JMA: 40, CWA: 40 }[
-      source
-    ];
+    return {
+      GEONET: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      SGC: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
   }
   if (withinBounds(latitude, longitude, INDONESIA_BOUNDS)) {
-    return { BMKG: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, GEONET: 40, JMA: 40, CWA: 40 }[
-      source
-    ];
+    return {
+      BMKG: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      GEONET: 40,
+      JMA: 40,
+      CWA: 40,
+      SGC: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
   }
   if (withinBounds(latitude, longitude, TAIWAN_BOUNDS)) {
-    return { CWA: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, GEONET: 40, BMKG: 40, JMA: 40 }[
-      source
-    ];
+    return {
+      CWA: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      SGC: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
   }
   if (withinBounds(latitude, longitude, JAPAN_BOUNDS)) {
-    return { JMA: 100, USGS: 80, GEOFON: 75, EMSC: 70, IGP: 40, FUNVISIS: 40, GEONET: 40, BMKG: 40, CWA: 40 }[
-      source
-    ];
+    return {
+      JMA: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      GEONET: 40,
+      BMKG: 40,
+      CWA: 40,
+      SGC: 40,
+      IGN: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
   }
-  return { USGS: 80, GEOFON: 75, EMSC: 70, IGP: 50, FUNVISIS: 50, GEONET: 50, BMKG: 50, JMA: 50, CWA: 50 }[
-    source
-  ];
+  if (withinBounds(latitude, longitude, IGN_REGION_BOUNDS)) {
+    return {
+      IGN: 100,
+      USGS: 80,
+      GEOFON: 75,
+      EMSC: 70,
+      IGP: 40,
+      FUNVISIS: 40,
+      GEONET: 40,
+      BMKG: 40,
+      JMA: 40,
+      CWA: 40,
+      SGC: 40,
+      SSN: 40,
+      CSN: 40,
+      INGV: 40
+    }[source];
+  }
+  return {
+    USGS: 80,
+    GEOFON: 75,
+    EMSC: 70,
+    IGP: 50,
+    FUNVISIS: 50,
+    GEONET: 50,
+    BMKG: 50,
+    JMA: 50,
+    CWA: 50,
+    SGC: 50,
+    IGN: 50,
+    SSN: 50,
+    CSN: 50,
+    INGV: 50
+  }[source];
 }
 
 function canonicalParams(event: SeismicEvent, rawPayload: unknown, priority: number): unknown[] {

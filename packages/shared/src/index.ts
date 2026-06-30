@@ -1,4 +1,18 @@
-export type SourceCode = "USGS" | "EMSC" | "IGP" | "FUNVISIS" | "GEOFON" | "GEONET" | "BMKG" | "JMA" | "CWA";
+export type SourceCode =
+  | "USGS"
+  | "EMSC"
+  | "IGP"
+  | "FUNVISIS"
+  | "GEOFON"
+  | "GEONET"
+  | "BMKG"
+  | "JMA"
+  | "CWA"
+  | "SGC"
+  | "IGN"
+  | "SSN"
+  | "CSN"
+  | "INGV";
 export type OperationalSourceCode = SourceCode | "GDACS" | "NOAA_PTWC" | "NOAA_NTWC";
 
 export type SeismicEvent = {
