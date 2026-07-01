@@ -9,7 +9,8 @@ import {
   fetchExperimentalOrigins,
   fetchSeismicPresence,
   fetchStations,
-  fetchSourceStatuses
+  fetchSourceStatuses,
+  fetchTopMagnitude
 } from "../lib/api";
 
 const REFRESH_MS = 60_000;
@@ -63,6 +64,14 @@ export function useSeismicPresenceQuery() {
   return useQuery({
     queryKey: ["seismic-presence"],
     queryFn: fetchSeismicPresence,
+    refetchInterval: 5 * REFRESH_MS
+  });
+}
+
+export function useTopMagnitudeQuery() {
+  return useQuery({
+    queryKey: ["top-magnitude"],
+    queryFn: () => fetchTopMagnitude(10),
     refetchInterval: 5 * REFRESH_MS
   });
 }

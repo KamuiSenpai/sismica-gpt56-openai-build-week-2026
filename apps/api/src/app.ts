@@ -7,7 +7,12 @@ import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
 import { parseEventsQuery } from "./lib/queryParams.js";
 import { getActiveDisasters, getActiveTsunamiProducts } from "./services/contextRepository.js";
-import { getEventById, getEventReferences, getEvents } from "./services/eventRepository.js";
+import {
+  getEventById,
+  getEventReferences,
+  getEvents,
+  getTopMagnitudeEvents
+} from "./services/eventRepository.js";
 import { getSourceStatuses } from "./services/sourceStatusRepository.js";
 import { StreamBroker } from "./services/streamBroker.js";
 import { getStations, parseStationQuery } from "./services/stationRepository.js";
@@ -112,6 +117,17 @@ export function createApp(streamBroker: StreamBroker) {
   app.get("/api/analytics/seismic-presence", async (_request, response) => {
     try {
       response.json(await getSeismicPresenceSummary(pool));
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/analytics/top-magnitude", async (request, response) => {
+    try {
+      const raw = typeof request.query.limit === "string" ? Number(request.query.limit) : 10;
+      const limit = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.trunc(raw))) : 10;
+      const items = await getTopMagnitudeEvents(pool, limit);
+      response.json({ generatedAt: new Date().toISOString(), items });
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }

@@ -8,7 +8,7 @@ type EventStatusBadge = {
   description: string;
 };
 
-const MAGNITUDE_PREFIX = /^M\s*\d+(?:\.\d+)?\s*-\s*/i;
+const EVENT_TITLE_PREFIX = /^(?:M\s*\d+(?:\.\d+)?|Earthquake|Sismo)\s*(?:-\s*)?/i;
 
 function pad(value: number): string {
   return String(value).padStart(2, "0");
@@ -71,8 +71,13 @@ function cleanDescriptor(text: string): string {
 }
 
 export function getEventPlace(title: string): string {
-  const stripped = title.replace(MAGNITUDE_PREFIX, "").trim();
-  return cleanDescriptor(stripped) || title;
+  let stripped = title.replace(EVENT_TITLE_PREFIX, "");
+  stripped = stripped.replace(/\b(?:earthquake|sismo)\b/gi, "");
+  stripped = stripped.replace(/\s+/g, " ");
+  stripped = stripped.replace(/\s+([,-])/g, "$1");
+  stripped = stripped.replace(/([,-])\s+([,-])/g, "$1");
+  stripped = stripped.replace(/(^\s*[,.-]\s*|\s*[,.-]\s*$)/g, "");
+  return cleanDescriptor(stripped.trim()) || title;
 }
 
 export const EVENT_STATUS_LEGEND: EventStatusBadge[] = [

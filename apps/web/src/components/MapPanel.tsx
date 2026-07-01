@@ -49,6 +49,7 @@ import {
 } from "../lib/presentation";
 import { CountryFlag } from "./CountryFlag";
 import { MosaicSwap } from "./MosaicSwap";
+import { TopMagnitudeTable } from "./TopMagnitudeTable";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? "";
 
@@ -58,6 +59,7 @@ type MapPanelProps = {
   stations: SeismicStation[];
   experimentalOrigins: ExperimentalOrigin[];
   seismicPresence: SeismicPresenceSummary | null;
+  topMagnitude: SeismicEvent[];
   selectedEventId: string | null;
   onSelect: (eventId: string) => void;
   tourPaused: boolean;
@@ -373,6 +375,7 @@ export function MapPanel({
   stations,
   experimentalOrigins,
   seismicPresence,
+  topMagnitude,
   selectedEventId,
   onSelect,
   tourPaused,
@@ -1052,6 +1055,7 @@ export function MapPanel({
       </div>
 
       <SeismicPresenceLegend summary={seismicPresence} />
+      <TopMagnitudeTable historical={topMagnitude} liveEvents={events} />
 
       <div
         className="map-legend legend-intensity"

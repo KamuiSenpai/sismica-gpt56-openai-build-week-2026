@@ -131,6 +131,27 @@ export async function getEvents(pool: Pool, query: EventsQuery): Promise<Seismic
   return result.rows.map(mapEventRow);
 }
 
+// Top-N sismos de mayor magnitud (2000-actualidad). Se filtra a USGS (fuente
+// global autoritativa, una fila por evento) y magnitud <= 9.6 para excluir
+// duplicados entre fuentes y magnitudes erroneas de otros proveedores.
+export async function getTopMagnitudeEvents(pool: Pool, limit: number): Promise<SeismicEvent[]> {
+  const result = await pool.query<EventRow>(
+    `
+      SELECT ${EVENT_COLUMNS}
+      FROM seismic_events
+      WHERE source = 'USGS'
+        AND magnitude IS NOT NULL
+        AND magnitude <= 9.6
+        AND event_time_utc >= '2000-01-01T00:00:00Z'
+      ORDER BY magnitude DESC, event_time_utc DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
+
+  return result.rows.map(mapEventRow);
+}
+
 export async function getEventById(pool: Pool, eventId: string): Promise<SeismicEvent | null> {
   const result = await pool.query<EventRow>(
     `

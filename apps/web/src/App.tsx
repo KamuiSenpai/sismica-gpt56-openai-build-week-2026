@@ -23,6 +23,7 @@ import {
   useSeismicPresenceQuery,
   useSourceStatusesQuery,
   useStationsQuery,
+  useTopMagnitudeQuery,
   useTsunamiQuery
 } from "./hooks/queries";
 import {
@@ -40,6 +41,7 @@ import {
 } from "./lib/presentation";
 import { resolveCountryCode, useCountryGeocoder } from "./lib/countryGeocoder";
 import { CountryFlag } from "./components/CountryFlag";
+import { Marquee } from "./components/Marquee";
 
 function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | null): SeismicEvent | null {
   return selectedEventId ? (events.find((event) => event.eventId === selectedEventId) ?? null) : null;
@@ -109,6 +111,7 @@ export default function App() {
   const stationsQuery = useStationsQuery();
   const stations = stationsQuery.data ?? [];
   const seismicPresence = useSeismicPresenceQuery().data ?? null;
+  const topMagnitude = useTopMagnitudeQuery().data ?? [];
   const error = eventsQuery.isError
     ? eventsQuery.error instanceof Error
       ? eventsQuery.error.message
@@ -233,6 +236,7 @@ export default function App() {
           stations={stations}
           experimentalOrigins={[]}
           seismicPresence={seismicPresence}
+          topMagnitude={topMagnitude}
           selectedEventId={selectedEventId}
           onSelect={setSelectedEventId}
           tourPaused={tourPaused}
@@ -259,8 +263,8 @@ export default function App() {
                   </div>
                   <div className="event-headline">
                     <strong>
-                      <CountryFlag event={focusEvent} className="event-flag" />{" "}
-                      {normalizedPlace(focusEvent, resolveCountryCode(focusEvent))}
+                      <CountryFlag event={focusEvent} className="event-flag" />
+                      <Marquee text={normalizedPlace(focusEvent, resolveCountryCode(focusEvent))} />
                     </strong>
                     <span>{formatUtcDateTime(focusEvent.eventTimeUtc)} UTC</span>
                     <span>

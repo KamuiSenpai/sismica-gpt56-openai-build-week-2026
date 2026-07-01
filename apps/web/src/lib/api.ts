@@ -165,6 +165,17 @@ export async function fetchSeismicPresence(): Promise<SeismicPresenceSummary | n
   }
 }
 
+export async function fetchTopMagnitude(limit = 10): Promise<SeismicEvent[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/top-magnitude?limit=${limit}`);
+    if (!response.ok) throw new Error(`Top magnitude request failed: ${response.status}`);
+    return ((await response.json()) as EventsResponse).items;
+  } catch (error) {
+    console.warn("Top de mayor magnitud no disponible.", error);
+    return [];
+  }
+}
+
 export function buildStreamUrl(): string {
   return `${API_BASE_URL}/api/stream`;
 }
