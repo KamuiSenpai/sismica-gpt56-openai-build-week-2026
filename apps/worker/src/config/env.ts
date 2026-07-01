@@ -68,7 +68,17 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => (value ?? "false").toLowerCase() === "true"),
-  STREAM_CHANNEL: channelEnv("seismic_events_channel")
+  STREAM_CHANNEL: channelEnv("seismic_events_channel"),
+  // Motor experimental de deteccion/triangulacion (publica por el adaptador interno).
+  SEISMIC_ENGINE_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => (value ?? "false").toLowerCase() === "true"),
+  SEISMIC_ENGINE_TOKEN: z.string().min(24).optional(),
+  SEISMIC_ENGINE_API_URL: urlEnv("http://localhost:3000"),
+  SEISMIC_ENGINE_INTERVAL_MS: numberEnv(120000),
+  SEISMIC_ENGINE_MAX_STATIONS: numberEnv(8),
+  SEISMIC_ENGINE_MAX_EVENTS: numberEnv(6)
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -119,5 +129,11 @@ export const env = {
   sourceWindowHours: parsed.data.SOURCE_WINDOW_HOURS,
   stationCatalogRefreshMs: parsed.data.STATION_CATALOG_REFRESH_MS,
   runOnce: parsed.data.RUN_ONCE,
-  streamChannel: parsed.data.STREAM_CHANNEL
+  streamChannel: parsed.data.STREAM_CHANNEL,
+  seismicEngineEnabled: parsed.data.SEISMIC_ENGINE_ENABLED,
+  seismicEngineToken: parsed.data.SEISMIC_ENGINE_TOKEN,
+  seismicEngineApiUrl: parsed.data.SEISMIC_ENGINE_API_URL,
+  seismicEngineIntervalMs: parsed.data.SEISMIC_ENGINE_INTERVAL_MS,
+  seismicEngineMaxStations: parsed.data.SEISMIC_ENGINE_MAX_STATIONS,
+  seismicEngineMaxEvents: parsed.data.SEISMIC_ENGINE_MAX_EVENTS
 };

@@ -368,10 +368,15 @@ export function estimatedIntensity(event: SeismicEvent): number | null {
 
 export function normalizedIntensity(event: SeismicEvent): string {
   if (event.intensityText) {
-    // IGP a veces envía "II Chimbote", extraemos solo el número romano si es posible
-    const igpMatch = event.intensityText.trim().match(/^(IV|IX|V?I{0,3})(?:\s|-|$)/i);
-    if (igpMatch && igpMatch[1] && event.source === "IGP") {
-      return `MMI ${igpMatch[1].toUpperCase()}`;
+    const match = event.intensityText
+      .trim()
+      .match(
+        /^(?:INTENSIDAD\s+)?(XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I)(?:-(XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I))?(?:\s|-|$)/i
+      );
+    if (match && match[1]) {
+      let res = match[1].toUpperCase();
+      if (match[2]) res += "-" + match[2].toUpperCase();
+      return `MMI ${res}`;
     }
     return event.intensityText;
   }

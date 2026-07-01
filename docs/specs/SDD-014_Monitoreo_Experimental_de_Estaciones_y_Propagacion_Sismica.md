@@ -450,3 +450,80 @@ Reglas:
 | RF-1409, RF-1410, RF-1412 | Cesium station layer          | VF-1407, VV-1401  |
 | RF-1411                   | wavefront time model          | UT-1406, VF-1408  |
 | RNF-1401 a RNF-1409       | configuracion y gates         | VT-1401 a VT-1407 |
+
+## 16. Addendum operacional
+
+Addendum ejecutado el 30 de junio de 2026 en `America/Lima` y validado
+tecnicamente tambien el 1 de julio de 2026 UTC. Este apartado describe el modo
+operacional actualmente implementado sobre `SDD-014`.
+
+### 16.1 Consulta publica de origenes experimentales
+
+Se expone el endpoint:
+
+```text
+GET /api/experimental-origins?hours=<1..720>&limit=<1..1000>
+```
+
+Respuesta esperada:
+
+```json
+{
+  "generatedAt": "2026-07-01T04:40:42.132Z",
+  "items": [],
+  "count": 0
+}
+```
+
+Reglas operacionales:
+
+1. La consulta es de solo lectura.
+2. Los origenes se leen desde `experimental_origins`.
+3. Los registros con `status = discarded` no se exponen.
+4. La respuesta nunca alimenta `seismic_events` ni `/api/events`.
+
+### 16.2 Capa web de epicentros experimentales
+
+La aplicacion React/CesiumJS incorpora una capa separada para los epicentros
+experimentales:
+
+1. Marcador tipo rombo sobre el globo.
+2. Color de relleno por `quality`.
+3. Borde por `status`.
+4. Tooltip con hora UTC, profundidad, motor y numero de estaciones.
+5. Toggle independiente `Epicentros exp.` en el panel de capas.
+6. Leyenda explicita dentro del panel experimental.
+
+La capa no sustituye ni colorea la capa oficial de sismos consolidados.
+
+### 16.3 Modo operacional del monitor
+
+El comportamiento operacional actual queda definido asi:
+
+1. El catalogo oficial multifuente sigue siendo la fuente primaria del feed.
+2. Las estaciones y los epicentros experimentales son capas secundarias,
+   separadas y etiquetadas como experimentales.
+3. El mapa base operativo por defecto es oscuro para priorizar lectura del
+   monitor.
+4. Las ondas P/S visibles en la interfaz se usan como replay visual del monitor
+   para inspeccion y no deben interpretarse como tiempo oficial de arribo.
+5. Un origen experimental puede mostrarse en el globo sin aparecer en el feed
+   oficial, por diseno.
+
+### 16.4 Extension de requisitos
+
+Este addendum extiende `SDD-014` con los siguientes requisitos:
+
+| Codigo   | Requisito                                                                    |
+| -------- | ---------------------------------------------------------------------------- |
+| RF-1413  | Exponer consulta publica de origenes experimentales por REST                 |
+| RF-1414  | Renderizar capa de epicentros experimentales con marcador, toggle y leyenda  |
+| RNF-1410 | Mantener separacion visual y semantica entre catalogo oficial y experimental |
+
+### 16.5 Trazabilidad del addendum
+
+| Requisito | Implementacion prevista            | Validacion       |
+| --------- | ---------------------------------- | ---------------- |
+| RF-1413   | API `experimentalOriginRepository` | AO-1401, AO-1405 |
+| RF-1414   | `MapPanel` + cliente React         | AO-1402, AO-1406 |
+| RNF-1410  | leyenda, toggle y tooltip          | AO-1402, AO-1406 |

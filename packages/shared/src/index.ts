@@ -88,6 +88,31 @@ export type EventsQuery = {
   limit: number;
 };
 
+export type ContinentCode = "SA" | "NA" | "EU" | "AS" | "AF" | "OC";
+
+export type CountrySeismicPresence = {
+  countryCode: string;
+  countryName: string;
+  count: number;
+  percentage: number;
+};
+
+export type ContinentSeismicPresence = {
+  continentCode: ContinentCode;
+  continentName: string;
+  countries: CountrySeismicPresence[];
+};
+
+export type SeismicPresenceSummary = {
+  generatedAt: string;
+  totalRecords: number;
+  assignedRecords: number;
+  unassignedRecords: number;
+  startYear: number | null;
+  endYear: number | null;
+  continents: ContinentSeismicPresence[];
+};
+
 export type StreamEvent = {
   type: "event.created" | "event.updated";
   payload: SeismicEvent;

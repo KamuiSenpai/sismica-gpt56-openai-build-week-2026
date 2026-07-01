@@ -69,3 +69,38 @@ Referencias oficiales:
 - https://docs.gempa.de/seiscomp/current/apps/scautoloc.html
 - https://docs.gempa.de/seiscomp/current/apps/scmag.html
 - https://geofon.gfz.de/waveform/seedlink.php
+
+## Modo operacional
+
+Orden minimo de operacion:
+
+1. Aplicar migraciones: `npm run db:migrate`
+2. Levantar la API en `http://localhost:3000`
+3. Ejecutar el worker con el motor habilitado
+4. Verificar el endpoint publico de origenes experimentales
+5. Verificar la capa `Epicentros exp.` en el frontend
+
+Ejecucion de un ciclo puntual del motor:
+
+```powershell
+$env:RUN_ONCE='true'
+$env:SEISMIC_ENGINE_ENABLED='true'
+npx tsx apps/worker/src/index.ts
+```
+
+Consulta publica esperada:
+
+```text
+GET http://localhost:3000/api/experimental-origins?hours=72&limit=10
+```
+
+Comportamiento operacional actual:
+
+1. Los origenes experimentales se consultan por REST y se visualizan en una
+   capa independiente del feed oficial.
+2. La capa web usa un marcador propio, toggle y leyenda explicita.
+3. La interfaz mantiene separados los catalogos oficiales y experimentales.
+4. Las ondas visibles del monitor son un replay visual de inspeccion y no una
+   prediccion oficial de arribo.
+5. Ningun origen experimental debe insertarse automaticamente en
+   `seismic_events`.

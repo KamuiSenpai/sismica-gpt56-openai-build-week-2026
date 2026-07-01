@@ -262,8 +262,9 @@ button {
   overflow: hidden;
   color: #fff;
   font-size: 0.82rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .event-headline span {
@@ -620,9 +621,10 @@ button {
   overflow: hidden;
   font-size: 0.68rem;
   font-weight: 600;
-  text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .feed-event-copy small,
@@ -729,59 +731,103 @@ button {
   grid-template-columns: 1fr;
 }
 
+.legend-presence {
+  right: 640px;
+  bottom: 34px;
+  width: 398px;
+  min-height: 193px;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 8px 11px 9px;
+  font-size: 0.64rem;
+}
+
+.presence-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.presence-heading .legend-title {
+  grid-column: auto;
+  font-size: 0.69rem;
+}
+
+.presence-heading strong {
+  color: #8ce2ff;
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+.presence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.presence-continent {
+  min-width: 0;
+}
+
+.presence-continent > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #facc15;
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.presence-continent ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.presence-continent li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 16px;
+  min-width: 0;
+  color: #d1d8de;
+}
+
+.presence-continent li em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presence-continent li strong {
+  color: #e6ebef;
+  font-size: 0.62rem;
+}
+
+.presence-flag {
+  width: 14px;
+  height: 10px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.presence-empty {
+  grid-template-columns: 1fr !important;
+  color: #64748b !important;
+}
+
 .legend-row .legend-swatch {
   width: 12px;
   height: 12px;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 2px;
   flex: 0 0 auto;
-}
-
-.station-layer-toggle {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(141, 161, 178, 0.35);
-  color: #eef5f8;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.station-legend-panel {
-  position: absolute;
-  right: 640px;
-  bottom: 34px;
-  z-index: 20;
-  width: 168px;
-  display: grid;
-  gap: 6px;
-  padding: 7px 9px;
-  border: 1px solid #8da1b2;
-  border-radius: 2px;
-  color: #d1d8de;
-  background: rgba(2, 8, 13, 0.9);
-  font-size: 0.58rem;
-}
-
-.station-layer-toggle input {
-  accent-color: #38bdf8;
-}
-
-.station-state-legend {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 8px;
-}
-
-.station-triangle {
-  width: 0 !important;
-  height: 0 !important;
-  border-right: 5px solid transparent;
-  border-bottom: 9px solid;
-  border-left: 5px solid transparent;
 }
 
 .station-detail {
@@ -1012,12 +1058,14 @@ button {
     left: 310px;
   }
 
-  .station-legend-panel {
-    right: 472px;
-  }
-
   .topbar-center {
     text-align: left;
+  }
+}
+
+@media (max-width: 1180px) {
+  .legend-presence {
+    display: none;
   }
 }
 
@@ -1073,17 +1121,15 @@ button {
     display: none !important;
   }
 
+  .legend-presence {
+    display: none !important;
+  }
+
   .station-detail {
     left: 8px;
     top: 8px;
     bottom: auto;
     width: min(280px, calc(100vw - 16px));
-  }
-
-  .station-legend-panel {
-    right: auto;
-    left: 8px;
-    bottom: 8px;
   }
 
   .monitor-footer {

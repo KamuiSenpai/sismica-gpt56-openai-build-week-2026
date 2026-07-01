@@ -11,6 +11,11 @@ import { getEventById, getEventReferences, getEvents } from "./services/eventRep
 import { getSourceStatuses } from "./services/sourceStatusRepository.js";
 import { StreamBroker } from "./services/streamBroker.js";
 import { getStations, parseStationQuery } from "./services/stationRepository.js";
+import { getSeismicPresenceSummary } from "./services/seismicPresenceRepository.js";
+import {
+  getExperimentalOrigins,
+  parseExperimentalOriginQuery
+} from "./services/experimentalOriginRepository.js";
 import {
   experimentalOriginSchema,
   persistExperimentalOrigin,
@@ -104,6 +109,14 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
+  app.get("/api/analytics/seismic-presence", async (_request, response) => {
+    try {
+      response.json(await getSeismicPresenceSummary(pool));
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   app.get("/api/disasters/active", async (_request, response) => {
     try {
       response.json({ items: await getActiveDisasters(pool) });
@@ -146,6 +159,21 @@ export function createApp(streamBroker: StreamBroker) {
   app.get("/api/stations/stream", (request, response) => {
     const id = streamBroker.registerStation(response);
     request.on("close", () => streamBroker.unregister(id));
+  });
+
+  app.get("/api/experimental-origins", async (request, response) => {
+    try {
+      const query = parseExperimentalOriginQuery({
+        hours: typeof request.query.hours === "string" ? request.query.hours : undefined,
+        limit: typeof request.query.limit === "string" ? request.query.limit : undefined
+      });
+      const origins = await getExperimentalOrigins(pool, query);
+      response.json({ generatedAt: new Date().toISOString(), items: origins, count: origins.length });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      const invalidInput = message.includes("must");
+      response.status(invalidInput ? 400 : 500).json({ error: message });
+    }
   });
 
   app.post("/internal/seismic-engine/snapshots", async (request, response) => {

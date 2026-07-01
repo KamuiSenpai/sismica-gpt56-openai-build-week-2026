@@ -105,9 +105,36 @@ confirmo globo, imagenes, entidades y controles renderizados.
 
 ## Observaciones
 
-1. `npm run lint` conserva 19 errores preexistentes en scripts exploratorios de
-   `apps/worker/test` ajenos a SDD-014. Los archivos implementados compilan y no
-   agregan errores de lint.
-2. La prueba uso GEOFON `GE`; integrar streams del IGP requiere un canal
+1. La prueba uso GEOFON `GE`; integrar streams del IGP requiere un canal
    documentado o coordinacion institucional.
-3. El modulo sigue siendo experimental y no produce alertas oficiales.
+2. El modulo sigue siendo experimental y no produce alertas oficiales.
+
+## Addendum operacional
+
+Addendum ejecutado el 30 de junio de 2026 (`America/Lima`) y corroborado
+tecnicamente el 1 de julio de 2026 UTC para cerrar el modo operacional del
+monitor experimental.
+
+### Casos del addendum
+
+| Id      | Caso                                  | Resultado esperado                                |
+| ------- | ------------------------------------- | ------------------------------------------------- |
+| AO-1401 | GET `/api/experimental-origins`       | Respuesta REST con `items` y `count`              |
+| AO-1402 | Capa web de epicentros experimentales | Marcador, toggle y leyenda operativos             |
+| AO-1403 | Build shared                          | `npm run build -w packages/shared` sin errores    |
+| AO-1404 | Typecheck y lint                      | `npm run typecheck` y `npm run lint` sin errores  |
+| AO-1405 | Migracion + motor experimental        | `db:migrate` aplicado y ciclo del motor publicado |
+| AO-1406 | Build web                             | `npm run build -w apps/web` sin errores           |
+| AO-1407 | Tests automatizados                   | API, worker y web sin fallas                      |
+
+### Resultado del addendum
+
+| Id      | Resultado | Evidencia                                                                                                                                                            |
+| ------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AO-1401 | Aprobado  | `GET /api/experimental-origins?hours=72&limit=10` respondio `count=10` y `generatedAt=2026-07-01T04:40:42.132Z`                                                      |
+| AO-1402 | Aprobado  | `MapPanel` renderiza la capa `Epicentros exp.` con tooltip, toggle y leyenda                                                                                         |
+| AO-1403 | Aprobado  | `npm run build -w packages/shared` completo                                                                                                                          |
+| AO-1404 | Aprobado  | `npm run typecheck` y `npm run lint` completos                                                                                                                       |
+| AO-1405 | Aprobado  | `npm run db:migrate` aplico `001` a `006`; `RUN_ONCE=true SEISMIC_ENGINE_ENABLED=true npx tsx apps/worker/src/index.ts` publico `origins=6`, `triggered stations=31` |
+| AO-1406 | Aprobado  | `npm run build -w apps/web` completo                                                                                                                                 |
+| AO-1407 | Aprobado  | `npm test -w apps/api` 4/4, `npm test -w apps/worker` 41/41, `npm test -w apps/web` 3/3                                                                              |

@@ -14,7 +14,7 @@ import { fetchJson, fetchText, fetchXml } from "../providers/http.js";
 import { normalizeEmscFeature, parseEmscResponse } from "../providers/emscProvider.js";
 import { createFdsnProvider, normalizeFdsnRecord } from "../providers/fdsnProvider.js";
 import { normalizeGdacsFeature, type GdacsFeature } from "../providers/gdacsProvider.js";
-import { normalizeGeofonRecord, parseFdsnText, type FdsnTextRecord } from "../providers/geofonProvider.js";
+import { normalizeGeofonRecord, parseFdsnText } from "../providers/geofonProvider.js";
 import { normalizeIgepnRecord, parseIgepnCsv } from "../providers/igepnProvider.js";
 import { normalizeIgnFeature, extractNamedJsonObject } from "../providers/ignProvider.js";
 import { normalizeIgpRecord, type IgpRecord } from "../providers/igpProvider.js";
@@ -29,7 +29,6 @@ import {
 } from "../providers/schemas.js";
 import { type SeismicRecord } from "../providers/types.js";
 
-type EmscFeature = Parameters<typeof normalizeEmscFeature>[0];
 type IgnFeatureCollection = { features?: Parameters<typeof normalizeIgnFeature>[0][] };
 type GdacsResponse = { features?: GdacsFeature[] };
 

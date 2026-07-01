@@ -3,7 +3,9 @@ import {
   DEFAULT_MIN_MAGNITUDE,
   normalizeUsgsFeature,
   type DisasterContext,
+  type ExperimentalOrigin,
   type SeismicEvent,
+  type SeismicPresenceSummary,
   type SeismicStation,
   type SourceStatus,
   type TsunamiProduct,
@@ -30,6 +32,10 @@ type TsunamiResponse = {
 
 type StationsResponse = {
   items: SeismicStation[];
+};
+
+type ExperimentalOriginsResponse = {
+  items: ExperimentalOrigin[];
 };
 
 type EventsInput = {
@@ -134,6 +140,28 @@ export async function fetchStations(): Promise<SeismicStation[]> {
   } catch (error) {
     console.warn("Catalogo de estaciones no disponible.", error);
     return [];
+  }
+}
+
+export async function fetchExperimentalOrigins(): Promise<ExperimentalOrigin[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/experimental-origins?hours=72&limit=200`);
+    if (!response.ok) throw new Error(`Experimental origins request failed: ${response.status}`);
+    return ((await response.json()) as ExperimentalOriginsResponse).items;
+  } catch (error) {
+    console.warn("Origenes experimentales no disponibles.", error);
+    return [];
+  }
+}
+
+export async function fetchSeismicPresence(): Promise<SeismicPresenceSummary | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/seismic-presence`);
+    if (!response.ok) throw new Error(`Seismic presence request failed: ${response.status}`);
+    return (await response.json()) as SeismicPresenceSummary;
+  } catch (error) {
+    console.warn("Resumen de presencia sismica no disponible.", error);
+    return null;
   }
 }
 

@@ -14,6 +14,8 @@
     "dev:worker": "npm run dev -w apps/worker",
     "start:api": "npm run start -w apps/api",
     "start:worker": "npm run start -w apps/worker",
+    "db:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-db.ps1",
+    "db:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-db.ps1",
     "db:migrate": "node scripts/migrate.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

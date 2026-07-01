@@ -1,6 +1,7 @@
 import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
 import { runIngestion } from "./services/ingestionService.js";
+import { runSeismicEngineCycle } from "./services/seismicEngine/engine.js";
 import { refreshStationCatalogIfDue } from "./services/stationCatalogService.js";
 
 async function executeOnce() {
@@ -21,14 +22,33 @@ async function executeOnce() {
   }
 }
 
+// Motor experimental: triangula epicentros y publica telemetria por el adaptador interno.
+// Fallar aqui (p. ej. si la API aun no responde) no debe detener la ingesta.
+async function runEngineSafely() {
+  try {
+    const summary = await runSeismicEngineCycle();
+    if (summary.status === "skipped") {
+      console.log(`seismic engine skipped: ${summary.reason}`);
+    } else {
+      console.log(
+        `seismic engine: origins=${summary.publishedOrigins}, triggered stations=${summary.triggeredStations}`
+      );
+    }
+  } catch (error) {
+    console.error("Seismic engine cycle failed", error);
+  }
+}
+
 async function main() {
   if (env.runOnce) {
     await executeOnce();
+    await runEngineSafely();
     await pool.end();
     return;
   }
 
   await executeOnce();
+  await runEngineSafely();
 
   const timer = setInterval(async () => {
     try {
@@ -38,8 +58,11 @@ async function main() {
     }
   }, env.pollIntervalMs);
 
+  const engineTimer = setInterval(runEngineSafely, env.seismicEngineIntervalMs);
+
   const shutdown = async () => {
     clearInterval(timer);
+    clearInterval(engineTimer);
     await pool.end();
     process.exit(0);
   };

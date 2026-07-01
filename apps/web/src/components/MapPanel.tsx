@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
-import { type DisasterContext, type SeismicEvent, type SeismicStation } from "@sismica/shared";
 import {
+  type DisasterContext,
+  type ExperimentalOrigin,
+  type SeismicEvent,
+  type SeismicPresenceSummary,
+  type SeismicStation
+} from "@sismica/shared";
+import {
+  BillboardGraphics,
   CallbackProperty,
   Cartesian3,
   Cartographic,
@@ -13,33 +20,32 @@ import {
   EllipsoidGeodesic,
   Entity,
   GeoJsonDataSource,
-  BillboardGraphics,
   HorizontalOrigin,
-  VerticalOrigin,
   Ion,
   JulianDate,
   Math as CesiumMath,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   UrlTemplateImageryProvider,
+  VerticalOrigin,
   Viewer,
   defined
 } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
+import { resolveCountryCode } from "../lib/countryGeocoder";
 import {
+  estimatedIntensity,
   formatDepth,
   formatMagnitude,
   formatUtcDateTime,
-  MAGNITUDE_BANDS,
-  magnitudeCssColor,
-  normalizedPlace,
-  estimatedIntensity,
-  intensityCssColor,
   INTENSITY_BANDS,
-  normalizedIntensity
+  MAGNITUDE_BANDS,
+  intensityCssColor,
+  magnitudeCssColor,
+  normalizedIntensity,
+  normalizedPlace
 } from "../lib/presentation";
-import { resolveCountryCode } from "../lib/countryGeocoder";
 import { CountryFlag } from "./CountryFlag";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? "";
@@ -48,21 +54,24 @@ type MapPanelProps = {
   disasters: DisasterContext[];
   events: SeismicEvent[];
   stations: SeismicStation[];
+  experimentalOrigins: ExperimentalOrigin[];
+  seismicPresence: SeismicPresenceSummary | null;
   selectedEventId: string | null;
   onSelect: (eventId: string) => void;
   tourPaused: boolean;
   onToggleTour: () => void;
 };
 
-// Velocidades sismicas medias en la corteza (m/s). El frente P es mas rapido que el S.
 const VP_MPS = 6500;
 const VS_MPS = 3750;
 const WAVE_TIME_ACCEL = 35;
 const WAVE_MAX_RADIUS_M = 1_500_000;
 const FRESH_WINDOW_MS = 10 * 60 * 1000;
 const SELECTION_WAVE_INTERVAL_MS = 3_500;
+
 const DISASTER_PREFIX = "context:";
 const STATION_PREFIX = "station:";
+const EXPERIMENTAL_ORIGIN_PREFIX = "origin:";
 const WAVE_PREFIX = "wave:";
 
 const PLATE_COLORS: Record<string, string> = {
@@ -72,25 +81,28 @@ const PLATE_COLORS: Record<string, string> = {
   transform: "#f59e0b"
 };
 
-// Color por MAGNITUD (la cifra "Richter"/Mw del sismo). Todos los sismos tienen
-// magnitud, asi que todos los puntos quedan coloreados. Clases descriptivas USGS.
-const MAG_BANDS: { max: number; color: string; label: string }[] = [
-  { max: 2, color: "#22c55e", label: "Micro (<2)" },
-  { max: 4, color: "#a3e635", label: "Menor (2–3.9)" },
-  { max: 5, color: "#facc15", label: "Ligero (4–4.9)" },
-  { max: 6, color: "#fb923c", label: "Moderado (5–5.9)" },
-  { max: 7, color: "#ef4444", label: "Fuerte (6–6.9)" },
-  { max: Number.POSITIVE_INFINITY, color: "#b91c1c", label: "Mayor (≥7)" }
-];
-const NO_MAGNITUDE_COLOR = "#64748b";
+const STATION_COLORS = {
+  unknown: "#64748b",
+  online: "#38bdf8",
+  delayed: "#facc15",
+  offline: "#991b1b",
+  triggered: "#84cc16"
+} as const;
 
-function magnitudeBand(magnitude: number): (typeof MAG_BANDS)[number] {
-  return MAG_BANDS.find((band) => magnitude < band.max) ?? MAG_BANDS[MAG_BANDS.length - 1];
-}
+const EXPERIMENTAL_QUALITY_COLORS: Record<ExperimentalOrigin["quality"], string> = {
+  acceptable: "#67e8f9",
+  preliminary: "#facc15",
+  rejected: "#ef4444"
+};
 
-function magnitudeColor(magnitude: number | null): Color {
-  return Color.fromCssColorString(magnitude === null ? NO_MAGNITUDE_COLOR : magnitudeBand(magnitude).color);
-}
+const EXPERIMENTAL_STATUS_STROKES: Record<ExperimentalOrigin["status"], string> = {
+  candidate: "#fb923c",
+  located: "#f8fafc",
+  discarded: "#64748b",
+  confirmed: "#22c55e"
+};
+
+const EXPERIMENTAL_ORIGIN_SYMBOL_CACHE = new Map<string, string>();
 
 function magnitudeSize(magnitude: number | null): number {
   if (magnitude === null) return 8;
@@ -131,9 +143,6 @@ function disasterColor(level: string | null): Color {
   }
 }
 
-// Frente de onda con FISICA real: el frente es una esfera de radio v·t que nace en el
-// hipocentro (profundidad h). Su traza en superficie es un circulo de radio
-// R(t) = sqrt((v·t)^2 - h^2), que recien aparece cuando v·t >= h (retardo = h/v).
 function spawnSeismicRing(
   viewer: Viewer,
   longitude: number,
@@ -178,9 +187,7 @@ function spawnSeismicRing(
   const lifeMs =
     (Math.sqrt(WAVE_MAX_RADIUS_M ** 2 + depthM ** 2) / velocityMps / WAVE_TIME_ACCEL) * 1000 + 250;
   window.setTimeout(() => {
-    if (!viewer.isDestroyed()) {
-      viewer.entities.remove(ring);
-    }
+    if (!viewer.isDestroyed()) viewer.entities.remove(ring);
   }, lifeMs);
 }
 
@@ -191,14 +198,6 @@ function spawnWavefront(viewer: Viewer, event: SeismicEvent): void {
   spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VP_MPS, depthM, 2);
   spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VS_MPS, depthM, 3);
 }
-
-const STATION_COLORS = {
-  unknown: "#64748b",
-  online: "#38bdf8",
-  delayed: "#facc15",
-  offline: "#991b1b",
-  triggered: "#84cc16"
-} as const;
 
 function stationSymbol(station: SeismicStation, selected: boolean): string {
   const fill = STATION_COLORS[station.status];
@@ -211,6 +210,71 @@ function stationSymbol(station: SeismicStation, selected: boolean): string {
         : "#0b1220";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2 22 21H2Z" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function experimentalOriginSymbol(origin: ExperimentalOrigin): string {
+  const fill = EXPERIMENTAL_QUALITY_COLORS[origin.quality];
+  const stroke = EXPERIMENTAL_STATUS_STROKES[origin.status];
+  const key = `${origin.quality}:${origin.status}`;
+  const cached = EXPERIMENTAL_ORIGIN_SYMBOL_CACHE.get(key);
+  if (cached) return cached;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><polygon points="14,2 26,14 14,26 2,14" fill="${fill}" stroke="${stroke}" stroke-width="2.2"/><circle cx="14" cy="14" r="3.1" fill="#08131b" opacity="0.9"/></svg>`;
+  const symbol = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  EXPERIMENTAL_ORIGIN_SYMBOL_CACHE.set(key, symbol);
+  return symbol;
+}
+
+function experimentalOriginScale(origin: ExperimentalOrigin): number {
+  const magnitudeBoost = origin.magnitude === null ? 0 : Math.max(0, Math.min(2.2, origin.magnitude / 4));
+  return 0.62 + magnitudeBoost * 0.18;
+}
+
+function formatPresenceCount(count: number): string {
+  return new Intl.NumberFormat("es-PE").format(count);
+}
+
+function formatPresenceCoverage(summary: SeismicPresenceSummary): string {
+  const count = `${formatPresenceCount(summary.totalRecords)} registros`;
+  if (summary.startYear === null || summary.endYear === null) return count;
+  return `${summary.startYear} - ${summary.endYear} / ${count}`;
+}
+
+function SeismicPresenceLegend({ summary }: { summary: SeismicPresenceSummary | null }) {
+  return (
+    <div className="map-legend legend-presence">
+      <div className="presence-heading">
+        <span className="legend-title">Paises con mas sismos</span>
+        <strong>{summary ? formatPresenceCoverage(summary) : "Cargando"}</strong>
+      </div>
+      <div className="presence-grid">
+        {(summary?.continents ?? []).map((continent) => (
+          <section className="presence-continent" key={continent.continentCode}>
+            <span>{continent.continentName}</span>
+            <ol>
+              {continent.countries.length > 0 ? (
+                continent.countries.map((country) => (
+                  <li key={`${continent.continentCode}-${country.countryCode}`}>
+                    <img
+                      alt=""
+                      aria-hidden="true"
+                      className="presence-flag"
+                      loading="lazy"
+                      src={`/flags/${country.countryCode}.svg`}
+                    />
+                    <em>{country.countryName}</em>
+                    <strong>{formatPresenceCount(country.count)}</strong>
+                  </li>
+                ))
+              ) : (
+                <li className="presence-empty">Sin datos</li>
+              )}
+            </ol>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 async function setupBasemap(viewer: Viewer): Promise<void> {
@@ -238,7 +302,6 @@ async function loadPlateBoundaries(viewer: Viewer): Promise<void> {
     const now = JulianDate.now();
     for (const entity of dataSource.entities.values) {
       if (!entity.polyline) continue;
-
       const props = entity.properties as unknown as { kind?: { getValue: (t: JulianDate) => string } };
       const kind = props?.kind?.getValue(now);
       const css = (kind && PLATE_COLORS[kind]) || "#94a3b8";
@@ -285,18 +348,15 @@ async function loadVolcanoes(viewer: Viewer): Promise<void> {
       'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><polygon points="12,2 22,20 2,20" fill="%23f97316" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/></svg>';
 
     for (const entity of dataSource.entities.values) {
-      if (entity.position) {
-        // Renderizar volcán como un triángulo 2D (billboard)
-        entity.billboard = new BillboardGraphics({
-          image: new ConstantProperty(volcanoSvg),
-          scale: new ConstantProperty(0.7),
-          horizontalOrigin: new ConstantProperty(HorizontalOrigin.CENTER),
-          verticalOrigin: new ConstantProperty(VerticalOrigin.BOTTOM)
-        });
-        // Quitar la configuración 3D/por defecto
-        entity.point = undefined;
-        entity.cylinder = undefined;
-      }
+      if (!entity.position) continue;
+      entity.billboard = new BillboardGraphics({
+        image: new ConstantProperty(volcanoSvg),
+        scale: new ConstantProperty(0.7),
+        horizontalOrigin: new ConstantProperty(HorizontalOrigin.CENTER),
+        verticalOrigin: new ConstantProperty(VerticalOrigin.BOTTOM)
+      });
+      entity.point = undefined;
+      entity.cylinder = undefined;
     }
 
     await viewer.dataSources.add(dataSource);
@@ -309,6 +369,8 @@ export function MapPanel({
   disasters,
   events,
   stations,
+  experimentalOrigins,
+  seismicPresence,
   selectedEventId,
   onSelect,
   tourPaused,
@@ -318,6 +380,7 @@ export function MapPanel({
   const viewerRef = useRef<Viewer | null>(null);
   const eventMapRef = useRef<Map<string, SeismicEvent>>(new Map());
   const stationMapRef = useRef<Map<string, SeismicStation>>(new Map());
+  const experimentalOriginMapRef = useRef<Map<string, ExperimentalOrigin>>(new Map());
   const disasterMapRef = useRef<Map<string, DisasterContext>>(new Map());
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
@@ -326,14 +389,17 @@ export function MapPanel({
   const selectionWaveTimerRef = useRef<number | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+
   const [hover, setHover] = useState<
     | { kind: "event"; event: SeismicEvent; x: number; y: number }
     | { kind: "disaster"; context: DisasterContext; x: number; y: number }
     | { kind: "station"; station: SeismicStation; x: number; y: number }
+    | { kind: "origin"; origin: ExperimentalOrigin; x: number; y: number }
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
   const [stationsVisible, setStationsVisible] = useState(true);
+  const [experimentalOriginsVisible, setExperimentalOriginsVisible] = useState(true);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -359,9 +425,7 @@ export function MapPanel({
     scene.globe.showGroundAtmosphere = true;
     scene.globe.depthTestAgainstTerrain = false;
     scene.globe.baseColor = Color.fromCssColorString("#0b1220");
-    if (scene.skyAtmosphere) {
-      scene.skyAtmosphere.show = true;
-    }
+    if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
     scene.fog.enabled = false;
     scene.highDynamicRange = false;
     scene.postProcessStages.bloom.enabled = false;
@@ -378,14 +442,14 @@ export function MapPanel({
 
     const canvas = viewer.scene.canvas;
     const handler = new ScreenSpaceEventHandler(canvas);
+
     handler.setInputAction((movement: ScreenSpaceEventHandler.PositionedEvent) => {
       const picked = viewer.scene.pick(movement.position);
-      if (defined(picked) && picked.id instanceof Entity && typeof picked.id.id === "string") {
-        if (eventMapRef.current.has(picked.id.id)) {
-          onSelectRef.current(picked.id.id);
-        } else if (stationMapRef.current.has(picked.id.id)) {
-          setSelectedStationId(picked.id.id);
-        }
+      if (!defined(picked) || !(picked.id instanceof Entity) || typeof picked.id.id !== "string") return;
+      if (eventMapRef.current.has(picked.id.id)) {
+        onSelectRef.current(picked.id.id);
+      } else if (stationMapRef.current.has(picked.id.id)) {
+        setSelectedStationId(picked.id.id);
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
@@ -396,9 +460,10 @@ export function MapPanel({
       const event = typeof id === "string" ? eventMapRef.current.get(id) : undefined;
       const context = typeof id === "string" ? disasterMapRef.current.get(id) : undefined;
       const station = typeof id === "string" ? stationMapRef.current.get(id) : undefined;
+      const origin = typeof id === "string" ? experimentalOriginMapRef.current.get(id) : undefined;
 
+      const rect = canvas.getBoundingClientRect();
       if (event) {
-        const rect = canvas.getBoundingClientRect();
         setHover({
           kind: "event",
           event,
@@ -407,7 +472,6 @@ export function MapPanel({
         });
         canvas.style.cursor = "pointer";
       } else if (context) {
-        const rect = canvas.getBoundingClientRect();
         setHover({
           kind: "disaster",
           context,
@@ -416,7 +480,6 @@ export function MapPanel({
         });
         canvas.style.cursor = "pointer";
       } else if (station) {
-        const rect = canvas.getBoundingClientRect();
         setHover({
           kind: "station",
           station,
@@ -424,11 +487,18 @@ export function MapPanel({
           y: rect.top + movement.endPosition.y
         });
         canvas.style.cursor = "pointer";
+      } else if (origin) {
+        setHover({
+          kind: "origin",
+          origin,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "default";
       } else if (entity?.properties?.volcanoName) {
-        const rect = canvas.getBoundingClientRect();
         setHover({
           kind: "volcano",
-          name: entity.properties.volcanoName.getValue()?.toString() || "Volcán",
+          name: entity.properties.volcanoName.getValue()?.toString() || "Volcan",
           country: entity.properties.country?.getValue()?.toString() || "",
           type: entity.properties.type?.getValue()?.toString() || "",
           x: rect.left + movement.endPosition.x,
@@ -479,9 +549,11 @@ export function MapPanel({
         typeof entity.id === "string" &&
         (entity.id.startsWith(WAVE_PREFIX) ||
           entity.id.startsWith(DISASTER_PREFIX) ||
-          entity.id.startsWith(STATION_PREFIX))
-      )
+          entity.id.startsWith(STATION_PREFIX) ||
+          entity.id.startsWith(EXPERIMENTAL_ORIGIN_PREFIX))
+      ) {
         continue;
+      }
       if (typeof entity.id === "string" && !nextMap.has(entity.id)) {
         collection.remove(entity);
       }
@@ -490,7 +562,6 @@ export function MapPanel({
     for (const event of events) {
       const selected = event.eventId === selectedIdRef.current;
       let entity = collection.getById(event.eventId);
-
       if (!entity) {
         entity = collection.add({
           id: event.eventId,
@@ -543,6 +614,7 @@ export function MapPanel({
           Cartesian3.fromDegrees(station.longitude, station.latitude)
         );
       }
+
       if (entity.billboard) {
         const selected = id === selectedStationId;
         entity.billboard.image = new ConstantProperty(stationSymbol(station, selected));
@@ -553,6 +625,50 @@ export function MapPanel({
       }
     }
   }, [stations, stationsVisible, selectedStationId]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const nextMap = new Map(
+      experimentalOrigins.map((origin) => [`${EXPERIMENTAL_ORIGIN_PREFIX}${origin.originId}`, origin])
+    );
+    experimentalOriginMapRef.current = nextMap;
+
+    for (const entity of [...viewer.entities.values]) {
+      if (
+        typeof entity.id === "string" &&
+        entity.id.startsWith(EXPERIMENTAL_ORIGIN_PREFIX) &&
+        !nextMap.has(entity.id)
+      ) {
+        viewer.entities.remove(entity);
+      }
+    }
+
+    for (const [id, origin] of nextMap) {
+      let entity = viewer.entities.getById(id);
+      if (!entity) {
+        entity = viewer.entities.add({
+          id,
+          position: Cartesian3.fromDegrees(origin.longitude, origin.latitude),
+          billboard: {}
+        });
+      } else {
+        entity.position = new ConstantPositionProperty(
+          Cartesian3.fromDegrees(origin.longitude, origin.latitude)
+        );
+      }
+
+      if (entity.billboard) {
+        entity.billboard.image = new ConstantProperty(experimentalOriginSymbol(origin));
+        entity.billboard.scale = new ConstantProperty(experimentalOriginScale(origin));
+        entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
+        entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.CENTER);
+        entity.billboard.disableDepthTestDistance = new ConstantProperty(Number.POSITIVE_INFINITY);
+        entity.billboard.show = new ConstantProperty(experimentalOriginsVisible);
+      }
+    }
+  }, [experimentalOrigins, experimentalOriginsVisible]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -603,35 +719,33 @@ export function MapPanel({
       }
     }
 
-    if (selectedEventId) {
-      const event = eventMapRef.current.get(selectedEventId);
-      if (event) {
-        stopSpinRef.current?.();
-        // Pull-back adaptativo: cuanto mas lejos esta el siguiente sismo, mas se aleja
-        // la camara en el trayecto para ver hacia donde viaja (en vez de arrastrarse).
-        const destination = Cartographic.fromDegrees(event.longitude, event.latitude);
-        const surfaceDistance = new EllipsoidGeodesic(viewer.camera.positionCartographic, destination)
-          .surfaceDistance;
-        const maximumHeight = CesiumMath.clamp(surfaceDistance * 0.5, 500_000, 9_000_000);
-        void viewer.camera.flyTo({
-          // Altitud baja (~450 km) en el destino para ver el lugar: costa, ciudades y etiquetas.
-          destination: Cartesian3.fromDegrees(event.longitude, event.latitude, 450_000),
-          orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
-          duration: 3.2,
-          maximumHeight,
-          easingFunction: EasingFunction.QUADRATIC_IN_OUT
-        });
-        spawnWavefront(viewer, event);
-        selectionWaveTimerRef.current = window.setInterval(() => {
-          if (viewer.isDestroyed()) return;
-          const activeId = selectedIdRef.current;
-          if (!activeId) return;
-          const activeEvent = eventMapRef.current.get(activeId);
-          if (!activeEvent) return;
-          spawnWavefront(viewer, activeEvent);
-        }, SELECTION_WAVE_INTERVAL_MS);
-      }
-    }
+    if (!selectedEventId) return;
+    const event = eventMapRef.current.get(selectedEventId);
+    if (!event) return;
+
+    stopSpinRef.current?.();
+    const destination = Cartographic.fromDegrees(event.longitude, event.latitude);
+    const surfaceDistance = new EllipsoidGeodesic(viewer.camera.positionCartographic, destination)
+      .surfaceDistance;
+    const maximumHeight = CesiumMath.clamp(surfaceDistance * 0.5, 500_000, 9_000_000);
+
+    void viewer.camera.flyTo({
+      destination: Cartesian3.fromDegrees(event.longitude, event.latitude, 450_000),
+      orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
+      duration: 3.2,
+      maximumHeight,
+      easingFunction: EasingFunction.QUADRATIC_IN_OUT
+    });
+
+    spawnWavefront(viewer, event);
+    selectionWaveTimerRef.current = window.setInterval(() => {
+      if (viewer.isDestroyed()) return;
+      const activeId = selectedIdRef.current;
+      if (!activeId) return;
+      const activeEvent = eventMapRef.current.get(activeId);
+      if (!activeEvent) return;
+      spawnWavefront(viewer, activeEvent);
+    }, SELECTION_WAVE_INTERVAL_MS);
   }, [selectedEventId]);
 
   useEffect(() => {
@@ -640,20 +754,27 @@ export function MapPanel({
 
     const event = eventMapRef.current.get(selectedEventId);
     if (!event || event.source !== "USGS" || !event.detailUrl) return;
+    const detailUrl = event.detailUrl;
 
     let activeDataSource: GeoJsonDataSource | null = null;
     let isCancelled = false;
 
     async function fetchAndRenderShakeMap() {
       try {
-        const res = await fetch(event!.detailUrl!);
-        const data = (await res.json()) as any;
-
+        const res = await fetch(detailUrl);
+        const data = (await res.json()) as {
+          properties?: {
+            products?: {
+              shakemap?: Array<{
+                contents?: Record<string, { url?: string }>;
+              }>;
+            };
+          };
+        };
         if (isCancelled) return;
 
         const shakemapProduct = data.properties?.products?.shakemap?.[0];
         if (!shakemapProduct) return;
-
         const contUrl = shakemapProduct.contents?.["download/cont_mi.json"]?.url;
         if (!contUrl) return;
 
@@ -667,24 +788,24 @@ export function MapPanel({
         for (const entity of dataSource.entities.values) {
           const valueProp = entity.properties?.value;
           const value = valueProp ? parseFloat(valueProp.getValue(JulianDate.now())) : null;
-          if (value !== null) {
-            const colorCss = intensityCssColor(value);
-            const cesiumColor = Color.fromCssColorString(colorCss).withAlpha(0.4);
-            if (entity.polygon) {
-              entity.polygon.material = new ColorMaterialProperty(cesiumColor);
-              entity.polygon.outline = new ConstantProperty(false);
-            }
-            if (entity.polyline) {
-              entity.polyline.material = new ColorMaterialProperty(cesiumColor);
-              entity.polyline.width = new ConstantProperty(2);
-            }
+          if (value === null) continue;
+
+          const colorCss = intensityCssColor(value);
+          const cesiumColor = Color.fromCssColorString(colorCss).withAlpha(0.4);
+          if (entity.polygon) {
+            entity.polygon.material = new ColorMaterialProperty(cesiumColor);
+            entity.polygon.outline = new ConstantProperty(false);
+          }
+          if (entity.polyline) {
+            entity.polyline.material = new ColorMaterialProperty(cesiumColor);
+            entity.polyline.width = new ConstantProperty(2);
           }
         }
 
         await viewerRef.current.dataSources.add(dataSource);
         activeDataSource = dataSource;
-      } catch (err) {
-        console.warn("Failed to load shakemap for event", err);
+      } catch (error) {
+        console.warn("Failed to load shakemap for event", error);
       }
     }
 
@@ -707,6 +828,7 @@ export function MapPanel({
   return (
     <div className="map-shell">
       <div ref={containerRef} className="map-canvas cesium-canvas" />
+
       {hover?.kind === "event" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>{normalizedPlace(hover.event, resolveCountryCode(hover.event))}</strong>
@@ -717,15 +839,17 @@ export function MapPanel({
           <span className="tt-source">Fuente: {hover.event.source}</span>
         </div>
       ) : null}
+
       {hover?.kind === "disaster" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>{hover.context.title}</strong>
           <span>
-            GDACS {hover.context.alertLevel ?? "N/D"} · score {hover.context.alertScore ?? "N/D"}
+            GDACS {hover.context.alertLevel ?? "N/D"} | score {hover.context.alertScore ?? "N/D"}
           </span>
           <span>{formatUtcDateTime(hover.context.eventTimeUtc)} UTC</span>
         </div>
       ) : null}
+
       {hover?.kind === "station" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>
@@ -733,17 +857,35 @@ export function MapPanel({
           </strong>
           <span>{hover.station.siteName ?? "Estacion sin nombre publicado"}</span>
           <span className="tt-source">
-            {hover.station.status.toUpperCase()} · {hover.station.source}
+            {hover.station.status.toUpperCase()} | {hover.station.source}
           </span>
         </div>
       ) : null}
+
+      {hover?.kind === "origin" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>Epicentro experimental</strong>
+          <span>
+            {formatMagnitude(hover.origin.magnitude)} | {hover.origin.status.toUpperCase()} |{" "}
+            {hover.origin.quality.toUpperCase()}
+          </span>
+          <span>
+            {formatUtcDateTime(hover.origin.originTimeUtc)} UTC | Prof. {formatDepth(hover.origin.depthKm)}
+          </span>
+          <span className="tt-source">
+            Motor: {hover.origin.engine} | estaciones: {hover.origin.stationCount}
+          </span>
+        </div>
+      ) : null}
+
       {hover?.kind === "volcano" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
-          <strong>🌋 {hover.name}</strong>
+          <strong>{hover.name}</strong>
           <span>{hover.type}</span>
           <span className="tt-source">{hover.country}</span>
         </div>
       ) : null}
+
       {tourEvent && !selectedStation ? (
         <div className="tour-card">
           <div className="tour-card-top">
@@ -752,7 +894,7 @@ export function MapPanel({
               <span style={{ color: magnitudeCssColor(tourEvent.magnitude) }}>
                 {formatMagnitude(tourEvent.magnitude)}
               </span>{" "}
-              — {normalizedPlace(tourEvent, resolveCountryCode(tourEvent))}
+              - {normalizedPlace(tourEvent, resolveCountryCode(tourEvent))}
             </strong>
             <button
               type="button"
@@ -761,14 +903,14 @@ export function MapPanel({
               title={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
               aria-label={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
             >
-              {tourPaused ? "▶" : "⏸"}
+              {tourPaused ? ">" : "||"}
             </button>
           </div>
           <div
             className="tour-card-meta"
             style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" }}
           >
-            {formatUtcDateTime(tourEvent.eventTimeUtc)} UTC • Prof: {formatDepth(tourEvent.depthKm)} •
+            {formatUtcDateTime(tourEvent.eventTimeUtc)} UTC | Prof: {formatDepth(tourEvent.depthKm)} |
             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
               <i
                 style={{
@@ -785,6 +927,7 @@ export function MapPanel({
           <span className="tour-card-source">Datos: {tourEvent.source}</span>
         </div>
       ) : null}
+
       {selectedStation ? (
         <section className="station-detail" aria-label="Detalle de estacion experimental">
           <button
@@ -794,7 +937,7 @@ export function MapPanel({
             aria-label="Cerrar detalle de estacion"
             title="Cerrar"
           >
-            ×
+            x
           </button>
           <span className="station-detail-kicker">ESTACION EXPERIMENTAL</span>
           <strong>
@@ -826,6 +969,7 @@ export function MapPanel({
           </a>
         </section>
       ) : null}
+
       <div className="map-legend">
         <span className="legend-title">Limites de placa</span>
         <span className="legend-row">
@@ -846,7 +990,7 @@ export function MapPanel({
         </span>
         <span className="legend-row">
           <i style={{ background: "#dc2626", opacity: 0.6 }} />
-          Fallas Activas
+          Fallas activas
         </span>
         <span className="legend-row">
           <i
@@ -872,27 +1016,9 @@ export function MapPanel({
           ShakeMap (USGS)
         </span>
       </div>
-      <div className="station-legend-panel">
-        <label className="station-layer-toggle">
-          <input
-            type="checkbox"
-            checked={stationsVisible}
-            onChange={(event) => setStationsVisible(event.target.checked)}
-          />
-          Estaciones ({stations.length})
-        </label>
-        {stationsVisible ? (
-          <div className="station-state-legend">
-            <span className="legend-title">Estados experimentales</span>
-            {Object.entries(STATION_COLORS).map(([status, color]) => (
-              <span className="legend-row" key={status}>
-                <i className="station-triangle" style={{ borderBottomColor: color }} />
-                {status.toUpperCase()}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
+
+      <SeismicPresenceLegend summary={seismicPresence} />
+
       <div
         className="map-legend legend-intensity"
         style={{ width: "auto", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "5px 24px" }}
@@ -907,7 +1033,7 @@ export function MapPanel({
           ))}
         </div>
         <div style={{ display: "grid", gap: "5px", alignContent: "start" }}>
-          <span className="legend-title">Magnitud (Tamaño)</span>
+          <span className="legend-title">Magnitud (Tamano)</span>
           {MAGNITUDE_BANDS.map((band) => {
             const mag = band.max === Infinity ? 7.5 : band.max - 0.5;
             const size = Math.min(16, magnitudeSize(mag));

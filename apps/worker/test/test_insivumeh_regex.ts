@@ -5,18 +5,18 @@ const markers = html.split("L.circleMarker(").slice(1);
 const records = [];
 
 for (const markerStr of markers) {
-  const coordMatch = markerStr.match(/\[([\-\d\.]+),\s*([\-\d\.]+)\]/);
+  const coordMatch = markerStr.match(/\[([-\d.]+),\s*([-\d.]+)\]/);
   const tooltipMatch = markerStr.split("bindTooltip")[1];
-  
+
   if (coordMatch && tooltipMatch) {
     const lat = parseFloat(coordMatch[1]);
     const lon = parseFloat(coordMatch[2]);
-    
-    const magMatch = tooltipMatch.match(/Magnitud:\s*<\/b>([\d\.]+)/i);
-    const timeMatch = tooltipMatch.match(/Tiempo de Origen:\s*<\/b>([\d\-:\s]+)/i);
-    const depthMatch = tooltipMatch.match(/Profundidad:\s*<\/b>\s*([\d\.]+)/i);
+
+    const magMatch = tooltipMatch.match(/Magnitud:\s*<\/b>([\d.]+)/i);
+    const timeMatch = tooltipMatch.match(/Tiempo de Origen:\s*<\/b>([\d-:\s]+)/i);
+    const depthMatch = tooltipMatch.match(/Profundidad:\s*<\/b>\s*([\d.]+)/i);
     const idMatch = tooltipMatch.match(/ID:\s*<\/b>([a-z0-9]+)/i);
-    
+
     if (magMatch && timeMatch && idMatch) {
       records.push({
         lat,
@@ -33,7 +33,7 @@ for (const markerStr of markers) {
 console.log("Total INSIVUMEH Records:", records.length);
 if (records.length > 0) {
   console.log("First record:", records[0]);
-  
+
   // Test date conversion (INSIVUMEH is UTC-6)
   const [datePart, timePart] = records[0].time.split(" ");
   const isoString = `${datePart}T${timePart}.000-06:00`;

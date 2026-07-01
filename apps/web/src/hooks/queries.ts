@@ -6,6 +6,8 @@ import {
   fetchActiveDisasters,
   fetchActiveTsunamiProducts,
   fetchEvents,
+  fetchExperimentalOrigins,
+  fetchSeismicPresence,
   fetchStations,
   fetchSourceStatuses
 } from "../lib/api";
@@ -54,6 +56,22 @@ export function useStationsQuery() {
     queryKey: ["stations"],
     queryFn: fetchStations,
     refetchInterval: 5 * REFRESH_MS
+  });
+}
+
+export function useSeismicPresenceQuery() {
+  return useQuery({
+    queryKey: ["seismic-presence"],
+    queryFn: fetchSeismicPresence,
+    refetchInterval: 5 * REFRESH_MS
+  });
+}
+
+export function useExperimentalOriginsQuery() {
+  return useQuery({
+    queryKey: ["experimental-origins"],
+    queryFn: fetchExperimentalOrigins,
+    refetchInterval: REFRESH_MS
   });
 }
 

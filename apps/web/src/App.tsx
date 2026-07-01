@@ -20,6 +20,7 @@ import {
   mergeIncomingEvent,
   useDisastersQuery,
   useEventsQuery,
+  useSeismicPresenceQuery,
   useSourceStatusesQuery,
   useStationsQuery,
   useTsunamiQuery
@@ -107,6 +108,7 @@ export default function App() {
   const tsunamiProducts = useTsunamiQuery().data ?? [];
   const stationsQuery = useStationsQuery();
   const stations = stationsQuery.data ?? [];
+  const seismicPresence = useSeismicPresenceQuery().data ?? null;
   const error = eventsQuery.isError
     ? eventsQuery.error instanceof Error
       ? eventsQuery.error.message
@@ -229,6 +231,8 @@ export default function App() {
           disasters={disasters}
           events={events}
           stations={stations}
+          experimentalOrigins={[]}
+          seismicPresence={seismicPresence}
           selectedEventId={selectedEventId}
           onSelect={setSelectedEventId}
           tourPaused={tourPaused}
