@@ -211,10 +211,6 @@ async function setupBasemap(viewer: Viewer): Promise<void> {
     const nightProvider = await IonImageryProvider.fromAssetId(3812);
     const nightLayer = viewer.imageryLayers.addImageryProvider(nightProvider);
     nightLayer.dayAlpha = 0.0; // Solo se ve de noche
-
-    // 3. Batimetría Submarina y Terreno 3D
-    const { Terrain } = await import("cesium");
-    viewer.scene.setTerrain(Terrain.fromWorldBathymetry());
   } catch (error) {
     console.warn("No se pudo cargar el mapa satelital", error);
     // Fallback al mapa oscuro de Carto
@@ -349,7 +345,7 @@ export function MapPanel({
     const scene = viewer.scene;
     scene.globe.enableLighting = true;
     scene.globe.showGroundAtmosphere = true;
-    scene.globe.depthTestAgainstTerrain = true;
+    scene.globe.depthTestAgainstTerrain = false;
     scene.globe.baseColor = Color.fromCssColorString("#0b1220");
     if (scene.skyAtmosphere) {
       scene.skyAtmosphere.show = true;
