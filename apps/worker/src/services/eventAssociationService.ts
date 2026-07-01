@@ -412,6 +412,33 @@ async function findExistingCanonical(client: PoolClient, eventId: string): Promi
   return result.rows[0] ?? null;
 }
 
+async function findExactMatch(client: PoolClient, event: SeismicEvent): Promise<MatchRow | null> {
+  const result = await client.query<MatchRow>(
+    `
+      SELECT
+        event_id,
+        0::double precision AS time_delta_seconds,
+        0::double precision AS distance_km,
+        CASE
+          WHEN magnitude IS NULL OR $4::double precision IS NULL THEN NULL
+          ELSE 0::double precision
+        END AS magnitude_delta,
+        0::double precision AS score
+      FROM seismic_events
+      WHERE event_time_utc = $1::timestamptz
+        AND ST_Equals(
+          geom::geometry,
+          ST_SetSRID(ST_MakePoint($2, $3), 4326)
+        )
+        AND magnitude IS NOT DISTINCT FROM $4::double precision
+      ORDER BY preferred_source_priority DESC, event_id ASC
+      LIMIT 1
+    `,
+    [event.eventTimeUtc, event.longitude, event.latitude, event.magnitude]
+  );
+  return result.rows[0] ?? null;
+}
+
 async function findMatch(client: PoolClient, event: SeismicEvent): Promise<MatchRow | null> {
   const result = await client.query<MatchRow>(
     `
@@ -632,7 +659,7 @@ export async function ingestSeismicRecords(
       continue;
     }
 
-    const match = await findMatch(client, event);
+    const match = (await findExactMatch(client, event)) ?? (await findMatch(client, event));
     if (match) {
       await upsertReference(client, match.event_id, record);
       await client.query(

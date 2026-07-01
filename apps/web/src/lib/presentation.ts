@@ -366,10 +366,15 @@ export function estimatedIntensity(event: SeismicEvent): number | null {
   return Math.max(1, Math.min(12, mmi));
 }
 
-// Intensidad unificada y etiquetada por escala (no se mezclan: MMI instrumental/DYFI
-// vs shindo de la JMA). Si no hay medida, se ESTIMA con la IPE (marcada como tal).
 export function normalizedIntensity(event: SeismicEvent): string {
-  if (event.intensityText) return event.intensityText; // p. ej. "JMA 3" (shindo), ya etiquetado
+  if (event.intensityText) {
+    // IGP a veces envía "II Chimbote", extraemos solo el número romano si es posible
+    const igpMatch = event.intensityText.trim().match(/^(IV|IX|V?I{0,3})(?:\s|-|$)/i);
+    if (igpMatch && igpMatch[1] && event.source === "IGP") {
+      return `MMI ${igpMatch[1].toUpperCase()}`;
+    }
+    return event.intensityText;
+  }
   // Intensidades < I (p. ej. cdi=0 = sin reportes) no son significativas.
   if (typeof event.mmi === "number" && event.mmi >= 1) return `MMI ${romanIntensity(event.mmi)}`;
   if (typeof event.cdi === "number" && event.cdi >= 1) return `MMI ${romanIntensity(event.cdi)} (DYFI)`;

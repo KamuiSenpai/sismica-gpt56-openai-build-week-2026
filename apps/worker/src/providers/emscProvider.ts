@@ -25,7 +25,16 @@ type EmscFeature = {
   };
 };
 
-type EmscResponse = { features?: EmscFeature[] };
+export type EmscResponse = { features?: EmscFeature[] };
+
+export function parseEmscResponse(payload: string): EmscResponse {
+  // El historico de EMSC contiene respuestas puntuales con comas duplicadas entre o al inicio de elementos.
+  const repaired = payload
+    .replace(/}\s*,{2,}\s*{/g, "},{")
+    .replace(/\[\s*,+\s*(?={)/g, "[")
+    .replace(/}\s*,+\s*]/g, "}]");
+  return JSON.parse(repaired) as EmscResponse;
+}
 
 export function normalizeEmscFeature(feature: EmscFeature, ingestedAt: string): SeismicEvent | null {
   const props = feature.properties;

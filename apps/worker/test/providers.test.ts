@@ -14,7 +14,7 @@ import {
   parseCsnDetailPage
 } from "../src/providers/csnProvider.js";
 import { buildCwaSourceEventId, normalizeCwaRecord } from "../src/providers/cwaProvider.js";
-import { normalizeEmscFeature } from "../src/providers/emscProvider.js";
+import { normalizeEmscFeature, parseEmscResponse } from "../src/providers/emscProvider.js";
 import { normalizeFunvisisFeature } from "../src/providers/funvisisProvider.js";
 import { normalizeGdacsFeature } from "../src/providers/gdacsProvider.js";
 import { normalizeGeoNetFeature } from "../src/providers/geoNetProvider.js";
@@ -100,6 +100,16 @@ test("normaliza evento EMSC", () => {
   assert.equal(event.source, "EMSC");
   assert.equal(event.magnitude, 4.4);
   assert.equal(event.title, "M4.4 - SOUTHERN PERU");
+});
+
+test("repara el separador duplicado del historico EMSC", () => {
+  const payload = '{"features":[,{"id":"a"},,{"id":"b"},]}';
+  const parsed = parseEmscResponse(payload);
+
+  assert.deepEqual(
+    parsed.features?.map((feature) => feature.id),
+    ["a", "b"]
+  );
 });
 
 test("parsea y normaliza respuesta FDSN texto de GEOFON", () => {

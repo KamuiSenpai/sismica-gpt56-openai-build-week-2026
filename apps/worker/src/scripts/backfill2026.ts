@@ -11,7 +11,7 @@ import { pool } from "../db/pool.js";
 import { ingestDisasterContexts, ingestTsunamiProducts } from "../services/auxiliaryIngestionService.js";
 import { ingestSeismicRecords, type SeismicIngestionStats } from "../services/eventAssociationService.js";
 import { fetchJson, fetchText, fetchXml } from "../providers/http.js";
-import { normalizeEmscFeature } from "../providers/emscProvider.js";
+import { normalizeEmscFeature, parseEmscResponse } from "../providers/emscProvider.js";
 import { createFdsnProvider, normalizeFdsnRecord } from "../providers/fdsnProvider.js";
 import { normalizeGdacsFeature, type GdacsFeature } from "../providers/gdacsProvider.js";
 import { normalizeGeofonRecord, parseFdsnText, type FdsnTextRecord } from "../providers/geofonProvider.js";
@@ -21,7 +21,12 @@ import { normalizeIgpRecord, type IgpRecord } from "../providers/igpProvider.js"
 import { normalizeIngvRecord } from "../providers/ingvProvider.js";
 import { normalizeInpresItem, parseInpresXml } from "../providers/inpresProvider.js";
 import { parseNoaaCap } from "../providers/noaaProvider.js";
-import { assertShape, emscResponseSchema, gdacsResponseSchema, usgsGeoJsonSchema } from "../providers/schemas.js";
+import {
+  assertShape,
+  emscResponseSchema,
+  gdacsResponseSchema,
+  usgsGeoJsonSchema
+} from "../providers/schemas.js";
 import { type SeismicRecord } from "../providers/types.js";
 
 type EmscFeature = Parameters<typeof normalizeEmscFeature>[0];
@@ -49,6 +54,7 @@ type HistoricalAuxSource<T> = {
   code: string;
   limit: number;
   minWindowMs: number;
+  maxWindowMs?: number;
   fetchWindow: (start: Date, end: Date, limit: number) => Promise<Array<AuxiliaryRecord<T>>>;
   persist: (records: Array<AuxiliaryRecord<T>>) => Promise<SeismicIngestionStats>;
 };
@@ -60,6 +66,7 @@ type OneShotSeismicSource = {
 
 const USGS_FDSN_QUERY_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query";
 const NOAA_PREVIOUS_EVENTS_URL = "https://www.tsunami.gov/php/prevEventresults.php";
+const MAX_SEISMIC_WINDOW_MS = 366 * 24 * 3_600_000;
 const NOAA_PRODUCT_CODES = [
   "WEPA41",
   "WEPA43",
@@ -127,6 +134,49 @@ function midpoint(start: Date, end: Date): Date {
   return new Date(Math.floor((start.getTime() + end.getTime()) / 2));
 }
 
+function shouldSplitOnFetchError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes("timeout") ||
+    message.includes("timed out") ||
+    message.includes("aborted") ||
+    message.includes("500") ||
+    message.includes("503") ||
+    message.includes("502") ||
+    message.includes("504") ||
+    message.includes("429") ||
+    message.includes("internal server error") ||
+    message.includes("service unavailable") ||
+    message.includes("response exceeds") ||
+    message.includes("too many") ||
+    message.includes("not valid json") ||
+    message.includes("unexpected token") ||
+    message.includes("unterminated string") ||
+    message.includes("limit")
+  );
+}
+
+function retryDelayMs(error: unknown, attempt: number): number {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  if (message.includes("429") || message.includes("too many")) {
+    return Math.min(60_000, attempt * 15_000);
+  }
+  if (
+    message.includes("timeout") ||
+    message.includes("timed out") ||
+    message.includes("aborted") ||
+    message.includes("500") ||
+    message.includes("502") ||
+    message.includes("503") ||
+    message.includes("504") ||
+    message.includes("service unavailable") ||
+    message.includes("internal server error")
+  ) {
+    return Math.min(20_000, attempt * 5_000);
+  }
+  return attempt * 1_000;
+}
+
 function addTotals(target: Totals, partial: Totals): Totals {
   return {
     fetched: target.fetched + partial.fetched,
@@ -181,7 +231,9 @@ async function withRetry<T>(label: string, job: () => Promise<T>, attempts = 3):
       lastError = error;
       if (attempt < attempts) {
         const message = error instanceof Error ? error.message : String(error);
+        const delayMs = retryDelayMs(error, attempt);
         console.warn(`[retry ${attempt}/${attempts - 1}] ${label}: ${message}`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
   }
@@ -225,7 +277,9 @@ async function persistContexts(
   }
 }
 
-async function persistTsunami(records: Array<AuxiliaryRecord<TsunamiProduct>>): Promise<SeismicIngestionStats> {
+async function persistTsunami(
+  records: Array<AuxiliaryRecord<TsunamiProduct>>
+): Promise<SeismicIngestionStats> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -243,7 +297,13 @@ async function persistTsunami(records: Array<AuxiliaryRecord<TsunamiProduct>>): 
   }
 }
 
-function logWindow(source: string, start: Date, end: Date, fetched: number, stats: SeismicIngestionStats): void {
+function logWindow(
+  source: string,
+  start: Date,
+  end: Date,
+  fetched: number,
+  stats: SeismicIngestionStats
+): void {
   console.log(
     `${source} ${formatDateOnly(start)}..${formatDateOnly(end)} fetched=${fetched} inserted=${stats.inserted} updated=${stats.updated} associated=${stats.associated}`
   );
@@ -254,9 +314,30 @@ async function runAdaptiveSeismicSource(
   start: Date,
   end: Date
 ): Promise<Totals> {
-  const records = await withRetry(`${source.code} ${start.toISOString()} ${end.toISOString()}`, () =>
-    source.fetchWindow(start, end, source.limit)
-  );
+  if (end.getTime() - start.getTime() > MAX_SEISMIC_WINDOW_MS) {
+    const split = midpoint(start, end);
+    const left = await runAdaptiveSeismicSource(source, start, split);
+    const right = await runAdaptiveSeismicSource(source, split, end);
+    return addTotals(left, right);
+  }
+
+  let records: SeismicRecord[];
+  try {
+    records = await withRetry(`${source.code} ${start.toISOString()} ${end.toISOString()}`, () =>
+      source.fetchWindow(start, end, source.limit)
+    );
+  } catch (error) {
+    if (shouldSplitOnFetchError(error) && end.getTime() - start.getTime() > source.minWindowMs) {
+      const split = midpoint(start, end);
+      console.warn(
+        `${source.code} split-on-error ${formatDateOnly(start)}..${formatDateOnly(end)} because ${error instanceof Error ? error.message : String(error)}`
+      );
+      const left = await runAdaptiveSeismicSource(source, start, split);
+      const right = await runAdaptiveSeismicSource(source, split, end);
+      return addTotals(left, right);
+    }
+    throw error;
+  }
 
   if (records.length >= source.limit && end.getTime() - start.getTime() > source.minWindowMs) {
     const split = midpoint(start, end);
@@ -275,9 +356,30 @@ async function runAdaptiveAuxSource<T>(
   start: Date,
   end: Date
 ): Promise<Totals> {
-  const records = await withRetry(`${source.code} ${formatDateOnly(start)} ${formatDateOnly(end)}`, () =>
-    source.fetchWindow(start, end, source.limit)
-  );
+  if (source.maxWindowMs && end.getTime() - start.getTime() > source.maxWindowMs) {
+    const split = midpoint(start, end);
+    const left = await runAdaptiveAuxSource(source, start, split);
+    const right = await runAdaptiveAuxSource(source, split, end);
+    return addTotals(left, right);
+  }
+
+  let records: Array<AuxiliaryRecord<T>>;
+  try {
+    records = await withRetry(`${source.code} ${formatDateOnly(start)} ${formatDateOnly(end)}`, () =>
+      source.fetchWindow(start, end, source.limit)
+    );
+  } catch (error) {
+    if (shouldSplitOnFetchError(error) && end.getTime() - start.getTime() > source.minWindowMs) {
+      const split = midpoint(start, end);
+      console.warn(
+        `${source.code} split-on-error ${formatDateOnly(start)}..${formatDateOnly(end)} because ${error instanceof Error ? error.message : String(error)}`
+      );
+      const left = await runAdaptiveAuxSource(source, start, split);
+      const right = await runAdaptiveAuxSource(source, split, end);
+      return addTotals(left, right);
+    }
+    throw error;
+  }
 
   if (records.length >= source.limit && end.getTime() - start.getTime() > source.minWindowMs) {
     const split = midpoint(start, end);
@@ -361,7 +463,7 @@ const emscHistoricalSource: HistoricalSeismicSource = {
       orderby: "time",
       limit: String(limit)
     });
-    const payload = await fetchJson<{ features?: EmscFeature[] }>(`${env.emscFdsnUrl}?${params.toString()}`);
+    const payload = parseEmscResponse(await fetchText(`${env.emscFdsnUrl}?${params.toString()}`));
     assertShape(emscResponseSchema, payload, "EMSC");
     const ingestedAt = new Date().toISOString();
     return (payload.features ?? []).flatMap((feature) => {
@@ -402,6 +504,7 @@ const ingvHistoricalSource: HistoricalSeismicSource = {
       format: "text",
       starttime: start.toISOString().replace(/\.\d{3}Z$/, ""),
       endtime: end.toISOString().replace(/\.\d{3}Z$/, ""),
+      minmagnitude: "2.5",
       orderby: "time",
       limit: String(limit)
     });
@@ -442,7 +545,11 @@ function parsePreviousBulletins(html: string): PreviousBulletin[] {
   return JSON.parse(match[1]) as PreviousBulletin[];
 }
 
-async function fetchNoaaProducts(start: Date, end: Date, limit: number): Promise<Array<AuxiliaryRecord<TsunamiProduct>>> {
+async function fetchNoaaProducts(
+  start: Date,
+  end: Date,
+  limit: number
+): Promise<Array<AuxiliaryRecord<TsunamiProduct>>> {
   const params = new URLSearchParams({
     start_date: formatDateOnly(start),
     end_date: formatDateOnly(end),
@@ -463,17 +570,28 @@ async function fetchNoaaProducts(start: Date, end: Date, limit: number): Promise
   }
 
   const records: Array<AuxiliaryRecord<TsunamiProduct>> = [];
-  for (const [capUrl, source] of capPaths.entries()) {
-    try {
-      const xml = await fetchXml(capUrl);
-      records.push({
-        item: parseNoaaCap(xml, source, capUrl),
-        rawPayload: xml
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`NOAA skip ${capUrl}: ${message}`);
-    }
+  const capEntries = [...capPaths.entries()];
+  const concurrency = 8;
+
+  for (let offset = 0; offset < capEntries.length; offset += concurrency) {
+    const batch = await Promise.all(
+      capEntries
+        .slice(offset, offset + concurrency)
+        .map(async ([capUrl, source]): Promise<AuxiliaryRecord<TsunamiProduct> | null> => {
+          try {
+            const xml = await fetchXml(capUrl);
+            return {
+              item: parseNoaaCap(xml, source, capUrl),
+              rawPayload: xml
+            };
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`NOAA skip ${capUrl}: ${message}`);
+            return null;
+          }
+        })
+    );
+    records.push(...batch.filter((record): record is AuxiliaryRecord<TsunamiProduct> => record !== null));
   }
   return records;
 }
@@ -482,6 +600,7 @@ const noaaHistoricalSource: HistoricalAuxSource<TsunamiProduct> = {
   code: "NOAA_CAP",
   limit: 200,
   minWindowMs: 24 * 3_600_000,
+  maxWindowMs: 90 * 24 * 3_600_000,
   fetchWindow: fetchNoaaProducts,
   persist: persistTsunami
 };
@@ -602,7 +721,7 @@ async function main(): Promise<void> {
   const includeAux = parseArg("include-aux", "true").toLowerCase() !== "false";
   const includeSnapshots = parseArg("include-snapshots", "true").toLowerCase() !== "false";
 
-  console.log(`Backfill 2026 from=${from.toISOString()} to=${to.toISOString()}`);
+  console.log(`Backfill from=${from.toISOString()} to=${to.toISOString()}`);
 
   let totals = emptyTotals();
 
@@ -633,7 +752,7 @@ async function main(): Promise<void> {
 
 main()
   .catch((error) => {
-    console.error(error instanceof Error ? error.stack ?? error.message : error);
+    console.error(error instanceof Error ? (error.stack ?? error.message) : error);
     process.exitCode = 1;
   })
   .finally(async () => {

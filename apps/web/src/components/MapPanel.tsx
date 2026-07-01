@@ -13,7 +13,9 @@ import {
   EllipsoidGeodesic,
   Entity,
   GeoJsonDataSource,
-  CylinderGraphics,
+  BillboardGraphics,
+  HorizontalOrigin,
+  VerticalOrigin,
   Ion,
   JulianDate,
   Math as CesiumMath,
@@ -55,10 +57,10 @@ type MapPanelProps = {
 const VP_MPS = 6500;
 const VS_MPS = 3750; // ≈ Vp / 1.73
 // La propagacion real tarda minutos; aceleramos: 1 s de animacion ≈ WAVE_TIME_ACCEL s reales.
-const WAVE_TIME_ACCEL = 75;
+const WAVE_TIME_ACCEL = 35; // Animación más lenta y pausada
 const WAVE_MAX_RADIUS_M = 1_500_000;
 const FRESH_WINDOW_MS = 10 * 60 * 1000;
-const SELECTION_WAVE_INTERVAL_MS = 2_200;
+const SELECTION_WAVE_INTERVAL_MS = 3_500; // Intervalo más amplio entre anillos
 const DISASTER_PREFIX = "context:";
 
 const PLATE_COLORS: Record<string, string> = {
@@ -262,7 +264,9 @@ async function loadActiveFaults(viewer: Viewer): Promise<void> {
 
     for (const entity of dataSource.entities.values) {
       if (!entity.polyline) continue;
-      entity.polyline.material = new ColorMaterialProperty(Color.fromCssColorString("#dc2626").withAlpha(0.3));
+      entity.polyline.material = new ColorMaterialProperty(
+        Color.fromCssColorString("#dc2626").withAlpha(0.3)
+      );
       entity.polyline.width = new ConstantProperty(1);
     }
 
@@ -278,18 +282,21 @@ async function loadVolcanoes(viewer: Viewer): Promise<void> {
 
     if (viewer.isDestroyed()) return;
 
+    const volcanoSvg =
+      'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><polygon points="12,2 22,20 2,20" fill="%23f97316" stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/></svg>';
+
     for (const entity of dataSource.entities.values) {
       if (entity.position) {
-        // Renderizar volcán como un cono 3D anaranjado
-        entity.cylinder = new CylinderGraphics({
-          length: 40000.0, // 40km de altura para visibilidad global
-          topRadius: 0.0,
-          bottomRadius: 20000.0,
-          material: new ColorMaterialProperty(Color.fromCssColorString("#f97316").withAlpha(0.85))
+        // Renderizar volcán como un triángulo 2D (billboard)
+        entity.billboard = new BillboardGraphics({
+          image: new ConstantProperty(volcanoSvg),
+          scale: new ConstantProperty(0.7),
+          horizontalOrigin: new ConstantProperty(HorizontalOrigin.CENTER),
+          verticalOrigin: new ConstantProperty(VerticalOrigin.BOTTOM)
         });
-        // Remove default points/billboards
+        // Quitar la configuración 3D/por defecto
         entity.point = undefined;
-        entity.billboard = undefined;
+        entity.cylinder = undefined;
       }
     }
 
@@ -321,6 +328,7 @@ export function MapPanel({
   const [hover, setHover] = useState<
     | { kind: "event"; event: SeismicEvent; x: number; y: number }
     | { kind: "disaster"; context: DisasterContext; x: number; y: number }
+    | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
 
@@ -377,7 +385,8 @@ export function MapPanel({
 
     handler.setInputAction((movement: ScreenSpaceEventHandler.MotionEvent) => {
       const picked = viewer.scene.pick(movement.endPosition);
-      const id = defined(picked) && picked.id instanceof Entity ? picked.id.id : undefined;
+      const entity = defined(picked) && picked.id instanceof Entity ? picked.id : undefined;
+      const id = entity?.id;
       const event = typeof id === "string" ? eventMapRef.current.get(id) : undefined;
       const context = typeof id === "string" ? disasterMapRef.current.get(id) : undefined;
 
@@ -395,6 +404,17 @@ export function MapPanel({
         setHover({
           kind: "disaster",
           context,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "pointer";
+      } else if (entity?.properties?.volcanoName) {
+        const rect = canvas.getBoundingClientRect();
+        setHover({
+          kind: "volcano",
+          name: entity.properties.volcanoName.getValue()?.toString() || "Volcán",
+          country: entity.properties.country?.getValue()?.toString() || "",
+          type: entity.properties.type?.getValue()?.toString() || "",
           x: rect.left + movement.endPosition.x,
           y: rect.top + movement.endPosition.y
         });
@@ -578,23 +598,23 @@ export function MapPanel({
     async function fetchAndRenderShakeMap() {
       try {
         const res = await fetch(event!.detailUrl!);
-        const data = await res.json() as any;
-        
+        const data = (await res.json()) as any;
+
         if (isCancelled) return;
-        
+
         const shakemapProduct = data.properties?.products?.shakemap?.[0];
         if (!shakemapProduct) return;
-        
+
         const contUrl = shakemapProduct.contents?.["download/cont_mi.json"]?.url;
         if (!contUrl) return;
-        
+
         const dataSource = await GeoJsonDataSource.load(contUrl, {
           clampToGround: true,
           strokeWidth: 2
         });
-        
+
         if (isCancelled || !viewerRef.current || viewerRef.current.isDestroyed()) return;
-        
+
         for (const entity of dataSource.entities.values) {
           const valueProp = entity.properties?.value;
           const value = valueProp ? parseFloat(valueProp.getValue(JulianDate.now())) : null;
@@ -611,16 +631,16 @@ export function MapPanel({
             }
           }
         }
-        
+
         await viewerRef.current.dataSources.add(dataSource);
         activeDataSource = dataSource;
       } catch (err) {
         console.warn("Failed to load shakemap for event", err);
       }
     }
-    
+
     void fetchAndRenderShakeMap();
-    
+
     return () => {
       isCancelled = true;
       if (activeDataSource && viewerRef.current && !viewerRef.current.isDestroyed()) {
@@ -628,7 +648,6 @@ export function MapPanel({
       }
     };
   }, [selectedEventId]);
-
 
   const tourEvent =
     (selectedEventId ? events.find((event) => event.eventId === selectedEventId) : undefined) ??
@@ -655,6 +674,13 @@ export function MapPanel({
             GDACS {hover.context.alertLevel ?? "N/D"} · score {hover.context.alertScore ?? "N/D"}
           </span>
           <span>{formatUtcDateTime(hover.context.eventTimeUtc)} UTC</span>
+        </div>
+      ) : null}
+      {hover?.kind === "volcano" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>🌋 {hover.name}</strong>
+          <span>{hover.type}</span>
+          <span className="tt-source">{hover.country}</span>
         </div>
       ) : null}
       {tourEvent ? (
@@ -721,7 +747,18 @@ export function MapPanel({
           Fallas Activas
         </span>
         <span className="legend-row">
-          <i className="legend-point" style={{ borderBottom: "10px solid #f97316", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", background: "transparent", borderRadius: 0, height: 0, width: 0 }} />
+          <i
+            className="legend-point"
+            style={{
+              borderBottom: "10px solid #f97316",
+              borderLeft: "6px solid transparent",
+              borderRight: "6px solid transparent",
+              background: "transparent",
+              borderRadius: 0,
+              height: 0,
+              width: 0
+            }}
+          />
           Volcanes (USGS)
         </span>
         <span className="legend-row">

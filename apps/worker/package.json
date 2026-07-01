@@ -9,6 +9,7 @@
     "test": "tsx --test test/providers.test.ts",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "backfill:historical": "tsx src/scripts/backfill2026.ts",
     "backfill:2026": "tsx src/scripts/backfill2026.ts"
   },
   "dependencies": {
