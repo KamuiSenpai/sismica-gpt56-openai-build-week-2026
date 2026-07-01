@@ -4,6 +4,7 @@ import {
   normalizeUsgsFeature,
   type DisasterContext,
   type SeismicEvent,
+  type SeismicStation,
   type SourceStatus,
   type TsunamiProduct,
   type UsgsGeoJson
@@ -25,6 +26,10 @@ type DisastersResponse = {
 
 type TsunamiResponse = {
   items: TsunamiProduct[];
+};
+
+type StationsResponse = {
+  items: SeismicStation[];
 };
 
 type EventsInput = {
@@ -119,6 +124,23 @@ export async function fetchActiveTsunamiProducts(): Promise<TsunamiProduct[]> {
   }
 }
 
+export async function fetchStations(): Promise<SeismicStation[]> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/stations?activeAt=${encodeURIComponent(new Date().toISOString())}&limit=5000`
+    );
+    if (!response.ok) throw new Error(`Stations request failed: ${response.status}`);
+    return ((await response.json()) as StationsResponse).items;
+  } catch (error) {
+    console.warn("Catalogo de estaciones no disponible.", error);
+    return [];
+  }
+}
+
 export function buildStreamUrl(): string {
   return `${API_BASE_URL}/api/stream`;
+}
+
+export function buildStationStreamUrl(): string {
+  return `${API_BASE_URL}/api/stations/stream`;
 }

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "engine": "seiscomp-lab/1",
+  "states": [
+    {
+      "stationId": "GEOFON:GE.SANT",
+      "status": "online",
+      "phase": "UNKNOWN",
+      "latencyMs": 850,
+      "observedAtUtc": "2026-06-30T12:00:00.000Z",
+      "sequence": 1
+    }
+  ],
+  "picks": []
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "originId": "seiscomp-lab:example-001",
+  "engine": "seiscomp-lab/1",
+  "originTimeUtc": "2026-06-30T11:59:40.000Z",
+  "latitude": -12.1,
+  "longitude": -77.1,
+  "depthKm": 35,
+  "magnitude": 3.8,
+  "stationCount": 6,
+  "rmsSec": 0.8,
+  "azimuthalGapDeg": 145,
+  "quality": "preliminary",
+  "status": "located"
+}

@@ -93,6 +93,62 @@ export type StreamEvent = {
   payload: SeismicEvent;
 };
 
+export type StationStatus = "unknown" | "online" | "delayed" | "offline" | "triggered";
+export type StationPhase = "P" | "S" | "UNKNOWN";
+
+export type StationState = {
+  stationId: string;
+  sequence: number;
+  status: StationStatus;
+  phase: StationPhase | null;
+  observedAtUtc: string;
+  latencyMs: number | null;
+  triggerValue: number | null;
+  engine: string;
+};
+
+export type SeismicStation = {
+  stationId: string;
+  source: "GEOFON";
+  networkCode: string;
+  stationCode: string;
+  siteName: string | null;
+  countryCode: string | null;
+  latitude: number;
+  longitude: number;
+  elevationM: number | null;
+  startTimeUtc: string | null;
+  endTimeUtc: string | null;
+  status: StationStatus;
+  phase: StationPhase | null;
+  latencyMs: number | null;
+  triggerValue: number | null;
+  observedAtUtc: string | null;
+  sequence: number | null;
+  engine: string | null;
+  sourceUrl: string;
+};
+
+export type StationStreamEvent = {
+  type: "station.state";
+  payload: StationState;
+};
+
+export type ExperimentalOrigin = {
+  originId: string;
+  engine: string;
+  status: "candidate" | "located" | "discarded" | "confirmed";
+  quality: "preliminary" | "acceptable" | "rejected";
+  originTimeUtc: string;
+  latitude: number;
+  longitude: number;
+  depthKm: number;
+  magnitude: number | null;
+  stationCount: number;
+  rmsSec: number | null;
+  azimuthalGapDeg: number | null;
+};
+
 export type DisasterContext = {
   contextId: string;
   source: "GDACS";

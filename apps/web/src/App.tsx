@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { DEFAULT_HOURS, DEFAULT_MIN_MAGNITUDE, clampNumber, type SeismicEvent } from "@sismica/shared";
+import {
+  DEFAULT_HOURS,
+  DEFAULT_MIN_MAGNITUDE,
+  clampNumber,
+  type SeismicEvent,
+  type SeismicStation,
+  type StationState
+} from "@sismica/shared";
 
 import { EventList } from "./components/EventList";
 import { MapPanel } from "./components/MapPanel";
 import { SourceStatusCard } from "./components/SourceStatusCard";
 import { useEventStream } from "./hooks/useEventStream";
+import { useStationStream } from "./hooks/useStationStream";
 import {
   eventsQueryKey,
   mergeIncomingEvent,
   useDisastersQuery,
   useEventsQuery,
   useSourceStatusesQuery,
+  useStationsQuery,
   useTsunamiQuery
 } from "./hooks/queries";
 import {
@@ -96,6 +105,8 @@ export default function App() {
   const statuses = useSourceStatusesQuery().data ?? [];
   const disasters = useDisastersQuery().data ?? [];
   const tsunamiProducts = useTsunamiQuery().data ?? [];
+  const stationsQuery = useStationsQuery();
+  const stations = stationsQuery.data ?? [];
   const error = eventsQuery.isError
     ? eventsQuery.error instanceof Error
       ? eventsQuery.error.message
@@ -135,6 +146,28 @@ export default function App() {
   );
 
   const connectionState = useEventStream(handleIncomingEvent);
+  const handleStationState = useCallback(
+    (incoming: StationState) => {
+      queryClient.setQueryData<SeismicStation[]>(["stations"], (current = []) =>
+        current.map((station) => {
+          if (station.stationId !== incoming.stationId) return station;
+          if (station.sequence !== null && incoming.sequence <= station.sequence) return station;
+          return {
+            ...station,
+            status: incoming.status,
+            phase: incoming.phase,
+            latencyMs: incoming.latencyMs,
+            triggerValue: incoming.triggerValue,
+            observedAtUtc: incoming.observedAtUtc,
+            sequence: incoming.sequence,
+            engine: incoming.engine
+          };
+        })
+      );
+    },
+    [queryClient]
+  );
+  useStationStream(handleStationState);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setUtcNow(new Date()), 1_000);
@@ -195,6 +228,7 @@ export default function App() {
         <MapPanel
           disasters={disasters}
           events={events}
+          stations={stations}
           selectedEventId={selectedEventId}
           onSelect={setSelectedEventId}
           tourPaused={tourPaused}
@@ -204,13 +238,7 @@ export default function App() {
         <section className="overlay-column overlay-left">
           <article className="event-console">
             <header className="event-console-title">
-              <strong>
-                {focusEvent ? (
-                  "Evento sismico detectado"
-                ) : (
-                  "Sin eventos"
-                )}
-              </strong>
+              <strong>{focusEvent ? "Evento sismico detectado" : "Sin eventos"}</strong>
               <span>
                 {focusEvent
                   ? `${Math.max(1, events.findIndex((event) => event.eventId === focusEvent.eventId) + 1)}/${events.length}`

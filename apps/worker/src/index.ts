@@ -1,8 +1,15 @@
 import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
 import { runIngestion } from "./services/ingestionService.js";
+import { refreshStationCatalogIfDue } from "./services/stationCatalogService.js";
 
 async function executeOnce() {
+  try {
+    const stationCount = await refreshStationCatalogIfDue();
+    if (stationCount !== null) console.log(`GEOFON station catalog synchronized: ${stationCount}`);
+  } catch (error) {
+    console.error("Station catalog synchronization failed", error);
+  }
   const summaries = await runIngestion();
   for (const summary of summaries) {
     const base = `${summary.source} ingestion ${summary.status}: inserted=${summary.inserted}, updated=${summary.updated}, associated=${summary.associated}`;

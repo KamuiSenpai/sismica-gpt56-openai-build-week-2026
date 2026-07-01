@@ -665,7 +665,7 @@ button {
   gap: 5px 8px;
   padding: 7px 9px;
   font-size: 0.62rem;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .legend-title {
@@ -735,6 +735,126 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 2px;
   flex: 0 0 auto;
+}
+
+.station-layer-toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(141, 161, 178, 0.35);
+  color: #eef5f8;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.station-legend-panel {
+  position: absolute;
+  right: 640px;
+  bottom: 34px;
+  z-index: 20;
+  width: 168px;
+  display: grid;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid #8da1b2;
+  border-radius: 2px;
+  color: #d1d8de;
+  background: rgba(2, 8, 13, 0.9);
+  font-size: 0.58rem;
+}
+
+.station-layer-toggle input {
+  accent-color: #38bdf8;
+}
+
+.station-state-legend {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+
+.station-triangle {
+  width: 0 !important;
+  height: 0 !important;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid;
+  border-left: 5px solid transparent;
+}
+
+.station-detail {
+  position: absolute;
+  left: 324px;
+  bottom: 34px;
+  z-index: 23;
+  width: 280px;
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid #8da1b2;
+  border-radius: 3px;
+  color: #edf4f8;
+  background: rgba(2, 8, 13, 0.96);
+}
+
+.station-detail-kicker {
+  color: #38bdf8;
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.station-detail > strong {
+  font-size: 1rem;
+}
+
+.station-detail > span:not(.station-detail-kicker) {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.station-detail dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 10px;
+  margin: 3px 0;
+}
+
+.station-detail dl div {
+  min-width: 0;
+}
+
+.station-detail dt {
+  color: var(--muted);
+  font-size: 0.57rem;
+  text-transform: uppercase;
+}
+
+.station-detail dd {
+  margin: 1px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.station-detail a {
+  color: #8ce2ff;
+  font-size: 0.64rem;
+}
+
+.station-detail-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(141, 161, 178, 0.45);
+  border-radius: 2px;
+  color: #e6ebef;
+  background: #111b24;
+  cursor: pointer;
 }
 
 /* Tarjeta del auto-recorrido, justo encima de la leyenda Magnitud. */
@@ -888,6 +1008,14 @@ button {
     width: 264px;
   }
 
+  .station-detail {
+    left: 310px;
+  }
+
+  .station-legend-panel {
+    right: 472px;
+  }
+
   .topbar-center {
     text-align: left;
   }
@@ -938,9 +1066,24 @@ button {
   }
 
   .map-legend {
-    right: 8px;
+    display: none;
+  }
+
+  .legend-intensity {
+    display: none !important;
+  }
+
+  .station-detail {
+    left: 8px;
+    top: 8px;
+    bottom: auto;
+    width: min(280px, calc(100vw - 16px));
+  }
+
+  .station-legend-panel {
+    right: auto;
+    left: 8px;
     bottom: 8px;
-    width: min(264px, calc(100vw - 16px));
   }
 
   .monitor-footer {

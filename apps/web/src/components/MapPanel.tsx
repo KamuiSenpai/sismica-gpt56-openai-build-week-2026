@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { type DisasterContext, type SeismicEvent } from "@sismica/shared";
+import { type DisasterContext, type SeismicEvent, type SeismicStation } from "@sismica/shared";
 import {
   CallbackProperty,
   Cartesian3,
@@ -47,6 +47,7 @@ Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? "";
 type MapPanelProps = {
   disasters: DisasterContext[];
   events: SeismicEvent[];
+  stations: SeismicStation[];
   selectedEventId: string | null;
   onSelect: (eventId: string) => void;
   tourPaused: boolean;
@@ -55,13 +56,14 @@ type MapPanelProps = {
 
 // Velocidades sismicas medias en la corteza (m/s). El frente P es mas rapido que el S.
 const VP_MPS = 6500;
-const VS_MPS = 3750; // ≈ Vp / 1.73
-// La propagacion real tarda minutos; aceleramos: 1 s de animacion ≈ WAVE_TIME_ACCEL s reales.
-const WAVE_TIME_ACCEL = 35; // Animación más lenta y pausada
+const VS_MPS = 3750;
+const WAVE_TIME_ACCEL = 35;
 const WAVE_MAX_RADIUS_M = 1_500_000;
 const FRESH_WINDOW_MS = 10 * 60 * 1000;
-const SELECTION_WAVE_INTERVAL_MS = 3_500; // Intervalo más amplio entre anillos
+const SELECTION_WAVE_INTERVAL_MS = 3_500;
 const DISASTER_PREFIX = "context:";
+const STATION_PREFIX = "station:";
+const WAVE_PREFIX = "wave:";
 
 const PLATE_COLORS: Record<string, string> = {
   subduction: "#d946ef",
@@ -146,8 +148,8 @@ function spawnSeismicRing(
 
   const surfaceRadius = () => {
     const realSeconds = ((performance.now() - start) / 1000) * WAVE_TIME_ACCEL;
-    const sphere = velocityMps * realSeconds; // radio del frente esferico (m)
-    if (sphere <= depthM) return 0; // la onda aun no llega a la superficie
+    const sphere = velocityMps * realSeconds;
+    if (sphere <= depthM) return 0;
     return Math.min(WAVE_MAX_RADIUS_M, Math.sqrt(sphere * sphere - depthM * depthM));
   };
 
@@ -155,12 +157,11 @@ function spawnSeismicRing(
     radius = surfaceRadius();
     return Math.max(1, radius);
   };
-  // Levisimo decremento para garantizar semiMinor <= semiMajor (evita DeveloperError).
   const semiMinorAxis = () => Math.max(1, radius - 0.001);
   const fade = () => (radius <= 0 ? 0 : 1 - radius / WAVE_MAX_RADIUS_M);
 
   const ring = viewer.entities.add({
-    id: `ripple-${start}-${color.toCssHexString()}-${Math.random().toString(36).slice(2)}`,
+    id: `${WAVE_PREFIX}${start}-${color.toCssHexString()}-${Math.random().toString(36).slice(2)}`,
     position: Cartesian3.fromDegrees(longitude, latitude),
     ellipse: {
       height: 0,
@@ -174,7 +175,6 @@ function spawnSeismicRing(
     }
   });
 
-  // Vida (en tiempo de animacion) hasta que el frente alcanza el radio maximo.
   const lifeMs =
     (Math.sqrt(WAVE_MAX_RADIUS_M ** 2 + depthM ** 2) / velocityMps / WAVE_TIME_ACCEL) * 1000 + 250;
   window.setTimeout(() => {
@@ -184,47 +184,46 @@ function spawnSeismicRing(
   }, lifeMs);
 }
 
-function spawnWavefront(
-  viewer: Viewer,
-  longitude: number,
-  latitude: number,
-  depthKm: number | null,
-  magnitude: number | null
-): void {
-  const depthM = Math.max(0, (depthKm ?? 0) * 1000);
-  const magColor = Color.fromCssColorString(magnitudeCssColor(magnitude));
+function spawnWavefront(viewer: Viewer, event: SeismicEvent): void {
+  const depthM = Math.max(0, (event.depthKm ?? 0) * 1000);
+  const magColor = Color.fromCssColorString(magnitudeCssColor(event.magnitude));
 
-  // Onda P (primaria, más rápida)
-  spawnSeismicRing(viewer, longitude, latitude, magColor, VP_MPS, depthM, 2);
-  // Onda S (secundaria, más lenta pero con borde un poco más grueso)
-  spawnSeismicRing(viewer, longitude, latitude, magColor, VS_MPS, depthM, 3);
+  spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VP_MPS, depthM, 2);
+  spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VS_MPS, depthM, 3);
+}
+
+const STATION_COLORS = {
+  unknown: "#64748b",
+  online: "#38bdf8",
+  delayed: "#facc15",
+  offline: "#991b1b",
+  triggered: "#84cc16"
+} as const;
+
+function stationSymbol(station: SeismicStation, selected: boolean): string {
+  const fill = STATION_COLORS[station.status];
+  const stroke = selected
+    ? "#ffffff"
+    : station.phase === "S"
+      ? "#fb923c"
+      : station.phase === "P"
+        ? "#67e8f9"
+        : "#0b1220";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2 22 21H2Z" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2.5 : 1.5}"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 async function setupBasemap(viewer: Viewer): Promise<void> {
   if (viewer.isDestroyed()) return;
 
-  try {
-    // 1. Capa de día (Satélite)
-    const { IonImageryProvider } = await import("cesium");
-    const dayProvider = await IonImageryProvider.fromAssetId(2);
-    viewer.imageryLayers.addImageryProvider(dayProvider);
-
-    // 2. Capa de noche (Black Marble / Earth at Night)
-    const nightProvider = await IonImageryProvider.fromAssetId(3812);
-    const nightLayer = viewer.imageryLayers.addImageryProvider(nightProvider);
-    nightLayer.dayAlpha = 0.0; // Solo se ve de noche
-  } catch (error) {
-    console.warn("No se pudo cargar el mapa satelital", error);
-    // Fallback al mapa oscuro de Carto
-    viewer.imageryLayers.addImageryProvider(
-      new UrlTemplateImageryProvider({
-        url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
-        subdomains: "abcd",
-        maximumLevel: 20,
-        credit: "(c) OpenStreetMap contributors (c) CARTO"
-      })
-    );
-  }
+  viewer.imageryLayers.addImageryProvider(
+    new UrlTemplateImageryProvider({
+      url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
+      subdomains: "abcd",
+      maximumLevel: 20,
+      credit: "(c) OpenStreetMap contributors (c) CARTO"
+    })
+  );
 }
 
 async function loadPlateBoundaries(viewer: Viewer): Promise<void> {
@@ -309,6 +308,7 @@ async function loadVolcanoes(viewer: Viewer): Promise<void> {
 export function MapPanel({
   disasters,
   events,
+  stations,
   selectedEventId,
   onSelect,
   tourPaused,
@@ -317,6 +317,7 @@ export function MapPanel({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const eventMapRef = useRef<Map<string, SeismicEvent>>(new Map());
+  const stationMapRef = useRef<Map<string, SeismicStation>>(new Map());
   const disasterMapRef = useRef<Map<string, DisasterContext>>(new Map());
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
@@ -328,9 +329,12 @@ export function MapPanel({
   const [hover, setHover] = useState<
     | { kind: "event"; event: SeismicEvent; x: number; y: number }
     | { kind: "disaster"; context: DisasterContext; x: number; y: number }
+    | { kind: "station"; station: SeismicStation; x: number; y: number }
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
+  const [stationsVisible, setStationsVisible] = useState(true);
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -379,6 +383,8 @@ export function MapPanel({
       if (defined(picked) && picked.id instanceof Entity && typeof picked.id.id === "string") {
         if (eventMapRef.current.has(picked.id.id)) {
           onSelectRef.current(picked.id.id);
+        } else if (stationMapRef.current.has(picked.id.id)) {
+          setSelectedStationId(picked.id.id);
         }
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
@@ -389,6 +395,7 @@ export function MapPanel({
       const id = entity?.id;
       const event = typeof id === "string" ? eventMapRef.current.get(id) : undefined;
       const context = typeof id === "string" ? disasterMapRef.current.get(id) : undefined;
+      const station = typeof id === "string" ? stationMapRef.current.get(id) : undefined;
 
       if (event) {
         const rect = canvas.getBoundingClientRect();
@@ -404,6 +411,15 @@ export function MapPanel({
         setHover({
           kind: "disaster",
           context,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "pointer";
+      } else if (station) {
+        const rect = canvas.getBoundingClientRect();
+        setHover({
+          kind: "station",
+          station,
           x: rect.left + movement.endPosition.x,
           y: rect.top + movement.endPosition.y
         });
@@ -461,7 +477,9 @@ export function MapPanel({
     for (const entity of [...collection.values]) {
       if (
         typeof entity.id === "string" &&
-        (entity.id.startsWith("ripple-") || entity.id.startsWith(DISASTER_PREFIX))
+        (entity.id.startsWith(WAVE_PREFIX) ||
+          entity.id.startsWith(DISASTER_PREFIX) ||
+          entity.id.startsWith(STATION_PREFIX))
       )
         continue;
       if (typeof entity.id === "string" && !nextMap.has(entity.id)) {
@@ -491,13 +509,50 @@ export function MapPanel({
       seenIdsRef.current.add(event.eventId);
       const isFresh = Date.now() - Date.parse(event.eventTimeUtc) < FRESH_WINDOW_MS;
       if (!firstLoad && isNew && isFresh) {
-        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm, event.magnitude);
+        spawnWavefront(viewer, event);
       }
     }
 
     collection.resumeEvents();
     initializedRef.current = true;
   }, [events]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const nextMap = new Map(stations.map((station) => [`${STATION_PREFIX}${station.stationId}`, station]));
+    stationMapRef.current = nextMap;
+
+    for (const entity of [...viewer.entities.values]) {
+      if (typeof entity.id === "string" && entity.id.startsWith(STATION_PREFIX) && !nextMap.has(entity.id)) {
+        viewer.entities.remove(entity);
+      }
+    }
+
+    for (const [id, station] of nextMap) {
+      let entity = viewer.entities.getById(id);
+      if (!entity) {
+        entity = viewer.entities.add({
+          id,
+          position: Cartesian3.fromDegrees(station.longitude, station.latitude),
+          billboard: {}
+        });
+      } else {
+        entity.position = new ConstantPositionProperty(
+          Cartesian3.fromDegrees(station.longitude, station.latitude)
+        );
+      }
+      if (entity.billboard) {
+        const selected = id === selectedStationId;
+        entity.billboard.image = new ConstantProperty(stationSymbol(station, selected));
+        entity.billboard.scale = new ConstantProperty(selected ? 0.95 : 0.68);
+        entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
+        entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.CENTER);
+        entity.billboard.show = new ConstantProperty(stationsVisible);
+      }
+    }
+  }, [stations, stationsVisible, selectedStationId]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -541,7 +596,7 @@ export function MapPanel({
     }
 
     for (const entity of viewer.entities.values) {
-      if (typeof entity.id !== "string" || entity.id.startsWith("ripple-")) continue;
+      if (typeof entity.id !== "string" || entity.id.startsWith(WAVE_PREFIX)) continue;
       const event = eventMapRef.current.get(entity.id);
       if (event) {
         styleEntity(entity, event, entity.id === selectedEventId);
@@ -566,20 +621,14 @@ export function MapPanel({
           maximumHeight,
           easingFunction: EasingFunction.QUADRATIC_IN_OUT
         });
-        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm, event.magnitude);
+        spawnWavefront(viewer, event);
         selectionWaveTimerRef.current = window.setInterval(() => {
           if (viewer.isDestroyed()) return;
           const activeId = selectedIdRef.current;
           if (!activeId) return;
           const activeEvent = eventMapRef.current.get(activeId);
           if (!activeEvent) return;
-          spawnWavefront(
-            viewer,
-            activeEvent.longitude,
-            activeEvent.latitude,
-            activeEvent.depthKm,
-            activeEvent.magnitude
-          );
+          spawnWavefront(viewer, activeEvent);
         }, SELECTION_WAVE_INTERVAL_MS);
       }
     }
@@ -653,6 +702,7 @@ export function MapPanel({
     (selectedEventId ? events.find((event) => event.eventId === selectedEventId) : undefined) ??
     events[0] ??
     null;
+  const selectedStation = selectedStationId ? (stationMapRef.current.get(selectedStationId) ?? null) : null;
 
   return (
     <div className="map-shell">
@@ -676,6 +726,17 @@ export function MapPanel({
           <span>{formatUtcDateTime(hover.context.eventTimeUtc)} UTC</span>
         </div>
       ) : null}
+      {hover?.kind === "station" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>
+            {hover.station.networkCode}.{hover.station.stationCode}
+          </strong>
+          <span>{hover.station.siteName ?? "Estacion sin nombre publicado"}</span>
+          <span className="tt-source">
+            {hover.station.status.toUpperCase()} · {hover.station.source}
+          </span>
+        </div>
+      ) : null}
       {hover?.kind === "volcano" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>🌋 {hover.name}</strong>
@@ -683,7 +744,7 @@ export function MapPanel({
           <span className="tt-source">{hover.country}</span>
         </div>
       ) : null}
-      {tourEvent ? (
+      {tourEvent && !selectedStation ? (
         <div className="tour-card">
           <div className="tour-card-top">
             <CountryFlag event={tourEvent} className="tour-flag" />
@@ -723,6 +784,47 @@ export function MapPanel({
           </div>
           <span className="tour-card-source">Datos: {tourEvent.source}</span>
         </div>
+      ) : null}
+      {selectedStation ? (
+        <section className="station-detail" aria-label="Detalle de estacion experimental">
+          <button
+            type="button"
+            className="station-detail-close"
+            onClick={() => setSelectedStationId(null)}
+            aria-label="Cerrar detalle de estacion"
+            title="Cerrar"
+          >
+            ×
+          </button>
+          <span className="station-detail-kicker">ESTACION EXPERIMENTAL</span>
+          <strong>
+            {selectedStation.networkCode}.{selectedStation.stationCode}
+          </strong>
+          <span>{selectedStation.siteName ?? "Sin nombre publicado"}</span>
+          <dl>
+            <div>
+              <dt>Estado</dt>
+              <dd style={{ color: STATION_COLORS[selectedStation.status] }}>
+                {selectedStation.status.toUpperCase()}
+              </dd>
+            </div>
+            <div>
+              <dt>Fase</dt>
+              <dd>{selectedStation.phase ?? "N/D"}</dd>
+            </div>
+            <div>
+              <dt>Latencia</dt>
+              <dd>{selectedStation.latencyMs === null ? "N/D" : `${selectedStation.latencyMs} ms`}</dd>
+            </div>
+            <div>
+              <dt>Motor</dt>
+              <dd>{selectedStation.engine ?? "Sin telemetria"}</dd>
+            </div>
+          </dl>
+          <a href={selectedStation.sourceUrl} target="_blank" rel="noreferrer">
+            Metadatos GEOFON
+          </a>
+        </section>
       ) : null}
       <div className="map-legend">
         <span className="legend-title">Limites de placa</span>
@@ -769,6 +871,27 @@ export function MapPanel({
           <i style={{ background: "linear-gradient(to right, #7aff93, #ff0000)", opacity: 0.8 }} />
           ShakeMap (USGS)
         </span>
+      </div>
+      <div className="station-legend-panel">
+        <label className="station-layer-toggle">
+          <input
+            type="checkbox"
+            checked={stationsVisible}
+            onChange={(event) => setStationsVisible(event.target.checked)}
+          />
+          Estaciones ({stations.length})
+        </label>
+        {stationsVisible ? (
+          <div className="station-state-legend">
+            <span className="legend-title">Estados experimentales</span>
+            {Object.entries(STATION_COLORS).map(([status, color]) => (
+              <span className="legend-row" key={status}>
+                <i className="station-triangle" style={{ borderBottomColor: color }} />
+                {status.toUpperCase()}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div
         className="map-legend legend-intensity"

@@ -6,6 +6,7 @@
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/wavefront.test.ts",
     "dev": "vite"
   },
   "dependencies": {

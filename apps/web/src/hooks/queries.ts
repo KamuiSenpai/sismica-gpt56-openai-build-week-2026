@@ -6,6 +6,7 @@ import {
   fetchActiveDisasters,
   fetchActiveTsunamiProducts,
   fetchEvents,
+  fetchStations,
   fetchSourceStatuses
 } from "../lib/api";
 
@@ -45,6 +46,14 @@ export function useTsunamiQuery() {
     queryKey: ["tsunami"],
     queryFn: fetchActiveTsunamiProducts,
     refetchInterval: REFRESH_MS
+  });
+}
+
+export function useStationsQuery() {
+  return useQuery({
+    queryKey: ["stations"],
+    queryFn: fetchStations,
+    refetchInterval: 5 * REFRESH_MS
   });
 }
 

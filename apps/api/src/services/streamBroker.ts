@@ -13,7 +13,9 @@ type SseClient = {
 
 export class StreamBroker {
   private readonly clients = new Map<string, SseClient>();
+  private readonly stationClients = new Map<string, SseClient>();
   private listener: Client | null = null;
+  private stationListener: Client | null = null;
   private heartbeat: NodeJS.Timeout | null = null;
 
   async start(): Promise<void> {
@@ -27,7 +29,11 @@ export class StreamBroker {
         }
         try {
           const parsed = JSON.parse(message.payload) as StreamEvent;
-          if (parsed && (parsed.type === "event.created" || parsed.type === "event.updated") && parsed.payload) {
+          if (
+            parsed &&
+            (parsed.type === "event.created" || parsed.type === "event.updated") &&
+            parsed.payload
+          ) {
             this.broadcast(parsed.type, JSON.stringify(parsed.payload));
             return;
           }
@@ -36,15 +42,46 @@ export class StreamBroker {
         }
         this.broadcast("event.created", message.payload);
       });
+      this.stationListener = new Client({ connectionString: env.databaseUrl });
+      await this.stationListener.connect();
+      await this.stationListener.query(`LISTEN ${env.stationStreamChannel}`);
+      this.stationListener.on("notification", (message) => {
+        if (!message.payload) return;
+        try {
+          const parsed = JSON.parse(message.payload) as {
+            type?: string;
+            payload?: { stationId?: string; sequence?: number };
+          };
+          if (
+            parsed.type === "station.state" &&
+            parsed.payload?.stationId &&
+            Number.isInteger(parsed.payload.sequence)
+          ) {
+            this.broadcastTo(
+              this.stationClients,
+              "station.state",
+              JSON.stringify(parsed.payload),
+              `${parsed.payload.stationId}:${parsed.payload.sequence}`
+            );
+          }
+        } catch {
+          // Ignore malformed internal notifications.
+        }
+      });
     } catch (error) {
       console.warn("SSE listener unavailable. API started without database notifications.", error);
       if (this.listener) {
         await this.listener.end().catch(() => undefined);
         this.listener = null;
       }
+      if (this.stationListener) {
+        await this.stationListener.end().catch(() => undefined);
+        this.stationListener = null;
+      }
     }
     this.heartbeat = setInterval(() => {
       this.broadcast("ping", JSON.stringify({ timestamp: new Date().toISOString() }));
+      this.broadcastTo(this.stationClients, "ping", JSON.stringify({ timestamp: new Date().toISOString() }));
     }, 20000);
   }
 
@@ -62,13 +99,20 @@ export class StreamBroker {
     return id;
   }
 
+  registerStation(response: Response): string {
+    const id = this.prepareClient(response);
+    this.stationClients.set(id, { id, response });
+    return id;
+  }
+
   unregister(id: string): void {
-    const client = this.clients.get(id);
+    const client = this.clients.get(id) ?? this.stationClients.get(id);
     if (!client) {
       return;
     }
     client.response.end();
     this.clients.delete(id);
+    this.stationClients.delete(id);
   }
 
   async stop(): Promise<void> {
@@ -80,11 +124,37 @@ export class StreamBroker {
       await this.listener.end();
       this.listener = null;
     }
+    if (this.stationListener) {
+      await this.stationListener.end();
+      this.stationListener = null;
+    }
   }
 
   private broadcast(event: string, payload: string): void {
-    for (const client of this.clients.values()) {
-      client.response.write(`event: ${event}\ndata: ${payload}\n\n`);
+    this.broadcastTo(this.clients, event, payload);
+  }
+
+  private broadcastTo(
+    clients: Map<string, SseClient>,
+    event: string,
+    payload: string,
+    eventId?: string
+  ): void {
+    for (const client of clients.values()) {
+      client.response.write(`${eventId ? `id: ${eventId}\n` : ""}event: ${event}\ndata: ${payload}\n\n`);
     }
+  }
+
+  private prepareClient(response: Response): string {
+    const id = randomUUID();
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": env.frontendOrigin
+    });
+    response.flushHeaders?.();
+    response.write(`event: ready\ndata: ${JSON.stringify({ id })}\n\n`);
+    return id;
   }
 }

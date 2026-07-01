@@ -11,6 +11,11 @@ const numberEnv = (fallback: number) =>
   );
 
 const urlEnv = (fallback: string) => z.string().url().default(fallback);
+const channelEnv = (fallback: string) =>
+  z
+    .string()
+    .regex(/^[a-z_][a-z0-9_]*$/i)
+    .default(fallback);
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
@@ -21,6 +26,7 @@ const envSchema = z.object({
   ),
   EMSC_FDSN_URL: urlEnv("https://www.seismicportal.eu/fdsnws/event/1/query"),
   GEOFON_FDSN_URL: urlEnv("https://geofon.gfz.de/fdsnws/event/1/query"),
+  GEOFON_FDSN_STATION_URL: urlEnv("https://geofon.gfz.de/fdsnws/station/1/query"),
   SED_FDSN_URL: urlEnv("http://eida.ethz.ch/fdsnws/event/1/query"),
   RENASS_FDSN_URL: urlEnv("https://api.franceseisme.fr/fdsnws/event/1/query"),
   ISC_FDSN_URL: urlEnv("http://www.isc.ac.uk/fdsnws/event/1/query"),
@@ -57,11 +63,12 @@ const envSchema = z.object({
   POLL_INTERVAL_MS: numberEnv(60000),
   SOURCE_TIMEOUT_MS: numberEnv(20000),
   SOURCE_WINDOW_HOURS: numberEnv(72),
+  STATION_CATALOG_REFRESH_MS: numberEnv(86400000),
   RUN_ONCE: z
     .string()
     .optional()
     .transform((value) => (value ?? "false").toLowerCase() === "true"),
-  STREAM_CHANNEL: z.string().min(1).default("seismic_events_channel")
+  STREAM_CHANNEL: channelEnv("seismic_events_channel")
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -79,6 +86,7 @@ export const env = {
   cwaEarthquakeUrl: parsed.data.CWA_EARTHQUAKE_URL,
   emscFdsnUrl: parsed.data.EMSC_FDSN_URL,
   geofonFdsnUrl: parsed.data.GEOFON_FDSN_URL,
+  geofonFdsnStationUrl: parsed.data.GEOFON_FDSN_STATION_URL,
   sedFdsnUrl: parsed.data.SED_FDSN_URL,
   renassFdsnUrl: parsed.data.RENASS_FDSN_URL,
   iscFdsnUrl: parsed.data.ISC_FDSN_URL,
@@ -109,6 +117,7 @@ export const env = {
   pollIntervalMs: parsed.data.POLL_INTERVAL_MS,
   sourceTimeoutMs: parsed.data.SOURCE_TIMEOUT_MS,
   sourceWindowHours: parsed.data.SOURCE_WINDOW_HOURS,
+  stationCatalogRefreshMs: parsed.data.STATION_CATALOG_REFRESH_MS,
   runOnce: parsed.data.RUN_ONCE,
   streamChannel: parsed.data.STREAM_CHANNEL
 };
