@@ -1,0 +1,1616 @@
+<!doctype html>
+<html>
+  <head>
+	<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-QQL2ZEX48H"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-QQL2ZEX48H');
+</script>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Type" content= "text/html; charset=UTF-8" />
+    <meta http-equiv="Content-Language" content="es-sv" />
+    <meta name="description" content= "Sitio web del Observatorio de Amenazas del Ministerio de Medio Ambiente de El Salvador." />
+    <meta name="keywords" content= "snet meterologia hidrologia sismologia riesgo tiempo clima erupcion volcanes vulcanologia lagos rios estudios" />
+    <!--<link rel="stylesheet" type="text/css" media="screen" href="/style/style.css">-->
+    <!--<link rel="stylesheet" type="text/css" media="screen" href="/style/imageMenu.css">-->
+	
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+	
+	
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="icon" type="image/gif" href="animated_favicon1.gif">
+    <link href="fontawesome/css/all.css" rel="stylesheet">
+    <title>:: DGOA - Direcci&oacute;n General del Observatorio de Amenazas</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/css/bootstrap.min.css" integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPvg6uqKI2xXr2" crossorigin="anonymous">
+	
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"	  integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0="  crossorigin="anonymous"></script>
+	
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+    crossorigin=""/>
+    </script>
+    <link href="/style/default5.css" rel="stylesheet" type="text/css" media="all"/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+    integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+    crossorigin=""></script>
+    <script type="text/javascript" src="leaflet-providers.js"></script>
+    <script src="https://unpkg.com/esri-leaflet@2.5.0/dist/esri-leaflet.js"
+    integrity="sha512-ucw7Grpc+iEQZa711gcjgMBnmd9qju1CICsRaryvX7HJklK0pGl/prxKvtHwpgm5ZHdvAil7YPxI1oWPOWK3UQ=="
+    crossorigin=""></script>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/assets/owl.carousel.min.css" integrity="sha512-tS3S5qG0BlhnQROyJXvNjeEM4UpMXHrQfTGmbQ1gKmelCxlSEBUaxhRBj/EFTzpbP4RVSrpEikbmdJobCvhE3g==" crossorigin="anonymous" />
+	  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/assets/owl.theme.default.min.css" integrity="sha512-sMXtMNL1zRzolHYKEujM2AqCLUR9F2C4/05cdbxjjLSRvMQIciEPCQZo++nk7go3BtSuK9kfa/s+a4f4i5pLkw==" crossorigin="anonymous" />
+  	<script src="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js" integrity="sha512-bPs7Ae6pVvhOSiIcyUClR7/q2OAsRiovw4vAkX+zJbw3ShAeeqezq50RIIcIURq7Oa20rW2n2q+fyXBNcU9lrw==" crossorigin="anonymous"></script>	
+	  
+
+
+	  <script type="text/javascript">
+      <!--//--><![CDATA[
+      <!--
+      		var startTime = 1782856961000;
+			var hayInforme = false;
+          	var accordion;
+            var center = [13.0, -88.883];
+            var center2 = [13.7, -88.883];
+            var gmap1;
+            var gmap2;
+            var gmap3;
+            
+          	$(document).ready(function (){
+				
+							//ESCRITORIO
+								
+							$("#contenedorprincipal").load("news4.php");
+							
+							//$("#contenedortiempo").load("meteorologia/metar/index2.php");
+				
+              $("#contenedorIBF").load("CondicionesIBF_new.php");
+
+              $("#profile").load("https://srt.snet.gob.sv/apps/public/viewmapaamenaza");
+							
+              //MOVIL
+							
+							$("#contenedorprincipal_M").load("news4.php");
+							
+							//$("#contenedortiempo_M").load("meteorologia/metar/index2.php");
+				
+              $("#contenedorIBF_M").load("CondicionesIBF_new.php");
+							
+							
+							
+      				setInterval('updateTime()',1000);
+					    var as = [];
+                                        
+                    //gmap1 = L.map("map1",{zoomControl: false}).setView(center, 8);
+                    //gmap2 = L.map("map2",{zoomControl: false}).setView(center2, 9);
+                    //gmap3 = L.map("map3",{zoomControl: false}).setView(center2, 9);
+                                        
+                    /*var baseMap1 = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean_Basemap/MapServer/tile/{z}/{y}/{x}', {
+  	                                             attribution: 'Tiles &copy; Esri &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri',
+  	                                             maxZoom: 13
+                                                });*/
+                    /*var baseMap2 = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean_Basemap/MapServer/tile/{z}/{y}/{x}', {
+  	                                             attribution: 'Tiles &copy; Esri &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri',
+  	                                             maxZoom: 13
+                                                });
+                    var baseMap3 = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean_Basemap/MapServer/tile/{z}/{y}/{x}', {
+  	                                             attribution: 'Tiles &copy; Esri &mdash; Sources: GEBCO, NOAA, CHS, OSU, UNH, CSUMB, National Geographic, DeLorme, NAVTEQ, and Esri',
+  	                                             maxZoom: 13
+                                                });*/
+                    baseMap1.addTo(gmap1);
+                    //baseMap2.addTo(gmap2);
+                    //baseMap3.addTo(gmap3);
+                    
+                    //$(".carousel-item").first().addClass("active");
+                    /*$('#news3div').carousel();
+                    $('#mapas').carousel({
+                        interval: 1000 * 15
+                    });
+                    $('#mapas').on('slide.bs.carousel', function () {
+                          setTimeout(function(){
+                          gmap1.invalidateSize();
+                          gmap2.invalidateSize();
+                          gmap3.invalidateSize();
+                          },300);
+                    }) ;
+                    L.esri.dynamicMapLayer({
+                      url: 'https://geoportal.snet.gob.sv/server/rest/services/imoran/intensidad_sv/MapServer',
+                      opacity: 0.7
+                    }).addTo(gmap1);
+                    var title0 = L.control({position: 'topleft'});
+                    title0.onAdd = function (gmap1) {
+                        var div = L.DomUtil.create("div","maptitle");
+                        div.innerHTML += "<h3>Sismicidad</h3>";
+                        return div;
+                    };
+                    title0.addTo(gmap1);
+                    var title = L.control({position: 'topleft'});
+                    title.onAdd = function (gmap2) {
+                        var div = L.DomUtil.create("div","maptitle");
+                        div.innerHTML += "<h3>Estado del tiempo</h3>";
+                        return div;
+                    };
+                    title.addTo(gmap2);
+                    var title2 = L.control({position: 'topleft'});
+                    title2.onAdd = function (gmap2) {
+                        var div = L.DomUtil.create("div","maptitle");
+                        div.innerHTML += "<h3>Velocidad y Direcci&oacute;n del viento</h3>";
+                        return div;
+                    };
+                    title2.addTo(gmap3);
+                    getMetarMap();*/
+          	});
+            
+            function getMetarMap() {
+                $.post("/meteorologia/metar/metarjson.php",function(data){
+                    var jsonMetar = eval('(' + data + ')');
+                    var i = 0;
+                    for(i=0;i<jsonMetar.length;i++){
+                        var wIcon = L.icon({
+                            iconUrl: jsonMetar[i].icono,
+                            iconSize: [35, 35]
+                        });
+                        var vIcon = L.icon({
+                            iconUrl: jsonMetar[i].dirviento,
+                            iconSize: [35, 35]
+                        });
+                        var m = L.marker([jsonMetar[i].latitud * 1, jsonMetar[i].longitud * 1], {icon: wIcon}).bindTooltip(jsonMetar[i].temperatura + " °C",{permanent:true, direction: 'right', offset: L.point(10,0)});
+                        m.addTo(gmap2).bindPopup("Temperatura: <b>" + jsonMetar[i].temperatura + " °C</b><br>Presi&oacute;n: <b>" + jsonMetar[i].presion + " hPa</b>");
+                        var v = L.marker([jsonMetar[i].latitud * 1, jsonMetar[i].longitud * 1], {icon: vIcon}).bindTooltip(jsonMetar[i].velocidad + " kt",{permanent:true, direction: 'right', offset: L.point(10,0)});;
+                        v.addTo(gmap3).bindPopup("Velocidad: <b>" + jsonMetar[i].velocidad + " kt</b>");
+                    }
+                });
+            }
+
+      		function pad(number,length) {
+          		var str = '' + number;
+          		while (str.length < length)
+              	str = '0' + str;
+          		return str;
+      		}
+            
+      		function updateTime() {
+      			startTime += 1000;
+      			var date = new Date();
+      			date.setTime(startTime);
+      			$('#currentTime').html(
+      					pad(date.getHours(),2)+":"+
+      					pad(date.getMinutes(),2)+":"+
+      					pad(date.getSeconds(),2));
+      		}
+      //-->
+      //-->]]>
+
+
+		
+    </script>
+   <script>
+     !(function () {
+      let e = document.createElement("script"),
+    t = document.head || document.getElementsByTagName("head")[0];
+    (e.src =
+    "https://www.snet.gob.sv/chat0/lib/index.js"),
+
+        (e.async = !0),
+         (e.onload = () => {
+        window.WebChat.default(
+       {
+          customData: { language: "es" },
+          socketUrl: "https://www.snet.gob.sv",
+          socketPath: "/chat0socket/socket.io",
+          
+        },
+       null
+     );
+    }),
+    t.insertBefore(e, t.firstChild);
+     })();
+</script> 
+<style>
+
+
+.owl-dots{
+	margin-bottom: 20px;
+    margin-top: 0px;
+}
+
+img {
+padding-left: 15px;  
+padding-right: 15px;
+}
+
+.contenedorExterior {
+    display: table;
+    width: 100px; /* anchura del padre */
+    height: 100px; /* altura del padre */
+    overflow: hidden;
+}
+.contenedorExterior .contenedorInterior {
+    display: table-cell;
+    vertical-align: middle;
+    width: 100%;
+    margin: 0 auto;
+    text-align: center;
+}
+.elemento {
+    background: #ddd;
+    width: 100px;
+    height: 100px;
+}
+
+
+.center {
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+}
+
+
+#lineas-de-interes .item {
+    padding: 10px 10px;
+    margin: 5px;
+
+    color: #FFF;
+    text-align: center;
+    font-size: .7em;
+    line-height: 18px;
+    border-radius: 6px;
+    box-shadow: 0 0 4px #ccc;
+}
+
+
+
+
+@keyframes slidein {
+  from {
+    margin-left: 50%;
+    width: 90%
+  }
+
+  to {
+    margin-left: 0%;
+    width: 50%;
+  }
+}
+
+
+
+
+@media screen and (max-width: 600px) {
+.ocultar-div{
+display:none;
+}
+}
+
+
+
+        /* **Liss**: Define el tamaño más grande para el modal */
+        .modal-lg-custom {
+            max-width: 80%;
+        }
+        /* **Liss**: Alinea el botón "Cerrar" en el centro del pie del modal */
+        .modal-footer .btn-close-centered {
+            margin: 0 auto;
+        }
+		
+		
+		
+		  .nav-link.active {
+    color: #000 !important; /* texto negro para el activo */
+  }
+  
+  
+
+  .social-bar {
+    background-color: #2e3740;
+    padding: 10px 0;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  .social-btn {
+    background-color: transparent;
+    border: 2px solid #ffffff33;
+    border-radius: 10px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    text-decoration: none;
+  }
+
+  .social-btn:hover {
+    background-color: #ffffff22;
+    transform: translateY(-2px);
+  }
+
+  .social-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: #ffffff;
+  }
+
+</style>
+
+</head>
+  <body>
+  
+
+
+
+
+  
+  <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <!-- **Liss**: Contenedor para la imagen dentro del modal, centrado en la pantalla -->
+            <div class="modal-body text-center position-relative">
+			  <!-- **Liss**: Botón "X" en la esquina superior derecha para cerrar el modal -->
+                <button type="button" class="btn-close position-absolute top-0 end-0 m-2" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <!-- **Liss**: Imagen que se mostrará en el modal; usa una URL para cargarla desde el servidor -->
+                <img src="https://srt.ambiente.gob.sv/publicaciones/PronosticoDGOA_INICIO.png" alt="Pronóstico" class="img-fluid" style="max-width: 100%; height: auto;">
+            </div>
+            <!-- **Liss**: Pie de modal con botón para cerrar -->
+            <div class="modal-footer">
+           <button type="button" class="btn btn-secondary btn-close-centered" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+  
+  
+  
+  <!-- **Liss**: Carga de jQuery y JavaScript de Bootstrap para el funcionamiento del modal -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // **Liss**: Usa jQuery para ejecutar el código cuando el documento esté completamente cargado
+    $(document).ready(function(){
+        // **Liss**: Muestra el modal automáticamente al cargar la página
+        $('#imageModal').modal('show');
+    });
+</script>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="container-fluid" style="margin-top: 15px; padding-right: 0px;padding-left: 0px;">
+
+				  
+      <div class="container-fluid" style="padding-left: 0px;   padding-right: 0px;">
+        <div id="mainBar" class="row" style="height:90px;">
+		
+          <div class="col-md-3" style= "justify-content: center;  text-align: center;  align-content: center; padding-bottom: 5px;">
+            <a href="https://www.snet.gob.sv"><img src="/UserFiles/SNET/Image/LOGOMARNB.png" alt="MARN" height="85px" /></a>
+          </div>
+		  
+		  <div class="col-md-4" style=" display: flex;    justify-content: center;    align-content: center;    flex-direction: column;">
+				   <div class="d-none d-sm-none d-md-block">
+        		  <p style="color: #ffffff; " href="/">Dirección General de Observatorio de Amenazas y Recursos Naturales</p>
+				  
+				  </div>
+          </div>
+
+		  <div class="col-md-2" style=" display: flex;    justify-content: center;    align-content: center;    flex-direction: column;">
+		  <div class="social-bar">
+  <!-- X -->
+  <a href="https://twitter.com/MedioAmbienteSV" target="_blank" class="social-btn" aria-label="X">
+    <svg viewBox="0 0 1200 1227" xmlns="http://www.w3.org/2000/svg">
+      <path d="M747.2 507.9L1150 0H1046.3L703.7 438.3L431.3 0H0L431.5 630.8L0 1227H103.7L472.4 743.1L768.7 1227H1200L747.2 507.9ZM133.5 84.6H342.3L1066.5 1142.4H857.6L133.5 84.6Z"/>
+    </svg>
+  </a>
+
+  <!-- Facebook -->
+  <a href="https://www.facebook.com/MedioAmbienteSLV" target="_blank" class="social-btn" aria-label="Facebook">
+    <svg viewBox="0 0 24 24">
+      <path d="M22 12a10 10 0 10-11.5 9.9v-7h-2v-3h2v-2.3c0-2 1.2-3.1 3-3.1.9 0 1.8.1 1.8.1v2h-1c-1 0-1.3.6-1.3 1.2V12h2.2l-.4 3h-1.8v7A10 10 0 0022 12z"/>
+    </svg>
+  </a>
+
+  <!-- Instagram -->
+  <a href="https://www.instagram.com/medioambientesv" target="_blank" class="social-btn" aria-label="Instagram">
+    <svg viewBox="0 0 24 24">
+      <path d="M7 2C4.243 2 2 4.243 2 7v10c0 2.757 2.243 5 5 5h10c2.757 0 5-2.243 5-5V7c0-2.757-2.243-5-5-5H7zm10 2a3 3 0 013 3v10a3 3 0 01-3 3H7a3 3 0 01-3-3V7a3 3 0 013-3h10zm-5 3a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6zm4.5-2a1 1 0 100 2 1 1 0 000-2z"/>
+    </svg>
+  </a>
+
+  <!-- TikTok -->
+  <a href="https://www.tiktok.com/@medioambientesv" target="_blank" class="social-btn" aria-label="TikTok">
+    <svg viewBox="0 0 256 256">
+      <path d="M224 80.2a80 80 0 01-48-16V168a72 72 0 11-72-72 70.5 70.5 0 0124.2 4.3A56.1 56.1 0 0096 96a56 56 0 1056 56V32h32a48 48 0 0040 48.2z"/>
+    </svg>
+  </a>
+</div>
+</div>
+		
+          <div class="col-md-3 d-none d-sm-none d-md-block">
+		 <div class="container-fluid d-none d-sm-block">
+        <div id="topMenu"  style="font-size:12pt;">
+          <div id="leftBar">
+            <!--
+            <img class="dot" src= "images/middot.png" alt="" /><a href= "https://portafolio.snet.gob.sv/base_bibliografica.shtml">Colecci&oacute;n Documentos</a>-->
+          </div>  
+          <div id="rightBar" style="text-align:right;">
+	
+		 
+            <a href="https://www.snet.gob.sv/anuario" style="padding-right: 5px; padding-left: 5px;"> <i class='fas fa-chart-bar'></i> Anuario Estad&iacute;stico</a>
+
+            <a href="https://www.snet.gob.sv/ver/snet/productos+y+servicios/" style="padding-right: 5px; padding-left: 5px;"><i class='fa fa-check-square'></i> Productos y Servicios</a>
+
+            <a href="https://www.snet.gob.sv/atlas/app.php" style="padding-right: 5px; padding-left: 5px;"><i class='fa fa-asterisk'></i> Referencia Territorial</a><br>
+            
+			<a href="https://online.desinventar.org/" target="_blank" style="padding-right: 5px; padding-left: 5px;"><i class='fa fa-bookmark'></i> DesInventar</a>
+			
+			<a href="/ver/seccion+educativa" style="padding-right: 5px; padding-left: 5px;"><i class="fas fa-book-reader"></i> Secci&oacute;n Educativa</a>
+			
+			<a href="/ver/meteorologia/pronostico/24+horas" style="padding-right: 5px; padding-left: 5px;"><i class="fas fa-cloud-sun"></i> Pron&oacute;stico</a><br>
+ 			
+			<a href="https://srt.snet.gob.sv/biblioteca_doa/public/" target="_blank" style="padding-right: 5px; padding-left: 5px;"><i class="fa fa-book"></i> Biblioteca</a><br>
+                   
+             
+            <!--<img class="dot" src= "/images/middot.png" alt="" /><a href="https://srt.snet.gob.sv/sihi/">SIHI</a>-->
+          </div>
+        </div>
+      </div>
+	  <br>  <br>
+       
+       
+			
+			
+		<div id="newsBar" class="row" style="margin-bottom:20px;">
+          <div class="col-md-1">
+            <span class="nodecoration" style="padding-left: 10px; ">
+            </span>
+          </div>
+          <div class="col-md-11" style="padding-right: 35px;">
+            <div id="currentTime" style="float: right;padding-rigth: 5px;">          </div>
+            <div style="padding-right: 5px; float: right;">
+              El Salvador - Hora Local:          </div>
+          </div>
+        </div>
+		
+		
+          </div>
+		    
+  
+        </div>
+
+		
+				  		 <div class="col-md-12"  style="background-color: #2e3740;">
+				  <div class="d-block d-sm-block d-md-none" >
+				
+        		  <div style="color: #ffffff; line-height:1; font-size:0.5rem; padding-bottom: 5px; text-align: center; padding-top: 5px;" href="/" >DIRECCIÓN GENERAL DEL OBSERVATORIO DE AMENAZAS Y RECURSOS NATURALES</div>
+				
+				  </div>
+		  </div>	
+		
+		
+		    <div class="col-md-12" style="background-color: #2e3740;">
+		
+
+				  
+		<div id="lineas-de-interes" class="owl-carousel owl-theme">
+
+  <div class="item item_par"><a href="/" title="Inicio">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Inicio.png" title="El inicio">  
+  <span style="color: #ffffff">Inicio</span></a></div>
+
+    <div class="item item_par"><a href="/ver/meteorologia/pronostico/24+horas" title="Pronóstico del tiempo">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Pronostico.png" title="Pronóstico del tiempo">  
+  <span style="color: #ffffff">Pronóstico</span></a></div>
+  
+   <div class="item item_par"><a href="/ver/meteorologia" title="Meteorología">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Meteorologia.png" title="Meteorología">  
+  <span style="color: #ffffff">Meteorología</span></a></div>
+  
+  <div class="item item_par"><a href="/ver/meteorologia/monitoreo/calidad+del+aire/" title="Calidad Aire">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/CalidadAire.png" title="Calidad Aire">  
+  <span style="color: #ffffff">Cal. Aire</span></a></div>
+  
+     <div class="item item_par"><a href="http://srt.marn.gob.sv/saapis.html" title="Satelite">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Satelite.png" title="Satelite">  
+  <span style="color: #ffffff">Satélites</span></a></div>
+  
+  <div class="item item_par"><a href="https://mapas.snet.gob.sv/" title="Mapas">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Mapas.png" title="Mapas">  
+  <span style="color: #ffffff">Mapas</span></a></div>
+  
+  <div class="item item_par"><a href="/informacion/?area=sismologia" title="Sismología">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Sismologia.png" title="Sismología">  
+  <span style="color: #ffffff">Sismología</span></a></div>
+  
+  <div class="item item_par"><a href="/ver/hidrologia" title="Hidrología">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Hidrologia.png" title="Hidrología">  
+  <span style="color: #ffffff">Hidrología</span></a></div>
+  
+  <div class="item item_par"><a href="/informacion/?area=deslizamientos" title="Deslizamientos">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Deslizamientos.png" title="Deslizamientos">  
+  <span style="color: #ffffff">Deslizamientos</span></a></div>
+  
+  <div class="item item_par"><a href="/informacion/?area=vulcanologia" title="Vulcanología">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Vulcanologia.png" title="Vulcanología">  
+  <span style="color: #ffffff">Vulcanología</span></a></div>
+  
+  <div class="item item_par"><a href="/ver/oceanografia" title="Oceanografía">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Oceanografia.png" title="Oceanografía">  
+  <span style="color: #ffffff">Oceanografía</span></a></div>
+  
+   <div class="item item_par"><a href="/informacion/?area=tsunamis" title="Tsunamis">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Tsunamis.png" title="Tsunamis">  
+  <span style="color: #ffffff">Tsunamis</span></a></div> 
+ 
+    <div class="item item_par"><a href="https://www.snet.gob.sv/surfcity.php" title="Surf City">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/SurfCity.png" title="Surf City">  
+  <span style="color: #ffffff">Surf City</span></a></div>
+  
+    <div class="item item_par"><a href="https://geoportal.snet.gob.sv/portal/apps/experiencebuilder/experience/?id=967b0cf9fcf04a28bf11b1bc618118c3" title="Riesgo">
+  <img class="center" src="/UserFiles/SNET/Image/IconNew/Riesgo.png" title="Riesgo">  
+  <span style="color: #ffffff">Riesgo</span></a></div>
+  
+  <div class="item item_par"><a href="/ver/riesgo/pronostico+de+impacto/sobre+pronostoco+basado+en+impacto/" title="Pronóstico impactos">
+  <img class="center" alt="Mi web" src="/UserFiles/SNET/Image/IconNew/IBF.png" title="Pronóstico Basado en impactos">  
+  <span style="color: #ffffff">Impactos</span></a></div>
+  
+ <div class="item item_par"><a href="/ver/riesgo/ultimos+informes+y+avisos/" title="Informes">
+  <img class="center" alt="Mi web" src="/UserFiles/SNET/Image/IconNew/Informes.png" title="Informes">  
+  <span style="color: #ffffff">Informes</span></a></div>
+  
+    <div class="item item_par"><a href="/ver/seccion+educativa" title="Educación">
+  <img class="center" alt="Mi web" src="/UserFiles/SNET/Image/IconNew/Eduacacion.png" title="Educación">  
+  <span style="color: #ffffff">Educación</span></a></div>
+  
+
+
+</div>
+		        </div>
+		
+		
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js" integrity="sha512-bPs7Ae6pVvhOSiIcyUClR7/q2OAsRiovw4vAkX+zJbw3ShAeeqezq50RIIcIURq7Oa20rW2n2q+fyXBNcU9lrw==" crossorigin="anonymous"></script>	
+<link href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css' rel='stylesheet' >
+                                                              
+		
+		    <script>
+$('.owl-carousel').owlCarousel({
+    loop:true,
+
+
+    nav:false,
+    responsive:{
+        0:{
+            items:4
+        },
+        600:{
+            items:5
+        },
+        1000:{
+            items:14
+        }
+    }
+})
+    </script>
+	
+		
+      </div>
+	  
+
+
+
+
+
+
+  <!--   *************************************************************************************************************   -->
+  <!--   ****************************************  INICIO ESCRITORIO WEB  ****************************************   -->
+
+	  <div class="d-none d-sm-none d-md-block">
+     <div style="background-color:#3c4657;padding-top:0px;">
+      <div id="mainContent" class="container-fluid" style="margin-top: 0px;padding-right: 0px;">
+
+
+	        <div class="row">
+                <div class="col-md-9" style="text-align: center;">	
+                    <div class="row">
+                        <div class="col-md-4" style="text-align: center;"> 
+                        
+                            <div class="row">
+                              <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px;"><b>PRONÓSTICOS BASADOS EN IMPACTO</b></div>
+                            </div>
+                        
+                            <div class="col-md-12" style="width: 100%;  overflow: hidden; padding-bottom: 5px; padding-left: 5px;padding-right: 5px;">
+                              <div id="contenedorIBF" ></div>
+                            </div>
+
+                            
+                        </div>
+                        <div class="col-md-8" style="text-align: center;">
+                          <ul class="nav nav-tabs" id="myTab" role="tablist">
+<li class="nav-item" role="presentation">
+  <button class="nav-link active text-white" id="home-tab" data-toggle="tab" data-target="#home" type="button" role="tab" aria-controls="home" aria-selected="true">Radar & Satelite</button>
+</li>
+<li class="nav-item" role="presentation">
+  <button class="nav-link text-white" id="cam-tab" data-toggle="tab" data-target="#cam" type="button" role="tab" aria-controls="home" aria-selected="true">C&aacute;mara Volc&aacute;n San Miguel</button>
+</li>
+<li class="nav-item" role="presentation">
+  <button class="nav-link text-white" id="caire-tab" data-toggle="tab" data-target="#caire" type="button" role="tab" aria-controls="home" aria-selected="true">Calidad del Aire</button>
+</li>
+<!--<li class="nav-item" role="presentation">
+  <button class="nav-link text-white" id="Pron-tab" data-toggle="tab" data-target="#Pron" type="button" role="tab" aria-controls="home" aria-selected="true">Condiciones y Pronóstico</button>
+</li>
+                            <li class="nav-item" role="presentation">
+                              <button class="nav-link" id="profile-tab" data-toggle="tab" data-target="#profile" type="button" role="tab" aria-controls="profile" aria-selected="false">Amenaza Actual a Deslizamientos</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                              <button class="nav-link" id="contact-tab" data-toggle="tab" data-target="#contact" type="button" role="tab" aria-controls="contact" aria-selected="false">Contact</button>
+                            </li>-->
+                          </ul>
+                          <div class="tab-content" id="myTabContent">
+                            <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
+                              <iframe src="https://www.snet.gob.sv/googlemaps/radares/radarS3.php" width="100%" height="600px;" frameBorder="0"></iframe>
+                            </div>
+                            <div class="tab-pane fade show" id="cam" role="tabpanel" aria-labelledby="cam-tab">
+							
+							
+							
+														
+    <iframe 
+      width="100%" 
+      height="600px" 
+      src="https://www.youtube.com/embed/QOCfhDnZrGo?autoplay=1&mute=1" 
+      title="YouTube video player" 
+      frameborder="0" 
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+      allowfullscreen>
+    </iframe>
+    
+						 
+                            </div>
+
+                            <div class="tab-pane fade show" id="caire" role="tabpanel" aria-labelledby="caire-tab">
+                              <iframe width="100%" height="600px" src="https://www.snet.gob.sv/googlemaps/calidadaire/monitoreoValores.php" title="Calidad de Aire San Salvador" frameborder="0"></iframe>
+                            </div>
+							
+							 <!--<div class="tab-pane fade show" id="Pron" role="tabpanel" aria-labelledby="Pron-tab">
+                              <iframe width="100%" height="570px" src="https://srt.snet.gob.sv/pronostico_tiempo/public/pronostico/PI027?codigoSitio=PI027" title="Pronóstico del tiempo" frameborder="0"></iframe>
+                            </div>-->
+                            
+                            
+                            <div class="tab-pane fade" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+
+                            </div>
+                            <!--<div class="tab-pane fade" id="contact" role="tabpanel" aria-labelledby="contact-tab">3...</div>-->
+                          </div>
+
+                            <!--<div id="mapas" class="carousel slide" data-ride="carousel" style="height:100%;">
+                                <div class="carousel-inner" style="height:100%;">
+                                    <div class="carousel-item active">
+                                        <div id="map1" class="map" style="height:610px;"></div>
+                                    </div>
+                                    <div class="carousel-item">
+                                        <div id="map2" class="map" style="height:610px;"></div>
+                                    </div>
+                                    <div class="carousel-item">
+                                        <div id="map3" class="map" style="height:610px;"></div>
+                                    </div>
+                                </div>
+                                <a style="z-index:10001;" class="carousel-control-prev" href="#mapas" role="button" data-slide="prev">
+                                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                    <span class="sr-only">Previous</span>
+                                </a>
+                                <a style="z-index:10001;" class="carousel-control-next" href="#mapas" role="button" data-slide="next">
+                                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                    <span class="sr-only">Next</span>
+                                </a>
+                            </div>-->
+                        </div>
+                    </div>
+			
+
+			<div class="row" style="padding-bottom: 15px;">
+			 
+			 
+			   <!--      ******************CONDICIONES Y PRONOSTICO************************************    -->
+                            <div class="row">
+                              <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px;"><b>PRONÓSTICOS DEL TIEMPO</b></div>
+                            </div>
+			 <div class="col-md-12" >
+		<iframe 
+    width="100%" 
+    height="2000px" 
+    src="https://srt.snet.gob.sv/pronostico_tiempo/public/pronostico/PI027?codigoSitio=PI027" 
+    title="Pronóstico del tiempo" 
+    frameborder="0" 
+    scrolling="no" 
+    style="overflow:hidden;">
+</iframe>
+</div>
+			
+				 <!--           ***********************************************************************************    -->
+
+
+
+	  		
+			</div>
+			
+			
+			</div>
+			
+	
+			
+			 
+			<div class="col-md-3" style="text-align: center;">	
+			    	
+	
+			    <div class="col-md-12"  style="width: 100%;  overflow: hidden; text-align: left;  padding-left: 0px;padding-right: 0px; margin-bottom: 10px;">
+				        <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 15px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px;"><b> <i class="fa fa-exclamation-triangle"></i> INFORMES ESPECIALES</b></div>
+					<div id="contenedorprincipal" style="font-size:10pt;">
+					</div>
+				</div>
+				
+
+	
+	<!-- 		  <div class="col-md-12"  style="width: 100%;  overflow: hidden; text-align: left;  padding-left: 0px;padding-right: 0px; margin-bottom: 10px;">
+			       <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 5px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px;"><b></i>CONDICIONES DEL TIEMPO</b></div>
+		
+<video id="videoPronostico1" width="100%" style="border: 1px solid #fff;" controls>
+  <source id="videoSource1" type="video/mp4">
+  Tu navegador no soporta el video.
+</video>
+ </div>-->
+ 
+ 
+
+ 
+	  <div class="col-md-12"  style="width: 100%;  overflow: hidden; text-align: left;  padding-left: 0px;padding-right: 0px; margin-bottom: 0px;">
+							   <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b>PRONÓSTICO DEL TIEMPO</b></div>		
+								<div class="col-md-12" style= "justify-content: center;  text-align: center;  align-content: center; padding-left: 0px;padding-right: 0px;">
+								<a href="/ver/meteorologia/pronostico/24+horas"><img src="https://srt.ambiente.gob.sv/publicaciones/PronosticoDGOA.png?x=1782856961.8757" alt="MARN" width="100%" /></a>
+								</div>
+		 
+            </div>
+
+
+
+
+
+			    <div class="col-md-12" style="text-align: right; margin-bottom: 10px;">
+							<a style="text-align: right; color: #FFFFFF; font-family: Verdana, Arial, Helvetica, sans-serif;	 font-size: 10px; text-decoration: none; background-color: transparent;"
+							href="/ver/riesgo/ultimos+informes+y+avisos/">Ver más...</a>
+				</div>
+
+        <!--<div class="row" style="margin-left: 0px;margin-right: 0px;">
+                                <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 5px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px;"><b>PRONÓSTICO DEL TIEMPO</b></div>
+                            </div>
+                            <video width="100%"  style="border: 1px solid #fff; " controls>
+                                <source src="https://srt.snet.gob.sv/videopronostico/Condiciones%20del%20tiempo.mp4" type="video/mp4">
+                            </video>							
+                            <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b>PRONÓSTICO SEMANAL</b></div>		
+                            <div class="col-md-12" style= "justify-content: center;  text-align: center;  align-content: center; padding-left: 0px;padding-right: 0px;">
+                                <a href="/ver/meteorologia/pronostico/24+horas"><img src="https://srt.snet.gob.sv/videopronostico/PronosticoTiempo/PronosticoDGOA.png" alt="MARN" width="100%" /></a>
+                            </div>-->
+			<div class="col-md-12" style="text-align: center;">  	
+			<a href="https://www.snet.gob.sv/INERV.php"  target="_blank"><img src="/img/INERV2024.JPG" alt="MARN" width="100%" style="padding-bottom: 10px;padding-left: 0px;padding-right: 0px;"  /></a>
+			</div>	
+			
+			
+					<div class="col-md-12" style="text-align: center;">  	
+			<a href="https://srt.snet.gob.sv/biblioteca_doa/public/an/inicio"  target="_blank"><img src="/img/Revista_Amenazas_Naturales_new.jpg" alt="MARN" width="100%" style="padding-bottom: 10px;padding-left: 0px;padding-right: 0px;"  /></a>
+			</div>		
+			
+			
+			
+			
+			
+
+			
+							   <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b>TEMÁTICAS</b>
+							   </div>		
+
+			
+			
+
+			 
+
+								<div class="row">
+								<div class="col-md-6" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+								
+								
+								          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/meteorologia"><img src="images/meteorologia2.png" class="card-img-top" alt="..."></a>
+      
+            <div class="card-body">
+			
+			      <!--
+		
+   
+              <img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="https://www.snet.gob.sv/ver/meteorologia/pronostico/inicio+epoca+lluviosa/">&nbsp;Inicio Epoca Lluviosa</a>
+            <img src="/images/bullet_square.gif" alt="" />&nbsp;
+
+            <a href="/ver/meteorologia/clima/boletin+temperaturas+extremas/"> Bolet&iacute;n Temperaturas Extremas</a>
+            | <a href="/ver/meteorologia/monitoreo/lluvia+registrada/">&nbsp;Lluvia Registrada </a>
+
+
+                        <hr class="linea"/>
+			   			<a href="/googlemaps/radares/radaresSV.php">Radar Meteorol&oacute;gico</a> |
+			   			<a href="/ver/meteorologia/monitoreo/satelite/visible/">Im&aacute;genes Sat&eacute;lite</a> |
+			   			<a href="/ver/meteorologia/pronostico/el+nino/">ENOS</a> |
+			   			<a href="/ver/meteorologia/monitoreo/lluvia+diaria/">Monitoreo</a> |
+			   			<a href="/ver/meteorologia/clima/agrometeorologico/">Agrometeorol&oacute;gico</a> |
+			   			<a href="/ver/meteorologia/informes+especiales/">Informes Especiales</a> |
+			   			<a href="/ver/meteorologia/clima+en+el+salvador/">Clima en El Salvador</a> |
+			   			<a href="/ver/meteorologia/monitoreo/calidad+del+aire/">Calidad del aire</a> 
+
+	-->
+
+<!--	NUEVA SECCCIÓN-->
+			   			<a href="/ver/meteorologia/pronostico/48+horas/">Pron&oacute;stico del tiempo</a> |
+						<a href="/ver/meteorologia/informes+especiales/?evento=418">Informes especiales </a>
+						<!--	 |<a href="/ver/meteorologia/informes+especiales/sequia+meteorologica/">Sequia Meteorol&oacute;gica </a> -->
+						
+						    <hr class="linea"/>
+							
+			   			<a href="/googlemaps/radares/radaresSV8.php">Radar Meteorol&oacute;gico </a> |
+						<a href="/ver/meteorologia/monitoreo/condiciones+del+tiempo/">Condiciones del tiempo </a> |
+						
+					
+			   			<a href="http://srt.marn.gob.sv/saapis.html">Im&aacute;genes de Sat&eacute;lite </a> |
+						
+						<a href="/ver/meteorologia/monitoreo/lluvia+registrada/">Lluvia registrada</a> |
+			   			<!--	<a href="/ver/meteorologia/monitoreo/lluvia+acumulada/">Registro de Lluvia Acumulada</a> |-->
+			   			<a href="/ver/meteorologia/pronostico/maritimo/">Pron&oacute;stico Mar&iacute;timo Costero </a> |
+						
+						<a href="/ver/meteorologia/clima/informe+sinoptico/">Informe Sin&oacute;ptico </a> |
+						
+						
+			   			<a href="/ver/meteorologia/pronostico/perspectivas+clima/">Perspectivas Clima</a> |
+			   			<a href="/ver/meteorologia/clima/resumen+climatologico+mensual/">Resumen climatol&oacute;gico mensual </a>  |
+			   			<a href="/ver/meteorologia/informes+especiales/climatologico/ ">Bolet&iacute;n ENOS - El Niño </a> |
+						
+
+						
+						<a href="/ver/meteorologia/clima/agrometeorologico/">Agrometeorol&oacute;gico</a> |
+						<a href="/ver/meteorologia/monitoreo/calidad+del+aire/">Calidad del aire</a> 
+					
+						</div>
+          </div>
+								
+								
+								
+								
+								</div>
+								
+								
+								<div class="col-md-6" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+								
+								
+								          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/hidrologia"><img src="images/hidrologia2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Hidrolog&iacute;a</h3></div>
+            <a class="header" href="/ver/hidrologia/"><img src="/images/HidroIcon.jpg" alt="Hidrologia" /></a>-->
+     <!--	       <div class="card-body">
+                          	<img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="/ver/hidrologia/boletines+y+pronosticos/pronostico/extendido/">Perspectivas Hidrol&oacute;gicas</a>&nbsp;|&nbsp;<a href="https://www.snet.gob.sv/googlemaps/puntos/puntos.html">Susceptibilidad a Inundaci&oacute;n</a> |&nbsp;
+			   			<a href="https://srt.snet.gob.sv/sihi/public/">SIHI</a>
+                        <hr class="linea" />
+			   			<a href="/ver/hidrologia/boletines+y+pronosticos/boletines/boletin+diario/">&nbsp;Pron&oacute;stico Hidrol&oacute;gico</a> |
+			   			<a href="https://www.snet.gob.sv/Geologia/pcbase2/parametros-mapa.php">Monitoreo Tiempo Real</a> |
+		   	
+			   			<a href="/ver/hidrologia/monitoreo+hidrologico/caudales/">Aguas Superficiales</a> |
+			   			<a href="/ver/hidrologia/monitoreo+hidrologico/">Aguas Subterraneas</a> |
+			   			<a href="/ver/hidrologia/monitoreo+hidrologico/calidad+de+agua/calidad+de+agua+2010/">Calidad del Agua</a> |
+			   			<a href="/ver/hidrologia/archivo+historico/inundaciones/">Archivo</a> |
+			   			<a href="/Documentos/balanceHidrico.pdf">Balance H&iacute;drico</a> |
+			   			<a href="/ver/hidrologia/hidrologia+en+el+salvador/">Hidrolog&iacute;a de El Salvador</a>            </div>
+          </div>		 -->
+								
+								
+			<!--	NUEVA SECCCIÓN-->
+
+
+
+            <div class="card-body">
+                        
+						
+						<a href="https://www.snet.gob.sv/googlemaps/arcgis/google/mapa3.php">Monitoreo Tiempo Real</a> |
+						<!--<a href="http://srt.snet.gob.sv/sihi/public/">Sistema de información Hidrica (SIHI)</a> |-->
+						<a href="/ver/hidrologia/boletines+y+pronosticos/boletines/boletin+diario/">&nbsp;Pron&oacute;stico Hidrol&oacute;gico</a> |
+
+			   			<a href="http://srt.snet.gob.sv/sihi/public/app/3/aforos">Aguas Superficiales</a> |
+			   			<a href="http://srt.snet.gob.sv/sihi/public/app/1/pozosmonitoreo">Aguas Subterraneas</a> |
+			   			<a href="http://srt.snet.gob.sv/sihi/public/app/2/fichas">Calidad del Agua</a> |
+			   		
+			   			<a href="/Hidrologia/PNGIRH.pdf">Balance H&iacute;drico</a> 
+
+
+						</div>
+						
+					
+						
+          </div>
+
+
+
+
+
+
+
+
+
+			
+								</div>
+								
+								<div class="col-6" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+						
+						          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/geologia"><img src="images/geologia2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Geolog&iacute;a</h3></div><!--<a class="header" href="/ver/geologia/"><img src="/images/GeoIcon.jpg" alt="Geologia" /></a>-->
+            <div class="card-body">
+
+              <a href="/ver/geologia/" class="light">Geolog&iacute;a</a> : <br  />
+              <a href="ver/geologia/mapa+de+amenaza+actual/">Monitoreo</a> |
+			   			<a href="/ver/geologia/inventario+deslizamientos/">Inventario</a> |
+			   			<a href="/ver/geologia/informes+especiales/">Informes</a> | <a href="https://www.snet.gob.sv/ver/geologia/informe+diario+de+susceptibilidad+a+deslizamientos/">Susceptibilidad a 
+deslizamientos</a> | <a href="https://www.snet.gob.sv/ver/geologia/mapa+de+amenaza+actual/">Mapa de amenaza actual</a> <br  />
+			   			<a href="/ver/vulcanologia/" class="light">Vulcanolog&iacute;a</a> : <br  />
+                        <a href="/ver/vulcanologia/vigilancia/">Vigilancia</a> |
+			   			<a href="/ver/vulcanologia/monitoreo/">Monitoreo</a> |
+			   			<a href="/ver/vulcanologia/amenaza/">Amenaza</a><br  />
+			   			<a href="/ver/sismologia/" class="light">Sismolog&iacute;a</a> : <br  />
+                        <a href="/ver/sismologia/registro/enjambres+sismicos/">Enjambres</a> |
+			   			<a href="/ver/sismologia/monitoreo/sismos+reportados/">Reporte de sismos</a> |
+			   			<a href="/ver/sismologia/vigilancia/">Vigilancia</a>            </div>
+          </div>
+						
+								
+								
+								
+								
+								
+								</div>
+								
+				
+						
+
+								
+								
+			<div class="col-md-6" style="padding-bottom: 15px;   padding-top: 15px;">
+			 <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/oceanografia"><img src="images/oceanografia2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Oceanograf&iacute;a</h3></div>
+            <a class="header" href="/ver/oceanografia/"><img src="/images/OceanoIcon.jpg" alt="Oceanografia" /></a>-->
+            <div class="card-body">
+
+						<!--<img src="/images/bullet_square.gif" alt="" />
+            <a href="https://www.snet.gob.sv/ver/oceanografia/pronostico/corrientes+de+retorno/">Pron&oacute;stico de Corrientes</a><br />-->
+			<!--<img src="/images/bullet_anim.gif" alt="" />&nbsp;<a href="https://www.snet.gob.sv/ver/oceanografia/pronostico/mareas+2010/mareas+extraordinarias/">Mareas Extraordinarias Noviembre</a> |
+              --><img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="https://www.snet.gob.sv/ver/oceanografia/amenaza/mapa+de+amenaza+por+tsunami/">Mapa amenaza Tsunami</a>
+			  &nbsp;|&nbsp;<a 
+href="/ver/oceanografia/almanaque+marino+astronomico/">Almanaque</a>
+			 <hr class="linea" />
+              <a href="/ver/oceanografia/pronostico/oleaje/diario/">Pron&oacute;stico del Oleaje</a> |
+<!--              <a href="/ver/oceanografia/pronostico/mareas/mareas+extremas/">Mareas Extremas</a> | -->
+              <a href="/ver/oceanografia/pronostico/mareas/calendario+de+mareas/">Calendario Mensual de Mareas</a> |
+              <a href="/ver/oceanografia/monitoreo/nivel+del+mar/">Monitoreo del nivel del Mar</a> |
+              <a href="/ver/oceanografia/monitoreo/tsunamis/ultimo+tsunami+ocurrido/">Monitoreo de Tsunamis</a> |
+              <a href="/ver/oceanografia/pronostico/mareas+2010/mareas+extraordinarias/">Mareas Extraordinarias</a> |
+              <a href="/ver/oceanografia/seccion+educativa/">Secci&oacute;n Educativa</a>           
+
+			  </div>
+          
+		  
+		  </div>
+
+
+			</div>
+								
+								
+			<div class="col-md-6" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+						
+						
+						
+							          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/riesgo"><img src="images/riesgo2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Riesgo</h3></div>
+            <!--<a class="header" href="/ver/riesgo/"><img src="/images/RiesgoIcon.jpg" alt="Gestion del Riesgo" /></a>-->
+            <div class="card-body">
+              <!--<img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="/ver/riesgo/dia+internacional+2009/">D&iacute;a Internacional de Reducci&oacute;n de Desastres</a>
+                        <hr class="linea"/>                      -->
+              <a href="/ver/riesgo/nacional/" style="color:#fff; !important;">An&aacute;lisis Territorial Nacional</a> |
+			   			<a href="/ver/riesgo/regiones/" style="color:#fff; !important;">An&aacute;lisis Territorial por Regiones</a> |
+			   			<a href="/ver/riesgo/monitoreo/perdidas+y+danos/" style="color:#fff; !important;">Fen&oacute;menos Naturales Significativos</a> |
+			   			<a href="/ver/seccion+educativa/riesgo/" style="color:#fff; !important;">Glosario de Riesgos</a> | <br><br> <a href="https://www.snet.gob.sv/ver/sismologia/riesgo+sismico/riesgo/taller+de+divulgacion+de+insumos+tecnicos/" style="color:#fff; !important;"><p style=”text-align: justify;”><b>Taller de divulgación de insumos técnicos para la actualización de la Normativa Nacional para Diseño y Construcción Sismorresistente en El Salvador.</b></p></a>            
+           </div>
+          </div>	
+								
+								
+								
+								
+			</div>
+								
+								
+			<div class="col-md-6" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+			<div style="background-color:#6c7386 !important; height:100%; width:100%;">
+			<iframe src="/googlemaps/radares/radarS2.php" style="height:100%;width:100%;"></iframe>
+          </div>
+								
+								
+						
+			</div>
+								
+								
+								
+								</div>								
+								
+								
+
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			</div>
+			
+			 </div>
+			
+          </div>
+		
+      </div>
+      </div>
+	  
+	  </div>
+	  
+	<!--   ****************************************  FIN ESCRITORIO WEB  ****************************************   -->
+	<!--   **********************************************************************************************************   -->
+	  
+	  
+	  
+	  
+	  
+
+  <!--   **************************************************************************************************   -->	  
+  <!--   ****************************************  INICIO MOVIL  ****************************************   -->
+
+
+
+<!-- Redes Sociales -->
+<div class="row">
+
+
+<!-- Redes Sociales - Botones Cuadrados Elegantes y Más Pequeños -->
+
+
+<div class="social-bar">
+  <!-- X -->
+  <a href="https://twitter.com/MedioAmbienteSV" target="_blank" class="social-btn" aria-label="X">
+    <svg viewBox="0 0 1200 1227" xmlns="http://www.w3.org/2000/svg">
+      <path d="M747.2 507.9L1150 0H1046.3L703.7 438.3L431.3 0H0L431.5 630.8L0 1227H103.7L472.4 743.1L768.7 1227H1200L747.2 507.9ZM133.5 84.6H342.3L1066.5 1142.4H857.6L133.5 84.6Z"/>
+    </svg>
+  </a>
+
+  <!-- Facebook -->
+  <a href="https://www.facebook.com/MedioAmbienteSLV" target="_blank" class="social-btn" aria-label="Facebook">
+    <svg viewBox="0 0 24 24">
+      <path d="M22 12a10 10 0 10-11.5 9.9v-7h-2v-3h2v-2.3c0-2 1.2-3.1 3-3.1.9 0 1.8.1 1.8.1v2h-1c-1 0-1.3.6-1.3 1.2V12h2.2l-.4 3h-1.8v7A10 10 0 0022 12z"/>
+    </svg>
+  </a>
+
+  <!-- Instagram -->
+  <a href="https://www.instagram.com/medioambientesv" target="_blank" class="social-btn" aria-label="Instagram">
+    <svg viewBox="0 0 24 24">
+      <path d="M7 2C4.243 2 2 4.243 2 7v10c0 2.757 2.243 5 5 5h10c2.757 0 5-2.243 5-5V7c0-2.757-2.243-5-5-5H7zm10 2a3 3 0 013 3v10a3 3 0 01-3 3H7a3 3 0 01-3-3V7a3 3 0 013-3h10zm-5 3a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6zm4.5-2a1 1 0 100 2 1 1 0 000-2z"/>
+    </svg>
+  </a>
+
+  <!-- TikTok -->
+  <a href="https://www.tiktok.com/@medioambientesv" target="_blank" class="social-btn" aria-label="TikTok">
+    <svg viewBox="0 0 256 256">
+      <path d="M224 80.2a80 80 0 01-48-16V168a72 72 0 11-72-72 70.5 70.5 0 0124.2 4.3A56.1 56.1 0 0096 96a56 56 0 1056 56V32h32a48 48 0 0040 48.2z"/>
+    </svg>
+  </a>
+</div>
+
+
+
+</div>
+
+
+ <div class="d-block d-sm-block d-md-none">
+     <div style="background-color:#3c4657;padding-top:0px;">
+      <div id="mainContent" class="container-fluid" style="margin-top: 0px;padding-right: 0px;">
+
+           
+	        <div class="row">
+          <div class="col-md-12" style="text-align: center; ">	
+		    
+					<div class="row">
+          <div class="col-md-6" style="text-align: center;">
+
+            
+          </div>
+		  
+		  
+	 <!--  	     <div class="col-md-3" style="text-align: center; padding-top: 10px; padding-top: 0px;" >  
+			  
+			  
+							    <div class="row">
+        <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b>CONDICIONES DEL TIEMPO</b></div>
+    </div>
+
+
+<video id="videoPronostico2" width="100%" style="border: 1px solid #fff;" controls>
+  <source id="videoSource2" type="video/mp4">
+  Tu navegador no soporta el video.
+</video>
+				
+							
+		 
+            </div>  -->
+          
+		             
+		  
+		  			<div class="col-md-3" style="text-align: center; padding-top: 10px; padding-top: 0px;">	 
+
+			    <div class="row">
+	<div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b>PRÓSTICOS BASADOS EN IMPACTO</b></div>
+    </div>
+			
+					<div class="col-md-12" style="width: 100%;  overflow: hidden; padding-bottom: 5px; padding-left: 5px;padding-right: 5px; padding-top: 10px;">
+			<div id="contenedorIBF_M" >
+			</div>
+		</div>
+</div>
+
+<div class="col-md-3" style="text-align:left; padding-top: 10px; padding-top: 0px;">	 
+		 <div class="row">
+			    <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b> INFORMES ESPECIALES</b></div>
+					<div id="contenedorprincipal_M" >
+		</div>			
+					
+					
+					</div>
+				</div>
+
+
+<div class="col-md-3" style="text-align:left; padding-top: 10px; padding-top: 0px;">	 			
+
+
+			 
+			 
+			   <!--      ******************CONDICIONES Y PRONOSTICO************************************     -->
+                            <div class="row">
+                              <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px;"><b>PRONÓSTICOS DEL TIEMPO</b></div>
+                            </div>
+			 <div class="col-md-12" >
+		<iframe 
+    width="100%" 
+    height="2000px" 
+    src="https://srt.snet.gob.sv/pronostico_tiempo/public/pronostico/PI027?codigoSitio=PI027" 
+    title="Pronóstico del tiempo" 
+    frameborder="0" 
+    scrolling="no" 
+    style="overflow:hidden;">
+</iframe>
+</div>
+			
+			   <!--   	        ***********************************************************************************    -->
+
+</div>	
+<div class="col-md-3" style="text-align:left; padding-top: 10px; padding-top: 0px;">	 
+<div class="row">
+<div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b> RADAR METEOROLÓGICO</b></div>	
+</div>
+			    <div class="col-md-12" style="text-align: right; background-color: #2e3740; margin-bottom: 10px;">
+				<div style="background-color:#6c7386 !important; height:400px; width:100%;">
+			<iframe src="/googlemaps/radares/radarS2.php" style="height:100%;width:100%;"></iframe>
+          </div>
+				</div>
+</div>	
+
+
+<div class="col-md-3" style="text-align:left; padding-top: 10px; padding-top: 0px;">	
+<div class="row">
+						        <div class="col divcaja" style="font-size: 13px;  background-color: #2e3740;color:#ffffff; padding-top: 3px;padding-bottom: 3px;margin-bottom: 0px;margin-top: 0px;border-top-width: 0px;border-bottom-width: 0px; margin-top: 15px;"><b> C&Aacute;MARA VOLC&Aacute;N SAN MIGUEL</b></div>
+                        <div class="col-12">
+											
+    <iframe 
+      width="100%" 
+      height="300px" 
+      src="https://www.youtube.com/embed/QOCfhDnZrGo?autoplay=1&mute=1" 
+      title="YouTube video player" 
+      frameborder="0" 
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+      allowfullscreen>
+    </iframe>
+                            </div>
+                      </div>
+      </div>
+
+			<div class="col-md-12" style="text-align: center;">  	
+			<a href="https://srt.snet.gob.sv/biblioteca_doa/public/an/inicio"  target="_blank"><img src="/img/Revista_Amenazas_Naturales_new.jpg" alt="MARN" width="100%" style="padding-bottom: 20px;padding-left: 0px;padding-right: 0px; padding-top: 20px;" /></a>
+			</div>	
+		
+
+
+			
+			</div>
+		  
+		  
+		  
+		  
+      </div>
+			
+
+			<div class="row" style="padding-bottom: 15px;">
+			
+			 <div class="col-md-12" >
+			 
+
+								<div class="row">
+								<div class="col-md-4" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+								
+								
+								          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/meteorologia"><img src="images/meteorologia2.png" class="card-img-top" alt="..."></a>
+      
+            <div class="card-body">
+			
+			      <!--
+		
+   
+              <img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="https://www.snet.gob.sv/ver/meteorologia/pronostico/inicio+epoca+lluviosa/">&nbsp;Inicio Epoca Lluviosa</a>
+            <img src="/images/bullet_square.gif" alt="" />&nbsp;
+
+            <a href="/ver/meteorologia/clima/boletin+temperaturas+extremas/"> Bolet&iacute;n Temperaturas Extremas</a>
+            | <a href="/ver/meteorologia/monitoreo/lluvia+registrada/">&nbsp;Lluvia Registrada </a>
+
+
+                        <hr class="linea"/>
+			   			<a href="/googlemaps/radares/radaresSV.php">Radar Meteorol&oacute;gico</a> |
+			   			<a href="/ver/meteorologia/monitoreo/satelite/visible/">Im&aacute;genes Sat&eacute;lite</a> |
+			   			<a href="/ver/meteorologia/pronostico/el+nino/">ENOS</a> |
+			   			<a href="/ver/meteorologia/monitoreo/lluvia+diaria/">Monitoreo</a> |
+			   			<a href="/ver/meteorologia/clima/agrometeorologico/">Agrometeorol&oacute;gico</a> |
+			   			<a href="/ver/meteorologia/informes+especiales/">Informes Especiales</a> |
+			   			<a href="/ver/meteorologia/clima+en+el+salvador/">Clima en El Salvador</a> |
+			   			<a href="/ver/meteorologia/monitoreo/calidad+del+aire/">Calidad del aire</a> 
+
+	-->
+
+<!--	NUEVA SECCCIÓN-->
+			   			<a href="/ver/meteorologia/pronostico/48+horas/">Pron&oacute;stico del tiempo</a> |
+						<a href="/ver/meteorologia/informes+especiales/?evento=418">Informes especiales </a>
+						<!--	 |<a href="/ver/meteorologia/informes+especiales/sequia+meteorologica/">Sequia Meteorol&oacute;gica </a> -->
+						
+						    <hr class="linea"/>
+							
+			   			<a href="/googlemaps/radares/radaresSV8.php">Radar Meteorol&oacute;gico </a> |
+						<a href="/ver/meteorologia/monitoreo/condiciones+del+tiempo/">Condiciones del tiempo </a> |
+						
+					
+			   			<a href="http://srt.marn.gob.sv/saapis.html">Im&aacute;genes de Sat&eacute;lite </a> |
+						
+						<a href="/ver/meteorologia/monitoreo/lluvia+registrada/">Lluvia registrada</a> |
+			   			<!--	<a href="/ver/meteorologia/monitoreo/lluvia+acumulada/">Registro de Lluvia Acumulada</a> |-->
+			   			<a href="/ver/meteorologia/pronostico/maritimo/">Pron&oacute;stico Mar&iacute;timo Costero </a> |
+						
+						<a href="/ver/meteorologia/clima/informe+sinoptico/">Informe Sin&oacute;ptico </a> |
+						
+						
+			   			<a href="/ver/meteorologia/pronostico/perspectivas+clima/">Perspectivas Clima</a> |
+			   			<a href="/ver/meteorologia/clima/resumen+climatologico+mensual/">Resumen climatol&oacute;gico mensual </a>  |
+			   			<a href="/ver/meteorologia/pronostico/boletin+enos+el+nino/">Bolet&iacute;n ENOS - El Niño </a> |
+						
+
+						
+						<a href="/ver/meteorologia/clima/agrometeorologico/">Agrometeorol&oacute;gico</a> |
+						<a href="/ver/meteorologia/monitoreo/calidad+del+aire/">Calidad del aire</a> 
+					
+						</div>
+          </div>
+								
+								
+								
+								
+								</div>
+								
+								
+								<div class="col-md-4" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+								
+								
+								          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/hidrologia"><img src="images/hidrologia2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Hidrolog&iacute;a</h3></div>
+            <!--<a class="header" href="/ver/hidrologia/"><img src="/images/HidroIcon.jpg" alt="Hidrologia" /></a>-->
+     <!--	       <div class="card-body">
+                          	<img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="/ver/hidrologia/boletines+y+pronosticos/pronostico/extendido/">Perspectivas Hidrol&oacute;gicas</a>&nbsp;|&nbsp;<a href="https://www.snet.gob.sv/googlemaps/puntos/puntos.html">Susceptibilidad a Inundaci&oacute;n</a> |&nbsp;
+			   			<a href="https://srt.snet.gob.sv/sihi/public/">SIHI</a>
+                        <hr class="linea" />
+			   			<a href="/ver/hidrologia/boletines+y+pronosticos/boletines/boletin+diario/">&nbsp;Pron&oacute;stico Hidrol&oacute;gico</a> |
+			   			<a href="https://www.snet.gob.sv/Geologia/pcbase2/parametros-mapa.php">Monitoreo Tiempo Real</a> |
+		   	
+			   			<a href="/ver/hidrologia/monitoreo+hidrologico/caudales/">Aguas Superficiales</a> |
+			   			<a href="/ver/hidrologia/monitoreo+hidrologico/">Aguas Subterraneas</a> |
+			   			<a href="/ver/hidrologia/monitoreo+hidrologico/calidad+de+agua/calidad+de+agua+2010/">Calidad del Agua</a> |
+			   			<a href="/ver/hidrologia/archivo+historico/inundaciones/">Archivo</a> |
+			   			<a href="/Documentos/balanceHidrico.pdf">Balance H&iacute;drico</a> |
+			   			<a href="/ver/hidrologia/hidrologia+en+el+salvador/">Hidrolog&iacute;a de El Salvador</a>            </div>
+          </div>		 -->
+								
+								
+			<!--	NUEVA SECCCIÓN-->
+
+
+
+            <div class="card-body">
+                        
+						
+						<a href="https://www.snet.gob.sv/googlemaps/arcgis/google/mapa3.php">Monitoreo Tiempo Real</a> |
+						<a href="http://srt.snet.gob.sv/sihi/public/">Sistema de información Hidrica (SIHI)</a> |
+						<a href="/ver/hidrologia/boletines+y+pronosticos/boletines/boletin+diario/">&nbsp;Pron&oacute;stico Hidrol&oacute;gico</a> |
+
+			   			<a href="http://srt.snet.gob.sv/sihi/public/app/3/aforos">Aguas Superficiales</a> |
+			   			<a href="http://srt.snet.gob.sv/sihi/public/app/1/pozosmonitoreo">Aguas Subterraneas</a> |
+			   			<a href="http://srt.snet.gob.sv/sihi/public/app/2/fichas">Calidad del Agua</a> |
+			   		
+			   			<a href="/Hidrologia/PNGIRH.pdf">Balance H&iacute;drico</a> 
+
+
+						</div>
+						
+					
+						
+          </div>
+
+
+
+
+
+
+
+
+
+			
+								</div>
+								
+								<div class="col-md-4" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+						
+						          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/geologia"><img src="images/geologia2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Geolog&iacute;a</h3></div><!--<a class="header" href="/ver/geologia/"><img src="/images/GeoIcon.jpg" alt="Geologia" /></a>-->
+            <div class="card-body">
+
+              <a href="/ver/geologia/" class="light">Geolog&iacute;a</a> : <br  />
+              <a href="ver/geologia/mapa+de+amenaza+actual/">Monitoreo</a> |
+			   			<a href="/ver/geologia/inventario+deslizamientos/">Inventario</a> |
+			   			<a href="/ver/geologia/informes+especiales/">Informes</a> | <a href="https://www.snet.gob.sv/ver/geologia/informe+diario+de+susceptibilidad+a+deslizamientos/">Susceptibilidad a 
+deslizamientos</a> | <a href="https://www.snet.gob.sv/ver/geologia/mapa+de+amenaza+actual/">Mapa de amenaza actual</a> <br  />
+			   			<a href="/ver/vulcanologia/" class="light">Vulcanolog&iacute;a</a> : <br  />
+                        <a href="/ver/vulcanologia/vigilancia/">Vigilancia</a> |
+			   			<a href="/ver/vulcanologia/monitoreo/">Monitoreo</a> |
+			   			<a href="/ver/vulcanologia/amenaza/">Amenaza</a><br  />
+			   			<a href="/ver/sismologia/" class="light">Sismolog&iacute;a</a> : <br  />
+                        <a href="/ver/sismologia/registro/enjambres+sismicos/">Enjambres</a> |
+			   			<a href="/ver/sismologia/monitoreo/sismos+reportados/">Reporte de sismos</a> |
+			   			<a href="/ver/sismologia/vigilancia/">Vigilancia</a>            </div>
+          </div>
+						
+								
+								
+								
+								
+								
+								</div>
+								
+								</div>
+								
+								<div class="row">
+
+								
+								
+			<div class="col-md-4" style="padding-bottom: 15px;   padding-top: 15px;">
+			 <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/oceanografia"><img src="images/oceanografia2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Oceanograf&iacute;a</h3></div>
+            <!--<a class="header" href="/ver/oceanografia/"><img src="/images/OceanoIcon.jpg" alt="Oceanografia" /></a>-->
+            <div class="card-body">
+
+						<!--<img src="/images/bullet_square.gif" alt="" />
+            <a href="https://www.snet.gob.sv/ver/oceanografia/pronostico/corrientes+de+retorno/">Pron&oacute;stico de Corrientes</a><br />-->
+			<!--<img src="/images/bullet_anim.gif" alt="" />&nbsp;<a href="https://www.snet.gob.sv/ver/oceanografia/pronostico/mareas+2010/mareas+extraordinarias/">Mareas Extraordinarias Noviembre</a> |
+              --><img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="https://www.snet.gob.sv/ver/oceanografia/amenaza/mapa+de+amenaza+por+tsunami/">Mapa amenaza Tsunami</a>
+			  &nbsp;|&nbsp;<a 
+href="/ver/oceanografia/almanaque+marino+astronomico/">Almanaque</a>
+			 <hr class="linea" />
+              <a href="/ver/oceanografia/pronostico/oleaje/diario/">Pron&oacute;stico del Oleaje</a> |
+<!--              <a href="/ver/oceanografia/pronostico/mareas/mareas+extremas/">Mareas Extremas</a> | -->
+              <a href="/ver/oceanografia/pronostico/marea/calendario+de+mareas/">Calendario Mensual de Mareas</a> |
+              <a href="/ver/oceanografia/monitoreo/nivel+del+mar/">Monitoreo del nivel del Mar</a> |
+              <a href="/ver/oceanografia/monitoreo/tsunamis/ultimo+tsunami+ocurrido/">Monitoreo de Tsunamis</a> |
+              <a href="/ver/oceanografia/pronostico/mareas+2010/mareas+extraordinarias/">Mareas Extraordinarias</a> |
+              <a href="/ver/oceanografia/seccion+educativa/">Secci&oacute;n Educativa</a>           
+
+			  </div>
+          
+		  
+		  </div>
+
+
+			</div>
+								
+								
+			<div class="col-md-4" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+						
+						
+						
+							          <div class="card" style="background-color:#6c7386 !important; height:100%;">
+            <a href="/ver/riesgo"><img src="images/riesgo2.png" class="card-img-top" alt="..."></a>
+            <!--<div style="height:35px; color:#fff; background-color:#3d4658;"><h3>Riesgo</h3></div>
+            <!--<a class="header" href="/ver/riesgo/"><img src="/images/RiesgoIcon.jpg" alt="Gestion del Riesgo" /></a>-->
+            <div class="card-body">
+              <!--<img src="/images/bullet_square.gif" alt="" />&nbsp;<a href="/ver/riesgo/dia+internacional+2009/">D&iacute;a Internacional de Reducci&oacute;n de Desastres</a>
+                        <hr class="linea"/>                      -->
+              <a href="/ver/riesgo/nacional/" style="color:#fff; !important;">An&aacute;lisis Territorial Nacional</a> |
+			   			<a href="/ver/riesgo/regiones/" style="color:#fff; !important;">An&aacute;lisis Territorial por Regiones</a> |
+			   			<a href="/ver/riesgo/monitoreo/perdidas+y+danos/" style="color:#fff; !important;">Fen&oacute;menos Naturales Significativos</a> |
+			   			<a href="/ver/seccion+educativa/riesgo/" style="color:#fff; !important;">Glosario de Riesgos</a> | <br><br> <a href="https://www.snet.gob.sv/ver/sismologia/riesgo+sismico/riesgo/taller+de+divulgacion+de+insumos+tecnicos/" style="color:#fff; !important;"><p style=”text-align: justify;”><b>Taller de divulgación de insumos técnicos para la actualización de la Normativa Nacional para Diseño y Construcción Sismorresistente en El Salvador.</b></p></a>            
+           </div>
+          </div>	
+								
+								
+								
+								
+			</div>
+								
+								
+			<div class="col-md-4" style="padding-bottom: 15px;   padding-top: 15px;">
+								
+								
+
+								
+								
+						
+			</div>
+								
+								
+								
+								</div>								
+								
+								
+
+					</div>
+	  		
+			</div>
+			
+			
+			</div>
+			
+	
+			
+			 
+
+			
+			 </div>
+			
+          </div>
+		
+      </div>
+      </div>
+	  
+	 </div>
+	  
+	<!--   ****************************************  FIN MOVIL ****************************************   -->	  
+	<!--   **********************************************************************************************   -->  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+
+    <!-- DISCLAIMER ROW -->
+        <footer>
+		
+		
+		    <div class="row">
+        <div class="col-md-12" style="height:35px; background-color:#2e3740;" ></div>
+    </div>
+    <div class="row">
+          <div class="col-md-12">
+            <div id="disclaimer" style="margin: 0px;    padding: 20px;    font-family: Verdana, Arial, Helvetica, sans-serif;    color: #2e3740;    background-color: #fff;    font-size: 12px;    text-align: center;">
+
+              <p>
+                Todos los derechos reservados.
+                <br/>
+                El MARN permite la reproducci&oacute;n total o parcial de la informaci&oacute;n,
+                <br/>
+                agradeciendo de antemano consignar la fuente, as&iacute; como su per&iacute;odo de validez.
+                <br/>
+              </p>
+              <p>
+  <!--              Servicio Nacional de Estudios Territoriales
+                <br/>-->
+                Km. 5 &frac12; Carretera a Santa Tecla, Avenida Las Mercedes
+                <br/>
+                Tel.: (503) 2132-9631 Fax: (503) 2132-9478
+                <br/>
+              </p>
+            </div>
+          </div>
+        </div>
+				    <div class="row">
+        <div class="col-md-12" style="height:35px; background-color:#2e3740;" ></div>
+    </div>
+		
+		
+
+        </footer>
+</body>
+<script>
+  const hoy = new Date();
+  const dia = hoy.getDate();
+  const urlVideo = `https://srt.snet.gob.sv/videopronostico/CondicionesTiempo_${dia}.mp4`;
+
+  // Primer video
+  const video1 = document.getElementById("videoPronostico1");
+  const source1 = document.getElementById("videoSource1");
+  source1.src = urlVideo;
+  video1.load();
+
+  // Segundo video
+  const video2 = document.getElementById("videoPronostico2");
+  const source2 = document.getElementById("videoSource2");
+  source2.src = urlVideo;
+  video2.load();
+</script>
+</html>

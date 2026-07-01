@@ -1,3 +1,4 @@
+import { type CSSProperties, useLayoutEffect, useRef, useState } from "react";
 import { type SeismicEvent } from "@sismica/shared";
 import { CountryFlag } from "./CountryFlag";
 
@@ -20,6 +21,14 @@ type EventListProps = {
 const SOURCE_MARK_LABEL: Record<SeismicEvent["source"], string> = {
   USGS: "US",
   EMSC: "EM",
+  SED: "CH",
+  RENASS: "FR",
+  ISC: "WW",
+  GA: "AU",
+  NRCAN: "CA",
+  NCEDC: "NC",
+  KNMI: "NL",
+  SCEDC: "SC",
   IGP: "PE",
   FUNVISIS: "FU",
   GEOFON: "GF",
@@ -31,18 +40,81 @@ const SOURCE_MARK_LABEL: Record<SeismicEvent["source"], string> = {
   IGN: "ES",
   SSN: "MX",
   CSN: "CL",
-  INGV: "IT"
+  INGV: "IT",
+  IGEPN: "EC",
+  INPRES: "AR",
+  MARN: "SV",
+  OVSICORI: "CR",
+  INSIVUMEH: "GT"
+};
+
+const FEED_ROW_HEIGHT_PX = 48;
+
+type FeedLayout = {
+  height: number;
+  rowHeight: number;
 };
 
 export function EventList({ events, selectedEventId, onSelect }: EventListProps) {
+  const cardRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLElement>(null);
+  const legendRef = useRef<HTMLDivElement>(null);
+  const [feedLayout, setFeedLayout] = useState<FeedLayout | null>(null);
+
+  useLayoutEffect(() => {
+    const updateFeedHeight = () => {
+      const card = cardRef.current;
+      const heading = headingRef.current;
+      const legend = legendRef.current;
+      if (!card || !heading || !legend) return;
+
+      const availableHeight = Math.max(0, card.clientHeight - heading.offsetHeight - legend.offsetHeight);
+      const rowCount = Math.max(1, Math.round(availableHeight / FEED_ROW_HEIGHT_PX));
+      const rowHeight = availableHeight / rowCount;
+      const nextLayout = {
+        height: rowHeight * rowCount,
+        rowHeight
+      };
+      setFeedLayout((current) =>
+        current &&
+        Math.abs(current.height - nextLayout.height) < 0.5 &&
+        Math.abs(current.rowHeight - nextLayout.rowHeight) < 0.5
+          ? current
+          : nextLayout
+      );
+    };
+
+    updateFeedHeight();
+
+    const resizeObserver = new ResizeObserver(updateFeedHeight);
+    if (cardRef.current) resizeObserver.observe(cardRef.current);
+    if (headingRef.current) resizeObserver.observe(headingRef.current);
+    if (legendRef.current) resizeObserver.observe(legendRef.current);
+    window.addEventListener("resize", updateFeedHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateFeedHeight);
+    };
+  }, []);
+
+  const feedStyle =
+    feedLayout === null
+      ? undefined
+      : ({
+          "--event-feed-row-height": `${feedLayout.rowHeight}px`,
+          flex: "0 0 auto",
+          height: `${feedLayout.height}px`
+        } as CSSProperties);
+
   return (
-    <section className="feed-card">
-      <header className="feed-heading">
+    <section className="feed-card" ref={cardRef}>
+      <header className="feed-heading" ref={headingRef}>
         <strong>Feed global</strong>
         <span>{events.length} eventos</span>
       </header>
 
-      <div className="feed-status-legend" aria-label="Leyenda de estados del feed">
+      <div className="feed-status-legend" aria-label="Leyenda de estados del feed" ref={legendRef}>
         {EVENT_STATUS_LEGEND.map((item) => (
           <span className="feed-status-legend-item" key={item.label} title={item.description}>
             <span className={`feed-status ${item.tone}`}>{item.label}</span>
@@ -51,7 +123,7 @@ export function EventList({ events, selectedEventId, onSelect }: EventListProps)
         ))}
       </div>
 
-      <div className="event-feed">
+      <div className="event-feed" style={feedStyle}>
         {events.map((event) => {
           const status = getEventStatusBadge(event.status);
           return (

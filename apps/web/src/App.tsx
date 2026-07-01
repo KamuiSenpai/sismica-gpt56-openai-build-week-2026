@@ -23,6 +23,7 @@ import {
   formatUtcClock,
   formatUtcDateTime,
   getEventStatusBadge,
+  MAGNITUDE_BANDS,
   magnitudeCssColor,
   normalizedIntensity,
   normalizedPlace
@@ -34,18 +35,47 @@ function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | nul
   return selectedEventId ? (events.find((event) => event.eventId === selectedEventId) ?? null) : null;
 }
 
+const MAGNITUDE_SCALE_LEVELS = [9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
+
 function MagnitudeScale({ magnitude }: { magnitude: number | null }) {
-  const height = `${clampNumber(((magnitude ?? 0) / 9) * 100, 0, 100)}%`;
+  const normalizedMagnitude = clampNumber(magnitude ?? 0, 0, 9);
   return (
-    <div className="magnitude-scale" aria-label={`Escala de magnitud ${magnitude ?? "no disponible"}`}>
-      <div className="magnitude-scale-numbers">
-        {[9, 8, 7, 6, 5, 4, 3, 2, 1].map((value) => (
-          <span key={value}>{value}</span>
-        ))}
+    <div
+      className="magnitude-scale"
+      aria-label={`Barra de magnitud ${magnitude ?? "no disponible"}`}
+      title="Barra = magnitud del evento. El color del mapa representa intensidad MMI."
+    >
+      <span className="magnitude-scale-label">Magnitud</span>
+      <div className="magnitude-scale-body">
+        <div className="magnitude-scale-numbers">
+          {MAGNITUDE_SCALE_LEVELS.map((value) => (
+            <span key={value}>{value}</span>
+          ))}
+        </div>
+        <div className="magnitude-scale-track">
+          {MAGNITUDE_SCALE_LEVELS.map((level) => {
+            const fill = magnitude === null ? 0 : clampNumber(normalizedMagnitude - (level - 1), 0, 1);
+            const bandMagnitude = Math.max(0.5, level - 0.5);
+            return (
+              <span className="magnitude-scale-segment" key={level}>
+                <i
+                  style={{
+                    background: magnitudeCssColor(bandMagnitude),
+                    opacity: fill > 0 ? 1 : 0.18,
+                    transform: `scaleY(${fill})`
+                  }}
+                />
+              </span>
+            );
+          })}
+        </div>
       </div>
-      <div className="magnitude-scale-track">
-        <i style={{ height }} />
-      </div>
+      <span className="magnitude-scale-caption">
+        {magnitude === null
+          ? "Sin dato"
+          : (MAGNITUDE_BANDS.find((band) => magnitude < band.max)?.label ??
+            MAGNITUDE_BANDS[MAGNITUDE_BANDS.length - 1].label)}
+      </span>
     </div>
   );
 }
@@ -121,12 +151,12 @@ export default function App() {
   }, [events, selectedEventId]);
 
   // Auto-recorrido: cada ~18 s (15 s de visualizacion + ~3 s de vuelo) pasa al siguiente
-  // de los ultimos 10 sismos. El timer es estable (no se reinicia con cada refresco de
+  // de los ultimos 15 sismos. El timer es estable (no se reinicia con cada refresco de
   // datos); lee la lista vigente desde una ref.
   useEffect(() => {
     if (tourPaused) return;
     const intervalId = window.setInterval(() => {
-      const tour = eventsRef.current.slice(0, 10);
+      const tour = eventsRef.current.slice(0, 15);
       if (tour.length === 0) return;
       setSelectedEventId((current) => {
         const index = tour.findIndex((event) => event.eventId === current);
@@ -176,12 +206,7 @@ export default function App() {
             <header className="event-console-title">
               <strong>
                 {focusEvent ? (
-                  <>
-                    <span style={{ color: magnitudeCssColor(focusEvent.magnitude) }}>
-                      {formatMagnitude(focusEvent.magnitude)}
-                    </span>{" "}
-                    Evento sismico detectado
-                  </>
+                  "Evento sismico detectado"
                 ) : (
                   "Sin eventos"
                 )}
@@ -196,7 +221,7 @@ export default function App() {
             {focusEvent ? (
               <div className="event-console-body">
                 <div className="event-identity">
-                  <div className="intensity-box">
+                  <div className="intensity-box" title="Color del punto en el mapa">
                     <small>Intensidad</small>
                     <strong>{normalizedIntensity(focusEvent)}</strong>
                   </div>
@@ -211,6 +236,13 @@ export default function App() {
                       {formatCoordinate(focusEvent.longitude, "lon")}
                     </span>
                     <span>Profundidad: {formatDepth(focusEvent.depthKm)}</span>
+                  </div>
+                  <div
+                    className="event-magnitude-display"
+                    style={{ color: magnitudeCssColor(focusEvent.magnitude) }}
+                    title="Magnitud del evento"
+                  >
+                    <span>{formatMagnitude(focusEvent.magnitude)}</span>
                   </div>
                   <span
                     className={`event-status-badge ${focusStatus?.tone}`}

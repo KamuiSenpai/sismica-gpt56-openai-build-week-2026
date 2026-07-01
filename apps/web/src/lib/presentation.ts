@@ -106,21 +106,22 @@ export function formatMetric(value: number | null | undefined, unit = "", decima
   return typeof value === "number" ? `${value.toFixed(decimals)}${unit}` : "N/D";
 }
 
-// Color por banda de magnitud (mismas clases que los puntos del globo).
-const MAGNITUDE_COLORS: { max: number; color: string }[] = [
-  { max: 2, color: "#22c55e" },
-  { max: 4, color: "#a3e635" },
-  { max: 5, color: "#facc15" },
-  { max: 6, color: "#fb923c" },
-  { max: 7, color: "#ef4444" },
-  { max: Number.POSITIVE_INFINITY, color: "#b91c1c" }
-];
+export const MAGNITUDE_BANDS = [
+  { max: 2, color: "#22c55e", label: "Micro (<2)" },
+  { max: 4, color: "#a3e635", label: "Menor (2-3.9)" },
+  { max: 5, color: "#facc15", label: "Ligero (4-4.9)" },
+  { max: 6, color: "#fb923c", label: "Moderado (5-5.9)" },
+  { max: 7, color: "#ef4444", label: "Fuerte (6-6.9)" },
+  { max: Number.POSITIVE_INFINITY, color: "#b91c1c", label: "Mayor (>=7)" }
+] as const;
+
+export function resolveMagnitudeBand(magnitude: number) {
+  return MAGNITUDE_BANDS.find((band) => magnitude < band.max) ?? MAGNITUDE_BANDS[MAGNITUDE_BANDS.length - 1];
+}
 
 export function magnitudeCssColor(magnitude: number | null | undefined): string {
   if (typeof magnitude !== "number") return "#64748b";
-  return (
-    MAGNITUDE_COLORS.find((band) => magnitude < band.max) ?? MAGNITUDE_COLORS[MAGNITUDE_COLORS.length - 1]
-  ).color;
+  return resolveMagnitudeBand(magnitude).color;
 }
 
 export const INTENSITY_BANDS = [
@@ -158,7 +159,17 @@ const SOURCE_COUNTRY: Record<string, string> = {
   SSN: "mx",
   CSN: "cl",
   INGV: "it",
+  IGEPN: "ec",
+  INPRES: "ar",
+  MARN: "sv",
+  OVSICORI: "cr",
+  INSIVUMEH: "gt",
   GEONET: "nz",
+  GA: "au",
+  NRCAN: "ca",
+  NCEDC: "us",
+  KNMI: "nl",
+  SCEDC: "us",
   CWA: "tw"
 };
 

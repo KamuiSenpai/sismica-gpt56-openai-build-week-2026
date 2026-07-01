@@ -13,6 +13,7 @@ import {
   EllipsoidGeodesic,
   Entity,
   GeoJsonDataSource,
+  CylinderGraphics,
   Ion,
   JulianDate,
   Math as CesiumMath,
@@ -28,6 +29,7 @@ import {
   formatDepth,
   formatMagnitude,
   formatUtcDateTime,
+  MAGNITUDE_BANDS,
   magnitudeCssColor,
   normalizedPlace,
   estimatedIntensity,
@@ -49,8 +51,6 @@ type MapPanelProps = {
   onToggleTour: () => void;
 };
 
-const WAVE_P_COLOR = Color.fromCssColorString("#2563eb");
-const WAVE_S_COLOR = Color.fromCssColorString("#facc15");
 // Velocidades sismicas medias en la corteza (m/s). El frente P es mas rapido que el S.
 const VP_MPS = 6500;
 const VS_MPS = 3750; // ≈ Vp / 1.73
@@ -198,17 +198,35 @@ function spawnWavefront(
   spawnSeismicRing(viewer, longitude, latitude, magColor, VS_MPS, depthM, 3);
 }
 
-function setupBasemap(viewer: Viewer): void {
+async function setupBasemap(viewer: Viewer): Promise<void> {
   if (viewer.isDestroyed()) return;
 
-  viewer.imageryLayers.addImageryProvider(
-    new UrlTemplateImageryProvider({
-      url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
-      subdomains: "abcd",
-      maximumLevel: 20,
-      credit: "(c) OpenStreetMap contributors (c) CARTO"
-    })
-  );
+  try {
+    // 1. Capa de día (Satélite)
+    const { IonImageryProvider } = await import("cesium");
+    const dayProvider = await IonImageryProvider.fromAssetId(2);
+    viewer.imageryLayers.addImageryProvider(dayProvider);
+
+    // 2. Capa de noche (Black Marble / Earth at Night)
+    const nightProvider = await IonImageryProvider.fromAssetId(3812);
+    const nightLayer = viewer.imageryLayers.addImageryProvider(nightProvider);
+    nightLayer.dayAlpha = 0.0; // Solo se ve de noche
+
+    // 3. Batimetría Submarina y Terreno 3D
+    const { Terrain } = await import("cesium");
+    viewer.scene.setTerrain(Terrain.fromWorldBathymetry());
+  } catch (error) {
+    console.warn("No se pudo cargar el mapa satelital", error);
+    // Fallback al mapa oscuro de Carto
+    viewer.imageryLayers.addImageryProvider(
+      new UrlTemplateImageryProvider({
+        url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
+        subdomains: "abcd",
+        maximumLevel: 20,
+        credit: "(c) OpenStreetMap contributors (c) CARTO"
+      })
+    );
+  }
 }
 
 async function loadPlateBoundaries(viewer: Viewer): Promise<void> {
@@ -234,6 +252,54 @@ async function loadPlateBoundaries(viewer: Viewer): Promise<void> {
     await viewer.dataSources.add(dataSource);
   } catch (error) {
     console.warn("No se pudieron cargar las placas tectonicas.", error);
+  }
+}
+
+async function loadActiveFaults(viewer: Viewer): Promise<void> {
+  try {
+    const dataSource = await GeoJsonDataSource.load("/data/gem_active_faults.geojson", {
+      clampToGround: true,
+      strokeWidth: 1
+    });
+
+    if (viewer.isDestroyed()) return;
+
+    for (const entity of dataSource.entities.values) {
+      if (!entity.polyline) continue;
+      entity.polyline.material = new ColorMaterialProperty(Color.fromCssColorString("#dc2626").withAlpha(0.3));
+      entity.polyline.width = new ConstantProperty(1);
+    }
+
+    await viewer.dataSources.add(dataSource);
+  } catch (error) {
+    console.warn("No se pudieron cargar las fallas activas.", error);
+  }
+}
+
+async function loadVolcanoes(viewer: Viewer): Promise<void> {
+  try {
+    const dataSource = await GeoJsonDataSource.load("/data/volcanoes.geojson");
+
+    if (viewer.isDestroyed()) return;
+
+    for (const entity of dataSource.entities.values) {
+      if (entity.position) {
+        // Renderizar volcán como un cono 3D anaranjado
+        entity.cylinder = new CylinderGraphics({
+          length: 40000.0, // 40km de altura para visibilidad global
+          topRadius: 0.0,
+          bottomRadius: 20000.0,
+          material: new ColorMaterialProperty(Color.fromCssColorString("#f97316").withAlpha(0.85))
+        });
+        // Remove default points/billboards
+        entity.point = undefined;
+        entity.billboard = undefined;
+      }
+    }
+
+    await viewer.dataSources.add(dataSource);
+  } catch (error) {
+    console.warn("No se pudieron cargar los volcanes.", error);
   }
 }
 
@@ -281,9 +347,9 @@ export function MapPanel({
     viewerRef.current = viewer;
 
     const scene = viewer.scene;
-    scene.globe.enableLighting = false;
+    scene.globe.enableLighting = true;
     scene.globe.showGroundAtmosphere = true;
-    scene.globe.depthTestAgainstTerrain = false;
+    scene.globe.depthTestAgainstTerrain = true;
     scene.globe.baseColor = Color.fromCssColorString("#0b1220");
     if (scene.skyAtmosphere) {
       scene.skyAtmosphere.show = true;
@@ -346,8 +412,10 @@ export function MapPanel({
     const clearHover = () => setHover((prev) => (prev ? null : prev));
     canvas.addEventListener("pointerleave", clearHover);
 
-    setupBasemap(viewer);
+    void setupBasemap(viewer);
     void loadPlateBoundaries(viewer);
+    void loadActiveFaults(viewer);
+    void loadVolcanoes(viewer);
 
     return () => {
       if (selectionWaveTimerRef.current !== null) {
@@ -407,7 +475,7 @@ export function MapPanel({
       seenIdsRef.current.add(event.eventId);
       const isFresh = Date.now() - Date.parse(event.eventTimeUtc) < FRESH_WINDOW_MS;
       if (!firstLoad && isNew && isFresh) {
-        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm);
+        spawnWavefront(viewer, event.longitude, event.latitude, event.depthKm, event.magnitude);
       }
     }
 
@@ -501,6 +569,71 @@ export function MapPanel({
     }
   }, [selectedEventId]);
 
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !selectedEventId) return;
+
+    const event = eventMapRef.current.get(selectedEventId);
+    if (!event || event.source !== "USGS" || !event.detailUrl) return;
+
+    let activeDataSource: GeoJsonDataSource | null = null;
+    let isCancelled = false;
+
+    async function fetchAndRenderShakeMap() {
+      try {
+        const res = await fetch(event!.detailUrl!);
+        const data = await res.json() as any;
+        
+        if (isCancelled) return;
+        
+        const shakemapProduct = data.properties?.products?.shakemap?.[0];
+        if (!shakemapProduct) return;
+        
+        const contUrl = shakemapProduct.contents?.["download/cont_mi.json"]?.url;
+        if (!contUrl) return;
+        
+        const dataSource = await GeoJsonDataSource.load(contUrl, {
+          clampToGround: true,
+          strokeWidth: 2
+        });
+        
+        if (isCancelled || !viewerRef.current || viewerRef.current.isDestroyed()) return;
+        
+        for (const entity of dataSource.entities.values) {
+          const valueProp = entity.properties?.value;
+          const value = valueProp ? parseFloat(valueProp.getValue(JulianDate.now())) : null;
+          if (value !== null) {
+            const colorCss = intensityCssColor(value);
+            const cesiumColor = Color.fromCssColorString(colorCss).withAlpha(0.4);
+            if (entity.polygon) {
+              entity.polygon.material = new ColorMaterialProperty(cesiumColor);
+              entity.polygon.outline = new ConstantProperty(false);
+            }
+            if (entity.polyline) {
+              entity.polyline.material = new ColorMaterialProperty(cesiumColor);
+              entity.polyline.width = new ConstantProperty(2);
+            }
+          }
+        }
+        
+        await viewerRef.current.dataSources.add(dataSource);
+        activeDataSource = dataSource;
+      } catch (err) {
+        console.warn("Failed to load shakemap for event", err);
+      }
+    }
+    
+    void fetchAndRenderShakeMap();
+    
+    return () => {
+      isCancelled = true;
+      if (activeDataSource && viewerRef.current && !viewerRef.current.isDestroyed()) {
+        viewerRef.current.dataSources.remove(activeDataSource);
+      }
+    };
+  }, [selectedEventId]);
+
+
   const tourEvent =
     (selectedEventId ? events.find((event) => event.eventId === selectedEventId) : undefined) ??
     events[0] ??
@@ -588,8 +721,20 @@ export function MapPanel({
           Transformante
         </span>
         <span className="legend-row">
+          <i style={{ background: "#dc2626", opacity: 0.6 }} />
+          Fallas Activas
+        </span>
+        <span className="legend-row">
+          <i className="legend-point" style={{ borderBottom: "10px solid #f97316", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", background: "transparent", borderRadius: 0, height: 0, width: 0 }} />
+          Volcanes (USGS)
+        </span>
+        <span className="legend-row">
           <i className="legend-point" style={{ background: "#ff9f1c" }} />
           Contexto GDACS
+        </span>
+        <span className="legend-row">
+          <i style={{ background: "linear-gradient(to right, #7aff93, #ff0000)", opacity: 0.8 }} />
+          ShakeMap (USGS)
         </span>
       </div>
       <div
@@ -607,7 +752,7 @@ export function MapPanel({
         </div>
         <div style={{ display: "grid", gap: "5px", alignContent: "start" }}>
           <span className="legend-title">Magnitud (Tamaño)</span>
-          {MAG_BANDS.map((band) => {
+          {MAGNITUDE_BANDS.map((band) => {
             const mag = band.max === Infinity ? 7.5 : band.max - 0.5;
             const size = Math.min(16, magnitudeSize(mag));
             return (

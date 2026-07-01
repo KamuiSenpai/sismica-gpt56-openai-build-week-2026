@@ -1,5 +1,13 @@
 export type SourceCode =
   | "USGS"
+  | "SED"
+  | "RENASS"
+  | "ISC"
+  | "GA"
+  | "NRCAN"
+  | "NCEDC"
+  | "KNMI"
+  | "SCEDC"
   | "EMSC"
   | "IGP"
   | "FUNVISIS"
@@ -12,7 +20,12 @@ export type SourceCode =
   | "IGN"
   | "SSN"
   | "CSN"
-  | "INGV";
+  | "INGV"
+  | "IGEPN"
+  | "INPRES"
+  | "MARN"
+  | "OVSICORI"
+  | "INSIVUMEH";
 export type OperationalSourceCode = SourceCode | "GDACS" | "NOAA_PTWC" | "NOAA_NTWC";
 
 export type SeismicEvent = {

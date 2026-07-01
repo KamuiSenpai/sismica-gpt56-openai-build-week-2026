@@ -19,6 +19,7 @@ import { normalizeFunvisisFeature } from "../src/providers/funvisisProvider.js";
 import { normalizeGdacsFeature } from "../src/providers/gdacsProvider.js";
 import { normalizeGeoNetFeature } from "../src/providers/geoNetProvider.js";
 import { normalizeGeofonRecord, parseFdsnText } from "../src/providers/geofonProvider.js";
+import { normalizeFdsnRecord } from "../src/providers/fdsnProvider.js";
 import { extractNamedJsonObject, normalizeIgnFeature } from "../src/providers/ignProvider.js";
 import { normalizeIgpRecord } from "../src/providers/igpProvider.js";
 import {
@@ -26,8 +27,13 @@ import {
   formatIngvUtcDateTime,
   normalizeIngvRecord
 } from "../src/providers/ingvProvider.js";
+import { normalizeIgepnRecord, parseIgepnCsv } from "../src/providers/igepnProvider.js";
+import { normalizeInpresItem, parseInpresXml } from "../src/providers/inpresProvider.js";
+import { normalizeInsivumehRecord, parseInsivumehMarkers } from "../src/providers/insivumehProvider.js";
 import { consolidateJmaRecords, normalizeJmaRecord } from "../src/providers/jmaProvider.js";
+import { normalizeMarnRecord, parseMarnHtml } from "../src/providers/marnProvider.js";
 import { parseNoaaCap } from "../src/providers/noaaProvider.js";
+import { normalizeOvsicoriRecord, parseOvsicoriMarkers } from "../src/providers/ovsicoriProvider.js";
 import { normalizeSgcFeature } from "../src/providers/sgcProvider.js";
 import { normalizeSsnItem } from "../src/providers/ssnProvider.js";
 import { isAssociationCandidate, sourcePriority } from "../src/services/eventAssociationService.js";
@@ -111,6 +117,60 @@ test("parsea y normaliza respuesta FDSN texto de GEOFON", () => {
   assert.equal(event.eventTimeUtc, "2026-06-30T05:20:30.120Z");
   assert.equal(event.magnitude, 4.6);
   assert.equal(event.depthKm, 35);
+});
+
+test("tolera variante FDSN de SCEDC con fecha slash y cabecera Longtitude", () => {
+  const payload = [
+    "#EventID  | Time                | Latitude | Longtitude   | Depth/km | Author | Catalog | ET | GT   | MagType | Magnitude | MagAuthor | EventLocationName",
+    "10245278 | 2026/06/29 11:35:33.6290 | 43.38280 | -127.0788000 | 10.00    | US     | SCEDC   | eq | t |   w     |  5.50     | US        |  221.9 km WNW from Port Orford, OR",
+    "",
+    "# of events : 1"
+  ].join("\n");
+
+  const records = parseFdsnText(payload);
+  const event = normalizeFdsnRecord(
+    records[0],
+    "SCEDC",
+    "SCEDC",
+    "https://service.scedc.caltech.edu/fdsnws/event/1/query",
+    INGESTED_AT
+  );
+
+  assert.equal(records.length, 1);
+  assert.ok(event);
+  assert.equal(event.source, "SCEDC");
+  assert.equal(event.eventTimeUtc, "2026-06-29T11:35:33.629Z");
+  assert.equal(event.longitude, -127.0788);
+  assert.equal(event.eventType, "earthquake");
+  assert.equal(event.networkCode, "US");
+});
+
+test("normaliza FDSN estandar de KNMI", () => {
+  const event = normalizeFdsnRecord(
+    {
+      EventID: "knmi2026mlbv",
+      Time: "2026-06-24T21:59:57.1",
+      Latitude: "53.312",
+      Longitude: "6.888",
+      "Depth/km": "3.0",
+      Contributor: "KNMI",
+      ContributorID: "knmi2026mlbv",
+      MagType: "MLn",
+      Magnitude: "1.3798966264661987",
+      EventLocationName: "Meedhuizen",
+      EventType: "induced or triggered event"
+    },
+    "KNMI",
+    "KNMI",
+    "https://rdsa.knmi.nl/fdsnws/event/1/query",
+    INGESTED_AT
+  );
+
+  assert.ok(event);
+  assert.equal(event.source, "KNMI");
+  assert.equal(event.eventTimeUtc, "2026-06-24T21:59:57.100Z");
+  assert.equal(event.eventType, "induced or triggered event");
+  assert.equal(event.sourceUrl, "https://rdsa.knmi.nl/fdsnws/event/1/query?eventid=knmi2026mlbv");
 });
 
 test("normaliza GeoNet y descarta registros eliminados", () => {
@@ -356,6 +416,126 @@ test("normaliza evento oficial INGV y descarta eventos fuera de la region operat
     ),
     null
   );
+});
+
+test("parsea CSV oficial IGEPN y normaliza hora local de Ecuador", () => {
+  const csv = [
+    "latitude,longitude,mag,depth,time,status,id,place",
+    "-2.1043,-77.6736,4.30,12.9727,2026/06/30 06:02:05,confirmed,igepn2026mrim,a 53.97 km de Macas, Morona Santiago"
+  ].join("\n");
+
+  const records = parseIgepnCsv(csv);
+  const event = normalizeIgepnRecord(records[0], INGESTED_AT);
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].place, "a 53.97 km de Macas, Morona Santiago");
+  assert.ok(event);
+  assert.equal(event.source, "IGEPN");
+  assert.equal(event.eventTimeUtc, "2026-06-30T11:02:05.000Z");
+  assert.equal(event.magnitude, 4.3);
+  assert.equal(event.depthKm, 12.9727);
+  assert.equal(event.status, "official");
+});
+
+test("parsea XML oficial INPRES y normaliza hora local de Argentina", () => {
+  const xml = `<?xml version="1.0"?>
+    <lista>
+      <item>
+        <idSismo>330485</idSismo>
+        <fecha>30/06</fecha>
+        <hora>06:10:20</hora>
+        <latitud>-31.5</latitud>
+        <longitud>-68.5</longitud>
+        <prof>112</prof>
+        <mg>3.4</mg>
+        <prov>San Juan</prov>
+        <link>../mapa/330485</link>
+      </item>
+    </lista>`;
+
+  const items = parseInpresXml(xml);
+  const event = normalizeInpresItem(items[0], INGESTED_AT, new Date("2026-06-30T12:00:00.000Z"));
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].idSismo, 330485);
+  assert.ok(event);
+  assert.equal(event.source, "INPRES");
+  assert.equal(event.eventTimeUtc, "2026-06-30T09:10:20.000Z");
+  assert.equal(event.latitude, -31.5);
+  assert.equal(event.longitude, -68.5);
+  assert.equal(event.sourceUrl, "http://contenidos.inpres.gob.ar/mapa/330485");
+});
+
+test("parsea tabla oficial MARN con intensidad reportada", () => {
+  const html = `
+    <table>
+      <tr>
+        <td>1</td><td>2026-06-30</td><td>06:35:00</td><td>13.115</td>
+        <td>-89.576836</td><td>Frente a la costa de La Libertad</td>
+        <td>II en San Salvador</td><td>3.9</td><td>36.85</td>
+      </tr>
+    </table>`;
+
+  const records = parseMarnHtml(html);
+  const event = normalizeMarnRecord(records[0], INGESTED_AT);
+
+  assert.equal(records.length, 1);
+  assert.ok(event);
+  assert.equal(event.source, "MARN");
+  assert.equal(event.eventTimeUtc, "2026-06-30T12:35:00.000Z");
+  assert.equal(event.intensityText, "II en San Salvador");
+  assert.equal(event.magnitude, 3.9);
+  assert.equal(event.depthKm, 36.85);
+});
+
+test("parsea marcador OVSICORI y conserva revision oficial", () => {
+  const html = `
+    L.marker([8.8952,-84.4345]).bindPopup('<table>
+      <tr><td>Magnitud:</td><td>2.8</td></tr>
+      <tr><td>Fecha y Hora Local:</td><td>2026-06-16 02:37:09</td></tr>
+      <tr><td>Ubicacion:</td><td>10 km al Sur de Quepos</td></tr>
+      <tr><td>Prof. [km]:</td><td>4</td></tr>
+      <tr><td>Revisado:</td><td>y</td></tr>
+      <tr><td><a href="detalle.php?eqid=1448130">ver</a></td></tr>
+    </table>')`;
+
+  const records = parseOvsicoriMarkers(html);
+  const event = normalizeOvsicoriRecord(records[0], INGESTED_AT);
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].sourceEventId, "1448130");
+  assert.ok(event);
+  assert.equal(event.source, "OVSICORI");
+  assert.equal(event.eventTimeUtc, "2026-06-16T08:37:09.000Z");
+  assert.equal(event.depthKm, 4);
+  assert.equal(event.status, "reviewed");
+  assert.equal(event.title, "M2.8 - 10 km al Sur de Quepos");
+});
+
+test("parsea HTML Leaflet INSIVUMEH con metadatos tecnicos", () => {
+  const html = `
+    var circle_marker_test = L.circleMarker([13.262, -90.048], {}).addTo(map);
+    circle_marker_test.bindPopup('<div>
+      ID: insivumeh2026mppx NST: 14 RMS: 0.28 GAP: 0.28
+      <a href="/IMM/HISTORICO/insivumeh2026mppx">historico</a>
+    </div>');
+    circle_marker_test.bindTooltip('<div>
+      Magnitud: 2.6 Tiempo de Origen: 2026-06-29 01:30:38 Profundidad: 37.0 km
+    </div>');
+  `;
+
+  const records = parseInsivumehMarkers(html);
+  const event = normalizeInsivumehRecord(records[0], INGESTED_AT);
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].sourceEventId, "insivumeh2026mppx");
+  assert.ok(event);
+  assert.equal(event.source, "INSIVUMEH");
+  assert.equal(event.eventTimeUtc, "2026-06-29T07:30:38.000Z");
+  assert.equal(event.stationCount, 14);
+  assert.equal(event.rmsSec, 0.28);
+  assert.equal(event.azimuthalGapDeg, 0.28);
+  assert.equal(event.depthKm, 37);
 });
 
 test("normaliza evento oficial BMKG con intensidad y sin falso tsunami", () => {
@@ -703,6 +883,11 @@ test("aplica prioridad regional a Peru y Venezuela", () => {
   assert.ok(sourcePriority("SSN", 17.4, -101.3) > sourcePriority("USGS", 17.4, -101.3));
   assert.ok(sourcePriority("CSN", -29.9, -71.3) > sourcePriority("USGS", -29.9, -71.3));
   assert.ok(sourcePriority("INGV", 40.7, 15.1) > sourcePriority("USGS", 40.7, 15.1));
+  assert.ok(sourcePriority("IGEPN", -1.2, -78.5) > sourcePriority("USGS", -1.2, -78.5));
+  assert.ok(sourcePriority("INPRES", -31.5, -68.5) > sourcePriority("USGS", -31.5, -68.5));
+  assert.ok(sourcePriority("MARN", 13.6, -89.0) > sourcePriority("USGS", 13.6, -89.0));
+  assert.ok(sourcePriority("OVSICORI", 9.9, -84.1) > sourcePriority("USGS", 9.9, -84.1));
+  assert.ok(sourcePriority("INSIVUMEH", 14.6, -90.5) > sourcePriority("USGS", 14.6, -90.5));
   assert.ok(sourcePriority("USGS", 35, 140) > sourcePriority("EMSC", 35, 140));
   assert.ok(sourcePriority("GEONET", -41.2, 174.8) > sourcePriority("USGS", -41.2, 174.8));
   assert.ok(sourcePriority("BMKG", -6.2, 106.8) > sourcePriority("USGS", -6.2, 106.8));

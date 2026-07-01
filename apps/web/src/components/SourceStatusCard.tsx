@@ -30,7 +30,7 @@ export function SourceStatusCard({ statuses }: SourceStatusCardProps) {
         {statuses.map((status) => (
           <div className="source-monitor-row" key={status.source} title={status.errorMessage ?? undefined}>
             <i className={getJobTone(status.status)} />
-            <strong>{status.source.replace("NOAA_", "")}</strong>
+            <strong>{status.source.replace("_", " ")}</strong>
             <span>{formatUtcDateTime(status.lastRunFinishedAt)}</span>
             <small>
               {status.insertedCount}/{status.updatedCount}/{status.associatedCount}

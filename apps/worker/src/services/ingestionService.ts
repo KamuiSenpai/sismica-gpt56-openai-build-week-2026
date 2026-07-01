@@ -13,14 +13,29 @@ import { gdacsProvider } from "../providers/gdacsProvider.js";
 import { geofonProvider } from "../providers/geofonProvider.js";
 import { geoNetProvider } from "../providers/geoNetProvider.js";
 import { ignProvider } from "../providers/ignProvider.js";
+import { igepnProvider } from "../providers/igepnProvider.js";
 import { igpProvider } from "../providers/igpProvider.js";
+import { inpresProvider } from "../providers/inpresProvider.js";
+import { insivumehProvider } from "../providers/insivumehProvider.js";
 import { ingvProvider } from "../providers/ingvProvider.js";
 import { jmaProvider } from "../providers/jmaProvider.js";
+import { marnProvider } from "../providers/marnProvider.js";
 import { noaaNtwcProvider, noaaPtwcProvider } from "../providers/noaaProvider.js";
+import { ovsicoriProvider } from "../providers/ovsicoriProvider.js";
 import { sgcProvider } from "../providers/sgcProvider.js";
 import { ssnProvider } from "../providers/ssnProvider.js";
 import { type AuxiliaryProvider, type SeismicProvider } from "../providers/types.js";
 import { usgsProvider } from "../providers/usgsProvider.js";
+import {
+  sedProvider,
+  renassProvider,
+  iscProvider,
+  gaProvider,
+  nrcanProvider,
+  ncedcProvider,
+  knmiProvider,
+  scedcProvider
+} from "../providers/fdsnProvider.js";
 import {
   ingestDisasterContexts,
   ingestTsunamiProducts,
@@ -33,6 +48,14 @@ type RunStats = SeismicIngestionStats;
 const SOURCE_INTERVALS_MS: Record<OperationalSourceCode, number> = {
   USGS: 60_000,
   EMSC: 60_000,
+  SED: 180_000,
+  RENASS: 120_000,
+  ISC: 300_000,
+  GA: 180_000,
+  NRCAN: 180_000,
+  NCEDC: 180_000,
+  KNMI: 180_000,
+  SCEDC: 180_000,
   IGP: 120_000,
   FUNVISIS: 120_000,
   SGC: 120_000,
@@ -40,6 +63,11 @@ const SOURCE_INTERVALS_MS: Record<OperationalSourceCode, number> = {
   SSN: 120_000,
   CSN: 180_000,
   INGV: 180_000,
+  IGEPN: 120_000,
+  INPRES: 180_000,
+  MARN: 180_000,
+  OVSICORI: 180_000,
+  INSIVUMEH: 180_000,
   GEOFON: 120_000,
   GEONET: 120_000,
   BMKG: 120_000,
@@ -285,6 +313,14 @@ export async function runIngestion(): Promise<SourceRunSummary[]> {
   const seismicProviders = [
     usgsProvider,
     emscProvider,
+    sedProvider,
+    renassProvider,
+    iscProvider,
+    gaProvider,
+    nrcanProvider,
+    ncedcProvider,
+    knmiProvider,
+    scedcProvider,
     igpProvider,
     funvisisProvider,
     sgcProvider,
@@ -292,6 +328,11 @@ export async function runIngestion(): Promise<SourceRunSummary[]> {
     ssnProvider,
     csnProvider,
     ingvProvider,
+    igepnProvider,
+    inpresProvider,
+    marnProvider,
+    ovsicoriProvider,
+    insivumehProvider,
     geofonProvider,
     geoNetProvider,
     bmkgProvider,

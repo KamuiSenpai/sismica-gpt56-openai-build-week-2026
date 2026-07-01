@@ -20,13 +20,14 @@ function utcIso(value: string | undefined): string | null {
 
 export function parseFdsnText(payload: string): FdsnTextRecord[] {
   const lines = payload.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const headerIndex = lines.findIndex((line) => /^#?EventID\|/i.test(line));
+  // Cabecera tolerante a espacios alrededor de las barras (RENASS: "# EventID | Time |").
+  const headerIndex = lines.findIndex((line) => /^#?\s*EventID\s*\|/i.test(line));
   if (headerIndex < 0) return [];
 
-  const headers = lines[headerIndex].replace(/^#/, "").split("|");
+  const headers = lines[headerIndex].replace(/^#/, "").split("|").map((header) => header.trim());
   return lines.slice(headerIndex + 1).flatMap((line) => {
     if (line.startsWith("#")) return [];
-    const values = line.split("|");
+    const values = line.split("|").map((value) => value.trim());
     if (values.length < headers.length) return [];
     return [Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]))];
   });

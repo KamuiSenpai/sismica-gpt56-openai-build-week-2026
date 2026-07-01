@@ -22,6 +22,10 @@ type ExistingReference = {
   unchanged: boolean;
 };
 
+type ExistingCanonical = {
+  event_id: string;
+};
+
 type CanonicalRow = {
   event_id: string;
   source: SourceCode;
@@ -58,8 +62,14 @@ type CanonicalRow = {
 const PERU_BOUNDS = { minLat: -19.5, maxLat: 0.5, minLon: -82.5, maxLon: -68.5 };
 const VENEZUELA_BOUNDS = { minLat: 0, maxLat: 13.5, minLon: -73.3, maxLon: -58.5 };
 const COLOMBIA_BOUNDS = { minLat: -4.5, maxLat: 14.5, minLon: -82.5, maxLon: -66 };
-const MEXICO_BOUNDS = { minLat: 14, maxLat: 33.5, minLon: -119, maxLon: -85.5 };
+const ECUADOR_BOUNDS = { minLat: -5.5, maxLat: 2.5, minLon: -92, maxLon: -75 };
+const ARGENTINA_BOUNDS = { minLat: -56, maxLat: -21, minLon: -75, maxLon: -53 };
+const MEXICO_BOUNDS = { minLat: 14.8, maxLat: 33.5, minLon: -119, maxLon: -85.5 };
+const COSTA_RICA_BOUNDS = { minLat: 5.5, maxLat: 12.5, minLon: -88.5, maxLon: -82 };
+const EL_SALVADOR_BOUNDS = { minLat: 11.5, maxLat: 15, minLon: -90.4, maxLon: -87 };
+const GUATEMALA_BOUNDS = { minLat: 12, maxLat: 19, minLon: -93, maxLon: -88 };
 const CHILE_BOUNDS = { minLat: -57, maxLat: -17, minLon: -80.5, maxLon: -66 };
+const CHILE_PRIMARY_BOUNDS = { minLat: -57, maxLat: -17, minLon: -80.5, maxLon: -69.8 };
 const ITALY_BOUNDS = { minLat: 34, maxLat: 48.5, minLon: 5, maxLon: 20.5 };
 const NEW_ZEALAND_BOUNDS = { minLat: -49, maxLat: -28, minLon: 160, maxLon: 180 };
 const KERMADEC_BOUNDS = { minLat: -37, maxLat: -20, minLon: -180, maxLon: -170 };
@@ -94,224 +104,124 @@ function withinBounds(latitude: number, longitude: number, bounds: typeof PERU_B
   );
 }
 
+const BASE_SOURCE_PRIORITY: Record<SourceCode, number> = {
+  USGS: 80,
+  GEOFON: 75,
+  ISC: 72,
+  EMSC: 70,
+  RENASS: 60,
+  SED: 50,
+  GA: 55,
+  NRCAN: 55,
+  NCEDC: 55,
+  KNMI: 55,
+  SCEDC: 55,
+  IGP: 50,
+  FUNVISIS: 50,
+  GEONET: 50,
+  BMKG: 50,
+  JMA: 50,
+  CWA: 50,
+  SGC: 50,
+  IGN: 50,
+  SSN: 50,
+  CSN: 50,
+  INGV: 50,
+  IGEPN: 50,
+  INPRES: 50,
+  MARN: 50,
+  OVSICORI: 50,
+  INSIVUMEH: 50
+};
+
+function priorityWith(source: SourceCode, overrides: Partial<Record<SourceCode, number>>): number {
+  return overrides[source] ?? BASE_SOURCE_PRIORITY[source];
+}
+
 export function sourcePriority(source: SourceCode, latitude: number, longitude: number): number {
+  if (withinBounds(latitude, longitude, ECUADOR_BOUNDS)) {
+    return priorityWith(source, {
+      IGEPN: 100,
+      IGP: 70,
+      SGC: 65
+    });
+  }
   if (withinBounds(latitude, longitude, PERU_BOUNDS)) {
-    return {
+    return priorityWith(source, {
       IGP: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      FUNVISIS: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      SGC: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+      IGEPN: 70
+    });
   }
   if (withinBounds(latitude, longitude, VENEZUELA_BOUNDS)) {
-    return {
-      FUNVISIS: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      SGC: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { FUNVISIS: 100 });
   }
   if (withinBounds(latitude, longitude, COLOMBIA_BOUNDS)) {
-    return {
+    return priorityWith(source, {
       SGC: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+      IGEPN: 65
+    });
+  }
+  if (withinBounds(latitude, longitude, CHILE_PRIMARY_BOUNDS)) {
+    return priorityWith(source, { CSN: 100, INPRES: 65 });
+  }
+  if (withinBounds(latitude, longitude, ARGENTINA_BOUNDS)) {
+    return priorityWith(source, {
+      INPRES: 100,
+      CSN: 75
+    });
   }
   if (withinBounds(latitude, longitude, MEXICO_BOUNDS)) {
-    return {
-      SSN: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      SGC: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      IGN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { SSN: 100 });
+  }
+  if (withinBounds(latitude, longitude, COSTA_RICA_BOUNDS)) {
+    return priorityWith(source, {
+      OVSICORI: 100,
+      MARN: 70,
+      INSIVUMEH: 65,
+      SSN: 60
+    });
+  }
+  if (withinBounds(latitude, longitude, EL_SALVADOR_BOUNDS)) {
+    return priorityWith(source, {
+      MARN: 100,
+      INSIVUMEH: 80,
+      OVSICORI: 65,
+      SSN: 60
+    });
+  }
+  if (withinBounds(latitude, longitude, GUATEMALA_BOUNDS)) {
+    return priorityWith(source, {
+      INSIVUMEH: 100,
+      MARN: 70,
+      OVSICORI: 65,
+      SSN: 60
+    });
   }
   if (withinBounds(latitude, longitude, CHILE_BOUNDS)) {
-    return {
-      CSN: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      SGC: 40,
-      SSN: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      IGN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { CSN: 100, INPRES: 65 });
   }
   if (withinBounds(latitude, longitude, ITALY_BOUNDS)) {
-    return {
-      INGV: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      SGC: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40
-    }[source];
+    return priorityWith(source, { INGV: 100 });
   }
   if (
     withinBounds(latitude, longitude, NEW_ZEALAND_BOUNDS) ||
     withinBounds(latitude, longitude, KERMADEC_BOUNDS)
   ) {
-    return {
-      GEONET: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      SGC: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { GEONET: 100 });
   }
   if (withinBounds(latitude, longitude, INDONESIA_BOUNDS)) {
-    return {
-      BMKG: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      GEONET: 40,
-      JMA: 40,
-      CWA: 40,
-      SGC: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { BMKG: 100 });
   }
   if (withinBounds(latitude, longitude, TAIWAN_BOUNDS)) {
-    return {
-      CWA: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      SGC: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { CWA: 100 });
   }
   if (withinBounds(latitude, longitude, JAPAN_BOUNDS)) {
-    return {
-      JMA: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      GEONET: 40,
-      BMKG: 40,
-      CWA: 40,
-      SGC: 40,
-      IGN: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { JMA: 100 });
   }
   if (withinBounds(latitude, longitude, IGN_REGION_BOUNDS)) {
-    return {
-      IGN: 100,
-      USGS: 80,
-      GEOFON: 75,
-      EMSC: 70,
-      IGP: 40,
-      FUNVISIS: 40,
-      GEONET: 40,
-      BMKG: 40,
-      JMA: 40,
-      CWA: 40,
-      SGC: 40,
-      SSN: 40,
-      CSN: 40,
-      INGV: 40
-    }[source];
+    return priorityWith(source, { IGN: 100 });
   }
-  return {
-    USGS: 80,
-    GEOFON: 75,
-    EMSC: 70,
-    IGP: 50,
-    FUNVISIS: 50,
-    GEONET: 50,
-    BMKG: 50,
-    JMA: 50,
-    CWA: 50,
-    SGC: 50,
-    IGN: 50,
-    SSN: 50,
-    CSN: 50,
-    INGV: 50
-  }[source];
+  return BASE_SOURCE_PRIORITY[source];
 }
 
 function canonicalParams(event: SeismicEvent, rawPayload: unknown, priority: number): unknown[] {
@@ -489,6 +399,19 @@ async function findExistingReference(
   return result.rows[0] ?? null;
 }
 
+async function findExistingCanonical(client: PoolClient, eventId: string): Promise<ExistingCanonical | null> {
+  const result = await client.query<ExistingCanonical>(
+    `
+      SELECT event_id
+      FROM seismic_events
+      WHERE event_id = $1
+      LIMIT 1
+    `,
+    [eventId]
+  );
+  return result.rows[0] ?? null;
+}
+
 async function findMatch(client: PoolClient, event: SeismicEvent): Promise<MatchRow | null> {
   const result = await client.query<MatchRow>(
     `
@@ -651,9 +574,13 @@ async function notifyEvent(
 export async function ingestSeismicRecords(
   client: PoolClient,
   records: SeismicRecord[],
-  streamChannel: string
+  streamChannel: string,
+  options?: {
+    notify?: boolean;
+  }
 ): Promise<SeismicIngestionStats> {
   const stats: SeismicIngestionStats = { inserted: 0, updated: 0, associated: 0 };
+  const notify = options?.notify ?? true;
 
   for (const record of records) {
     const event = record.event;
@@ -674,7 +601,7 @@ export async function ingestSeismicRecords(
             (current.source !== event.source && priority > current.preferred_source_priority));
         if (needsRefresh) {
           await updateCanonical(client, existingReference.event_id, event, record.rawPayload, priority);
-          if (current.source !== event.source) {
+          if (notify && current.source !== event.source) {
             await notifyEvent(client, streamChannel, "event.updated", existingReference.event_id);
           }
           stats.updated += 1;
@@ -684,7 +611,22 @@ export async function ingestSeismicRecords(
       await upsertReference(client, existingReference.event_id, record);
       if (await shouldReplaceCanonical(client, existingReference.event_id, event.source, priority)) {
         await updateCanonical(client, existingReference.event_id, event, record.rawPayload, priority);
-        await notifyEvent(client, streamChannel, "event.updated", existingReference.event_id);
+        if (notify) {
+          await notifyEvent(client, streamChannel, "event.updated", existingReference.event_id);
+        }
+      }
+      stats.updated += 1;
+      continue;
+    }
+
+    const existingCanonical = await findExistingCanonical(client, event.eventId);
+    if (existingCanonical) {
+      await upsertReference(client, existingCanonical.event_id, record);
+      if (await shouldReplaceCanonical(client, existingCanonical.event_id, event.source, priority)) {
+        await updateCanonical(client, existingCanonical.event_id, event, record.rawPayload, priority);
+        if (notify) {
+          await notifyEvent(client, streamChannel, "event.updated", existingCanonical.event_id);
+        }
       }
       stats.updated += 1;
       continue;
@@ -714,14 +656,18 @@ export async function ingestSeismicRecords(
       if (await shouldReplaceCanonical(client, match.event_id, event.source, priority)) {
         await updateCanonical(client, match.event_id, event, record.rawPayload, priority);
       }
-      await notifyEvent(client, streamChannel, "event.updated", match.event_id);
+      if (notify) {
+        await notifyEvent(client, streamChannel, "event.updated", match.event_id);
+      }
       stats.associated += 1;
       continue;
     }
 
     await insertCanonical(client, event, record.rawPayload, priority);
     await upsertReference(client, event.eventId, record);
-    await notifyEvent(client, streamChannel, "event.created", event.eventId);
+    if (notify) {
+      await notifyEvent(client, streamChannel, "event.created", event.eventId);
+    }
     stats.inserted += 1;
   }
 
