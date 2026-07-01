@@ -24,6 +24,7 @@ import {
   Ion,
   JulianDate,
   Math as CesiumMath,
+  SceneTransforms,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   UrlTemplateImageryProvider,
@@ -47,6 +48,7 @@ import {
   normalizedPlace
 } from "../lib/presentation";
 import { CountryFlag } from "./CountryFlag";
+import { MosaicSwap } from "./MosaicSwap";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? "";
 
@@ -401,6 +403,9 @@ export function MapPanel({
   const [stationsVisible, setStationsVisible] = useState(true);
   const [experimentalOriginsVisible, setExperimentalOriginsVisible] = useState(true);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  // Etiqueta minima de magnitud anclada al sismo seleccionado durante el
+  // recorrido. Se posiciona al terminar el vuelo (la camara queda estatica).
+  const [magTip, setMagTip] = useState<{ event: SeismicEvent; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -703,6 +708,7 @@ export function MapPanel({
 
   useEffect(() => {
     selectedIdRef.current = selectedEventId;
+    setMagTip(null); // se oculta mientras la camara viaja al nuevo sismo
     const viewer = viewerRef.current;
     if (!viewer) return;
 
@@ -734,7 +740,15 @@ export function MapPanel({
       orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
       duration: 3.2,
       maximumHeight,
-      easingFunction: EasingFunction.QUADRATIC_IN_OUT
+      easingFunction: EasingFunction.QUADRATIC_IN_OUT,
+      complete: () => {
+        if (viewer.isDestroyed() || selectedIdRef.current !== event.eventId) return;
+        const win = SceneTransforms.worldToWindowCoordinates(
+          viewer.scene,
+          Cartesian3.fromDegrees(event.longitude, event.latitude)
+        );
+        if (win) setMagTip({ event, x: win.x, y: win.y });
+      }
     });
 
     spawnWavefront(viewer, event);
@@ -886,45 +900,65 @@ export function MapPanel({
         </div>
       ) : null}
 
+      {magTip ? (
+        <div
+          className="mag-tip"
+          style={{ left: magTip.x, top: magTip.y, color: magnitudeCssColor(magTip.event.magnitude) }}
+        >
+          {formatMagnitude(magTip.event.magnitude)}
+        </div>
+      ) : null}
+
       {tourEvent && !selectedStation ? (
         <div className="tour-card">
-          <div className="tour-card-top">
-            <CountryFlag event={tourEvent} className="tour-flag" />
-            <strong className="tour-title">
-              <span style={{ color: magnitudeCssColor(tourEvent.magnitude) }}>
-                {formatMagnitude(tourEvent.magnitude)}
-              </span>{" "}
-              - {normalizedPlace(tourEvent, resolveCountryCode(tourEvent))}
-            </strong>
-            <button
-              type="button"
-              className="tour-toggle"
-              onClick={onToggleTour}
-              title={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
-              aria-label={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
-            >
-              {tourPaused ? ">" : "||"}
-            </button>
-          </div>
-          <div
-            className="tour-card-meta"
-            style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" }}
+          <button
+            type="button"
+            className={tourPaused ? "tour-toggle paused" : "tour-toggle"}
+            onClick={onToggleTour}
+            title={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
+            aria-label={tourPaused ? "Reanudar recorrido" : "Pausar recorrido"}
           >
-            {formatUtcDateTime(tourEvent.eventTimeUtc)} UTC | Prof: {formatDepth(tourEvent.depthKm)} |
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <i
-                style={{
-                  width: "10px",
-                  height: "10px",
-                  borderRadius: "2px",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  background: intensityCssColor(estimatedIntensity(tourEvent))
-                }}
-              />
-              {normalizedIntensity(tourEvent)}
-            </span>
-          </div>
-          <span className="tour-card-source">Datos: {tourEvent.source}</span>
+            {tourPaused ? (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                <path d="M3 2.2 10 6 3 9.8Z" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                <rect x="2.2" y="1.5" width="2.8" height="9" rx="1.1" />
+                <rect x="7" y="1.5" width="2.8" height="9" rx="1.1" />
+              </svg>
+            )}
+          </button>
+          <MosaicSwap swapKey={tourEvent.eventId} className="tour-card-body">
+            <div className="tour-card-top">
+              <CountryFlag event={tourEvent} className="tour-flag" />
+              <strong className="tour-title">
+                <span style={{ color: magnitudeCssColor(tourEvent.magnitude) }}>
+                  {formatMagnitude(tourEvent.magnitude)}
+                </span>{" "}
+                - {normalizedPlace(tourEvent, resolveCountryCode(tourEvent))}
+              </strong>
+            </div>
+            <div
+              className="tour-card-meta"
+              style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px" }}
+            >
+              {formatUtcDateTime(tourEvent.eventTimeUtc)} UTC | Prof: {formatDepth(tourEvent.depthKm)} |
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <i
+                  style={{
+                    width: "10px",
+                    height: "10px",
+                    borderRadius: "2px",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: intensityCssColor(estimatedIntensity(tourEvent))
+                  }}
+                />
+                {normalizedIntensity(tourEvent)}
+              </span>
+            </div>
+            <span className="tour-card-source">Datos: {tourEvent.source}</span>
+          </MosaicSwap>
         </div>
       ) : null}
 
