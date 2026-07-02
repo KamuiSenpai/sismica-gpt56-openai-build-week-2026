@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "mx_claribel": {
+      "label": "Presentadora (ElevenLabs)",
+      "speaker_wav": ".runtime-logs/xtts-voices/eleven_female_ref.wav",
+      "language": "es"
+    },
+    "mx_andrew": {
+      "label": "Presentador (ElevenLabs)",
+      "speaker_wav": ".runtime-logs/xtts-voices/eleven_male_ref.wav",
+      "language": "es"
+    }
+  }
+}

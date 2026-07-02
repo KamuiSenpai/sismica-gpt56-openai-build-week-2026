@@ -2,8 +2,10 @@
 // El API enruta a Piper (binario local) o hace proxy a XTTS-v2 (servicio Python).
 
 export type NeuralEngine = "piper" | "xtts";
+export type NeuralSpeechOptions = { voice?: string; playbackRate?: number };
+export type NeuralSpeechRequest = { text: string; voice?: string };
 
-export type TtsEngineHealth = { ok: boolean; voice?: string; detail?: string };
+export type TtsEngineHealth = { ok: boolean; voice?: string; detail?: string; profiles?: string[] };
 export type TtsHealth = {
   enabled: boolean;
   engines: Record<NeuralEngine, TtsEngineHealth>;
@@ -17,8 +19,8 @@ const PREFETCH_CACHE_LIMIT = 8;
 const blobCache = new Map<string, Blob>();
 const inFlightPrefetch = new Map<string, Promise<Blob | null>>();
 
-function cacheKey(engine: NeuralEngine, text: string): string {
-  return `${engine}|${text}`;
+function cacheKey(engine: NeuralEngine, text: string, voice?: string): string {
+  return `${engine}|${voice ?? "default"}|${text}`;
 }
 
 function rememberBlob(key: string, blob: Blob): void {
@@ -31,11 +33,15 @@ function rememberBlob(key: string, blob: Blob): void {
   }
 }
 
-async function requestNeuralBlob(text: string, engine: NeuralEngine, signal: AbortSignal): Promise<Blob> {
+async function requestNeuralBlob(
+  request: NeuralSpeechRequest,
+  engine: NeuralEngine,
+  signal: AbortSignal
+): Promise<Blob> {
   const response = await fetch(`${API_BASE_URL}/api/tts?engine=${engine}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text: request.text, voice: request.voice }),
     signal
   });
   if (!response.ok) {
@@ -84,13 +90,103 @@ export async function fetchTtsHealth(signal?: AbortSignal): Promise<TtsHealth | 
   }
 }
 
+async function obtainBlob(
+  request: NeuralSpeechRequest,
+  engine: NeuralEngine,
+  controller: AbortController,
+  seq: number
+): Promise<Blob | null> {
+  const key = cacheKey(engine, request.text, request.voice);
+  let blob = blobCache.get(key) ?? null;
+
+  if (!blob && inFlightPrefetch.has(key)) {
+    blob = (await inFlightPrefetch.get(key)) ?? null;
+    if (seq !== requestSeq || controller.signal.aborted) return null;
+    if (!blob) {
+      throw new Error(`TTS ${engine} no disponible desde prefetch`);
+    }
+  }
+
+  if (!blob) {
+    try {
+      blob = await requestNeuralBlob(
+        request,
+        engine,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(SYNTH_TIMEOUT_MS)])
+      );
+    } catch (error) {
+      if (controller.signal.aborted) return null;
+      throw error;
+    }
+
+    if (seq !== requestSeq || controller.signal.aborted) return null;
+    rememberBlob(key, blob);
+  }
+
+  return blob;
+}
+
+function playBlob(blob: Blob, controller: AbortController, seq: number, playbackRate = 1): Promise<void> {
+  if (seq !== requestSeq || controller.signal.aborted) return Promise.resolve();
+
+  stopCurrent();
+
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.playbackRate = playbackRate;
+  currentAudio = audio;
+  currentUrl = url;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      controller.signal.removeEventListener("abort", onAbort);
+      if (currentAudio === audio) stopCurrent();
+      if (error) reject(error);
+      else resolve();
+    };
+
+    const onAbort = () => finish();
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+
+    audio.addEventListener("ended", () => finish(), { once: true });
+    audio.addEventListener(
+      "error",
+      () => {
+        if (seq !== requestSeq || controller.signal.aborted) {
+          finish();
+          return;
+        }
+        finish(new Error("Fallo la reproduccion del audio neural"));
+      },
+      { once: true }
+    );
+
+    void audio.play().catch((error: unknown) => {
+      if (seq !== requestSeq || controller.signal.aborted) {
+        finish();
+        return;
+      }
+      finish(error instanceof Error ? error : new Error(String(error)));
+    });
+  });
+}
+
 // Pre-sintetiza y cachea el audio (best-effort) SIN reproducirlo, para que la reproduccion
 // posterior sea instantanea. Usa su propia peticion: no interfiere con la narracion en curso.
-export async function prefetchNeural(text: string, engine: NeuralEngine): Promise<void> {
-  const key = cacheKey(engine, text);
+export async function prefetchNeural(
+  text: string,
+  engine: NeuralEngine,
+  options: NeuralSpeechOptions = {}
+): Promise<void> {
+  const request: NeuralSpeechRequest = { text, voice: options.voice };
+  const key = cacheKey(engine, request.text, request.voice);
   if (blobCache.has(key) || inFlightPrefetch.has(key)) return;
 
-  const pending = requestNeuralBlob(text, engine, AbortSignal.timeout(SYNTH_TIMEOUT_MS))
+  const pending = requestNeuralBlob(request, engine, AbortSignal.timeout(SYNTH_TIMEOUT_MS))
     .then((blob) => {
       rememberBlob(key, blob);
       return blob;
@@ -109,58 +205,34 @@ export async function prefetchNeural(text: string, engine: NeuralEngine): Promis
 // Sintetiza y reproduce. Lanza SOLO ante un fallo real (motor no disponible, error de red,
 // timeout o fallo de reproduccion) para que el orquestador caiga al respaldo del navegador.
 // Si una narracion mas reciente la supera (o se cancela), termina en silencio sin respaldo.
-export async function speakNeural(text: string, engine: NeuralEngine): Promise<void> {
+export async function speakNeural(
+  text: string,
+  engine: NeuralEngine,
+  options: NeuralSpeechOptions = {}
+): Promise<void> {
   const seq = ++requestSeq;
   activeController?.abort(); // cancela la peticion anterior en vuelo
   const controller = new AbortController();
   activeController = controller;
+  const request: NeuralSpeechRequest = { text, voice: options.voice };
+  const blob = await obtainBlob(request, engine, controller, seq);
+  if (!blob) return;
+  await playBlob(blob, controller, seq, options.playbackRate ?? 1);
+}
 
-  const key = cacheKey(engine, text);
-  let blob = blobCache.get(key) ?? null;
+export async function speakNeuralSequence(
+  requests: Array<NeuralSpeechRequest & { playbackRate?: number }>,
+  engine: NeuralEngine
+): Promise<void> {
+  const seq = ++requestSeq;
+  activeController?.abort();
+  const controller = new AbortController();
+  activeController = controller;
 
-  if (!blob && inFlightPrefetch.has(key)) {
-    blob = (await inFlightPrefetch.get(key)) ?? null;
-    if (seq !== requestSeq || controller.signal.aborted) return; // superada mientras esperaba el prefetch
-    if (!blob) {
-      throw new Error(`TTS ${engine} no disponible desde prefetch`);
-    }
-  }
-
-  if (!blob) {
-    try {
-      blob = await requestNeuralBlob(
-        text,
-        engine,
-        AbortSignal.any([controller.signal, AbortSignal.timeout(SYNTH_TIMEOUT_MS)])
-      );
-    } catch (error) {
-      if (controller.signal.aborted) return; // superada/cancelada: sin respaldo
-      throw error; // timeout o red: el orquestador cae al navegador
-    }
-
-    if (seq !== requestSeq) return; // superada mientras llegaba la respuesta
-    rememberBlob(key, blob);
-  } else if (seq !== requestSeq) {
-    return; // superada antes de reproducir el audio cacheado
-  }
-
-  stopCurrent();
-
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  currentAudio = audio;
-  currentUrl = url;
-
-  const cleanup = () => {
-    if (currentAudio === audio) stopCurrent();
-  };
-  audio.addEventListener("ended", cleanup, { once: true });
-  audio.addEventListener("error", cleanup, { once: true });
-
-  try {
-    await audio.play();
-  } catch (error) {
-    if (seq !== requestSeq || controller.signal.aborted) return; // interrumpida por otra
-    throw error; // fallo real de reproduccion: respaldo del navegador
+  for (const request of requests) {
+    if (seq !== requestSeq || controller.signal.aborted) return;
+    const blob = await obtainBlob(request, engine, controller, seq);
+    if (!blob) return;
+    await playBlob(blob, controller, seq, request.playbackRate ?? 1);
   }
 }

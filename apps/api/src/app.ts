@@ -35,7 +35,12 @@ import {
   TtsUnavailableError
 } from "./services/ttsService.js";
 import { generateNarration, narrationRequestSchema } from "./services/narrationService.js";
-import { generateSegment, segmentRequestSchema } from "./services/segmentService.js";
+import {
+  generateHandoffSegment,
+  generateSegment,
+  handoffRequestSchema,
+  segmentRequestSchema
+} from "./services/segmentService.js";
 import { decideNext, directorStateSchema } from "./services/directorService.js";
 
 function hasValidEngineToken(candidate: string | undefined): boolean {
@@ -200,9 +205,7 @@ export function createApp(streamBroker: StreamBroker) {
       return;
     }
     try {
-      // text = null cuando la IA no esta disponible -> el cliente usa la plantilla.
-      const text = await generateNarration(parsed.data);
-      response.json({ text });
+      response.json({ editorial: await generateNarration(parsed.data) });
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
@@ -215,7 +218,20 @@ export function createApp(streamBroker: StreamBroker) {
       return;
     }
     try {
-      response.json({ text: await generateSegment(parsed.data) });
+      response.json(await generateSegment(parsed.data));
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/segment/handoff", async (request, response) => {
+    const parsed = handoffRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Solicitud de relevo invalida", issues: parsed.error.issues });
+      return;
+    }
+    try {
+      response.json(await generateHandoffSegment(parsed.data));
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }

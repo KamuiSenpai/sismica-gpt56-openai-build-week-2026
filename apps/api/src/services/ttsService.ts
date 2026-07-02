@@ -33,7 +33,7 @@ export const ttsRequestSchema = z.object({
 });
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 
-export type EngineHealth = { ok: boolean; voice?: string; detail?: string };
+export type EngineHealth = { ok: boolean; voice?: string; detail?: string; profiles?: string[] };
 export type TtsHealth = {
   enabled: boolean;
   engines: Record<TtsEngine, EngineHealth>;
@@ -216,7 +216,22 @@ async function xttsHealth(): Promise<EngineHealth> {
     const response = await fetch(`${env.xttsServiceUrl}/health`, {
       signal: AbortSignal.timeout(XTTS_HEALTH_TIMEOUT_MS)
     });
-    value = response.ok ? { ok: true, voice: "xtts-v2" } : { ok: false, detail: `health ${response.status}` };
+    if (!response.ok) {
+      value = { ok: false, detail: `health ${response.status}` };
+    } else {
+      const payload = (await response.json()) as {
+        speaker?: string | null;
+        defaultProfile?: string | null;
+        profiles?: string[] | null;
+      };
+      value = {
+        ok: true,
+        voice: payload.defaultProfile ?? payload.speaker ?? "xtts-v2",
+        profiles: Array.isArray(payload.profiles)
+          ? payload.profiles.filter((item) => typeof item === "string")
+          : []
+      };
+    }
   } catch {
     value = { ok: false, detail: "servicio no accesible" };
   }

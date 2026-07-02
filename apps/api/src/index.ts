@@ -32,4 +32,3 @@ main().catch(async (error) => {
   await pool.end().catch(() => undefined);
   process.exit(1);
 });
-

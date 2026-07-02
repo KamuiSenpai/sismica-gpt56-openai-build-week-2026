@@ -3,8 +3,9 @@ import test from "node:test";
 
 import { type SeismicEvent } from "@sismica/shared";
 
+import { broadcastPlace } from "../src/lib/broadcastPlace";
 import { getEventPlace } from "../src/lib/presentation";
-import { buildSeismicNarration } from "../src/lib/seismicSpeech";
+import { buildSeismicNarration, normalizeSpokenText } from "../src/lib/seismicSpeech";
 
 function makeEvent(overrides: Partial<SeismicEvent> = {}): SeismicEvent {
   return {
@@ -47,7 +48,7 @@ test("buildSeismicNarration turns a seismic card into spoken Spanish", () => {
   const narration = buildSeismicNarration(makeEvent());
   assert.equal(
     narration,
-    "Sismo detectado en Molucca Sea, de magnitud 3.5, a una profundidad de 75 kilometros."
+    "Sismo detectado en Mar de Molucas, de magnitud 3.5, a una profundidad de 75 kilometros."
   );
 });
 
@@ -59,7 +60,7 @@ test("buildSeismicNarration omits missing values cleanly", () => {
       depthKm: null
     })
   );
-  assert.equal(narration, "Sismo detectado en Northern Sumatra, Indonesia.");
+  assert.equal(narration, "Sismo detectado en norte de Sumatra, Indonesia.");
 });
 
 test("buildSeismicNarration appends inferred country for national-source titles", () => {
@@ -73,7 +74,7 @@ test("buildSeismicNarration appends inferred country for national-source titles"
   );
   assert.equal(
     narration,
-    "Sismo detectado en 112 kilometros al O de Caldera, Chile, de magnitud 2.6, a una profundidad de 28 kilometros."
+    "Sismo detectado en 112 kilometros al oeste de Caldera, Chile, de magnitud 2.6, a una profundidad de 28 kilometros."
   );
 });
 
@@ -81,7 +82,7 @@ test("buildSeismicNarration can announce a newly detected quake", () => {
   const narration = buildSeismicNarration(makeEvent(), { intro: "Nuevo sismo detectado" });
   assert.equal(
     narration,
-    "Nuevo sismo detectado en Molucca Sea, de magnitud 3.5, a una profundidad de 75 kilometros."
+    "Nuevo sismo detectado en Mar de Molucas, de magnitud 3.5, a una profundidad de 75 kilometros."
   );
 });
 
@@ -144,6 +145,44 @@ test("buildSeismicNarration expands EE. UU. for speech", () => {
   );
   assert.equal(
     narration,
-    "Sismo detectado en 91 kilometros al sur de Sand Point, Alaska- Estados Unidos, de magnitud 2.7, a una profundidad de 1 kilometro."
+    "Sismo detectado en 91 kilometros al sur de Sand Point, Alaska, Estados Unidos, de magnitud 2.7, a una profundidad de 1 kilometro."
+  );
+});
+
+test("broadcastPlace converts offshore descriptors into broadcast Spanish", () => {
+  const place = broadcastPlace(
+    makeEvent({
+      title: "M2.7 - Offshore Valparaiso, Chile",
+      source: "EMSC"
+    })
+  );
+  assert.equal(place, "Frente a la costa de Valparaiso, Chile");
+});
+
+test("broadcastPlace resolves ISO suffixes into full country names", () => {
+  const place = broadcastPlace(
+    makeEvent({
+      title: "M3.3 - Poland - PL",
+      source: "GEOFON"
+    })
+  );
+  assert.equal(place, "Polonia");
+});
+
+test("buildSeismicNarration appends a closing line when provided", () => {
+  const narration = buildSeismicNarration(makeEvent(), { closing: "Seguimos monitoreando la zona" });
+  assert.equal(
+    narration,
+    "Sismo detectado en Mar de Molucas, de magnitud 3.5, a una profundidad de 75 kilometros. Seguimos monitoreando la zona."
+  );
+});
+
+test("normalizeSpokenText replaces sentence-ending periods with natural pauses", () => {
+  const spoken = normalizeSpokenText(
+    "La magnitud mide la energia del sismo. La intensidad describe sus efectos en un lugar especifico."
+  );
+  assert.equal(
+    spoken,
+    "La magnitud mide la energia del sismo, La intensidad describe sus efectos en un lugar especifico"
   );
 });

@@ -10,52 +10,133 @@ import { z } from "zod";
 import { env } from "../config/env.js";
 import { chat, DeepSeekUnavailableError } from "./deepseekClient.js";
 
+export const editorialCueSchema = z.object({
+  urgency: z.enum(["baja", "media", "alta"]),
+  rhythm: z.enum(["sereno", "fluido", "agil"]),
+  tone: z.enum(["sobrio", "directo", "calido"])
+});
+export type EditorialCue = z.infer<typeof editorialCueSchema>;
+
+export const narrationModeSchema = z.enum(["breaking", "seguimiento"]);
+export type NarrationMode = z.infer<typeof narrationModeSchema>;
+
+export const narrationEditorialSchema = z.object({
+  intro: z.string().trim().min(1).max(80),
+  closing: z.string().trim().max(120).nullable().optional(),
+  cue: editorialCueSchema
+});
+export type NarrationEditorial = {
+  intro: string;
+  closing: string | null;
+  cue: EditorialCue;
+};
+
 export const narrationRequestSchema = z.object({
   eventId: z.string().trim().min(1).max(200),
   title: z.string().trim().min(1).max(300),
+  normalizedPlace: z.string().trim().min(1).max(240),
+  country: z.string().trim().max(80).nullish(),
+  mode: narrationModeSchema.default("seguimiento"),
   magnitude: z.number().finite().nullish(),
   depthKm: z.number().finite().nullish(),
   tsunami: z.boolean().optional(),
-  eventTimeUtc: z.string().trim().min(1).max(40).optional()
+  eventTimeUtc: z.string().trim().min(1).max(40).optional(),
+  updatedAtUtc: z.string().trim().min(1).max(40).nullish()
 });
 export type NarrationRequest = z.infer<typeof narrationRequestSchema>;
 
-// Cache por evento: cada sismo se narra UNA sola vez; el recorrido reutiliza (control de coste).
 const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const cacheDir = env.ttsCacheDir
   ? join(isAbsolute(env.ttsCacheDir) ? env.ttsCacheDir : resolve(REPO_ROOT, env.ttsCacheDir), "narration")
   : null;
 
-const memoryCache = new LRUCache<string, string>({ max: 500 });
+const memoryCache = new LRUCache<string, NarrationEditorial>({ max: 500 });
 let cacheDirReady: Promise<void> | null = null;
 
-function cacheKey(eventId: string): string {
-  return createHash("sha1").update(eventId).digest("hex");
+const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo)\b/iu;
+const SYSTEM_PROMPT =
+  "Eres el editor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
+  'este formato exacto: {"intro":"...","closing":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
+  "No cambies magnitud, profundidad, pais, lugar ni hora. intro debe ser breve y locutable. " +
+  "closing puede ser vacio o una frase corta de seguimiento. No inventes replicas, danos, " +
+  "alertas, riesgo, tsunami ni evacuaciones.";
+
+function fallbackNarrationEditorial(mode: NarrationMode): NarrationEditorial {
+  if (mode === "breaking") {
+    return {
+      intro: "Nuevo sismo detectado",
+      closing: "Seguimos monitoreando la zona",
+      cue: { urgency: "alta", rhythm: "agil", tone: "directo" }
+    };
+  }
+  return {
+    intro: "Sismo detectado",
+    closing: null,
+    cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+  };
 }
 
-async function readDiskCache(key: string): Promise<string | null> {
+function normalizeEditorialText(value: string | null | undefined, keepSentence = false): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.!,;:]+$/u, "");
+  if (!normalized) return null;
+  return keepSentence ? normalized : normalized;
+}
+
+function stripMarkdownFence(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:json)?\s*/iu, "")
+    .replace(/\s*```$/u, "");
+}
+
+function buildNarrationRevision(request: NarrationRequest): string {
+  return JSON.stringify({
+    eventId: request.eventId,
+    title: request.title,
+    normalizedPlace: request.normalizedPlace,
+    country: request.country ?? null,
+    mode: request.mode,
+    magnitude: typeof request.magnitude === "number" ? Number(request.magnitude.toFixed(1)) : null,
+    depthKm: typeof request.depthKm === "number" ? Math.round(request.depthKm) : null,
+    tsunami: request.tsunami === true,
+    eventTimeUtc: request.eventTimeUtc ?? null,
+    updatedAtUtc: request.updatedAtUtc ?? null
+  });
+}
+
+function cacheKey(request: NarrationRequest): string {
+  return createHash("sha1").update(buildNarrationRevision(request)).digest("hex");
+}
+
+async function readDiskCache(key: string): Promise<NarrationEditorial | null> {
   if (!cacheDir) return null;
-  const filePath = join(cacheDir, `${key}.txt`);
+  const filePath = join(cacheDir, `${key}.json`);
   if (!existsSync(filePath)) return null;
   try {
-    return (await readFile(filePath, "utf8")).trim() || null;
+    const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
+    return sanitizeNarrationEditorial(parsed, fallbackNarrationEditorial("seguimiento"));
   } catch {
     return null;
   }
 }
 
-async function writeDiskCache(key: string, text: string): Promise<void> {
+async function writeDiskCache(key: string, editorial: NarrationEditorial): Promise<void> {
   if (!cacheDir) return;
   try {
     if (!cacheDirReady) cacheDirReady = mkdir(cacheDir, { recursive: true }).then(() => undefined);
     await cacheDirReady;
-    await writeFile(join(cacheDir, `${key}.txt`), text, "utf8");
+    await writeFile(join(cacheDir, `${key}.json`), JSON.stringify(editorial), "utf8");
   } catch {
-    // Cache en disco best-effort; un fallo no debe romper la narracion.
+    // Cache en disco best-effort.
   }
 }
 
-// Tope de llamadas por ventana de 60 s: excederlo -> null (el cliente usa la plantilla).
 let windowStart = 0;
 let windowCount = 0;
 function withinRateLimit(): boolean {
@@ -69,26 +150,33 @@ function withinRateLimit(): boolean {
   return true;
 }
 
-const SYSTEM_PROMPT =
-  "Eres el presentador de un canal de monitoreo sismico en directo 24/7. Redacta UNA narracion " +
-  "breve (1 o 2 frases, maximo 35 palabras) en espanol neutro, natural y variada, lista para " +
-  "locutar por voz. Usa solo los datos proporcionados; no inventes cifras. Sin emojis, sin " +
-  "markdown y sin comillas.";
-
 function buildUserMessage(request: NarrationRequest): string {
-  const data: Record<string, unknown> = { titulo: request.title };
-  if (typeof request.magnitude === "number") data.magnitud = request.magnitude;
+  const data: Record<string, unknown> = {
+    modo: request.mode,
+    lugar_normalizado: request.normalizedPlace
+  };
+  if (request.country) data.pais = request.country;
+  if (typeof request.magnitude === "number") data.magnitud = Number(request.magnitude.toFixed(1));
   if (typeof request.depthKm === "number") data.profundidad_km = Math.round(request.depthKm);
-  if (request.tsunami) data.tsunami = true;
-  return `Datos del sismo: ${JSON.stringify(data)}`;
+  return `Contexto del aviso: ${JSON.stringify(data)}`;
 }
 
-// Devuelve la narracion IA (cacheada) o null ante cualquier problema, para que el cliente
-// use la plantilla local (buildSeismicNarration) que ya funciona.
-export async function generateNarration(request: NarrationRequest): Promise<string | null> {
-  if (!env.deepseekEnabled || !env.deepseekApiKey) return null;
+function sanitizeNarrationEditorial(value: unknown, fallback: NarrationEditorial): NarrationEditorial | null {
+  const parsed = narrationEditorialSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const intro = normalizeEditorialText(parsed.data.intro);
+  const closing = normalizeEditorialText(parsed.data.closing, true);
+  if (!intro || UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(intro)) return fallback;
+  if (closing && UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(closing)) {
+    return { ...fallback, intro, cue: parsed.data.cue };
+  }
+  return { intro, closing, cue: parsed.data.cue };
+}
 
-  const key = cacheKey(request.eventId);
+export async function generateNarration(request: NarrationRequest): Promise<NarrationEditorial> {
+  const fallback = fallbackNarrationEditorial(request.mode);
+  const key = cacheKey(request);
+
   const memoryHit = memoryCache.get(key);
   if (memoryHit) return memoryHit;
 
@@ -98,7 +186,7 @@ export async function generateNarration(request: NarrationRequest): Promise<stri
     return diskHit;
   }
 
-  if (!withinRateLimit()) return null;
+  if (!env.deepseekEnabled || !env.deepseekApiKey || !withinRateLimit()) return fallback;
 
   try {
     const raw = await chat(
@@ -106,17 +194,16 @@ export async function generateNarration(request: NarrationRequest): Promise<stri
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: buildUserMessage(request) }
       ],
-      { maxTokens: env.deepseekMaxTokens, temperature: 1.0 }
+      { maxTokens: Math.max(env.deepseekMaxTokens, 180), temperature: 0.65 }
     );
-    const text = raw.replace(/^["']+|["']+$/g, "").trim();
-    if (!text) return null;
-    memoryCache.set(key, text);
-    await writeDiskCache(key, text);
-    return text;
+    const parsed = sanitizeNarrationEditorial(JSON.parse(stripMarkdownFence(raw)), fallback) ?? fallback;
+    memoryCache.set(key, parsed);
+    await writeDiskCache(key, parsed);
+    return parsed;
   } catch (error) {
     if (!(error instanceof DeepSeekUnavailableError)) {
-      console.warn("Fallo generando narracion IA; se usara la plantilla.", error);
+      console.warn("Fallo generando pauta editorial de narracion; se usara fallback local.", error);
     }
-    return null;
+    return fallback;
   }
 }

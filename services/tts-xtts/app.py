@@ -22,9 +22,12 @@ NO comercial. Revisa los terminos antes de un despliegue publico.
 from __future__ import annotations
 
 import io
+import json
 import os
-from threading import Lock
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from threading import Lock
 
 import numpy as np
 import soundfile as sf
@@ -36,10 +39,39 @@ import torch
 # Acepta la licencia del modelo de forma no interactiva (necesario en servidor).
 os.environ.setdefault("COQUI_TOS_AGREED", "1")
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _load_root_env_defaults() -> None:
+    env_path = REPO_ROOT / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        cleaned = value.strip().strip("'").strip('"')
+        os.environ[key] = cleaned
+
+
+def _resolve_repo_path(path_value: str) -> str:
+    candidate = Path(path_value)
+    return str(candidate if candidate.is_absolute() else (REPO_ROOT / candidate).resolve())
+
+
+_load_root_env_defaults()
+
 MODEL_NAME = os.environ.get("XTTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2")
 DEFAULT_LANGUAGE = os.environ.get("XTTS_LANGUAGE", "es")
 DEFAULT_SPEAKER = os.environ.get("XTTS_SPEAKER") or None
 SPEAKER_WAV = os.environ.get("XTTS_SPEAKER_WAV") or None
+VOICE_PROFILES_FILE = os.environ.get("XTTS_VOICE_PROFILES") or None
+DEFAULT_PROFILE = os.environ.get("XTTS_DEFAULT_PROFILE") or None
 
 
 def _resolve_device() -> str:
@@ -59,10 +91,81 @@ class _State:
     device = "cpu"
     sample_rate = 24000
     default_speaker: str | None = None
+    default_profile: str | None = None
+    voice_profiles: dict[str, "VoiceProfile"] = {}
 
 
 state = _State()
 synthesis_lock = Lock()
+
+
+@dataclass(frozen=True)
+class VoiceProfile:
+    profile_id: str
+    speaker_wav: str
+    speaker: str | None = None
+    language: str | None = None
+    label: str | None = None
+
+
+def _load_voice_profiles() -> dict[str, VoiceProfile]:
+    if not VOICE_PROFILES_FILE:
+        return {}
+
+    profile_path = Path(_resolve_repo_path(VOICE_PROFILES_FILE))
+    if not profile_path.exists():
+        raise RuntimeError(f"XTTS_VOICE_PROFILES no encontrado: {profile_path}")
+
+    raw_payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    payload = raw_payload.get("profiles", raw_payload) if isinstance(raw_payload, dict) else raw_payload
+    if not isinstance(payload, dict):
+        raise RuntimeError("XTTS_VOICE_PROFILES debe ser un objeto JSON con ids de perfil")
+
+    profiles: dict[str, VoiceProfile] = {}
+    for profile_id, entry in payload.items():
+        if not isinstance(entry, dict):
+            raise RuntimeError(f"Perfil XTTS invalido: {profile_id}")
+        speaker_wav = entry.get("speaker_wav")
+        if not isinstance(speaker_wav, str) or not speaker_wav.strip():
+            raise RuntimeError(f"Perfil XTTS sin speaker_wav: {profile_id}")
+        resolved_wav = _resolve_repo_path(speaker_wav.strip())
+        if not Path(resolved_wav).exists():
+            raise RuntimeError(f"speaker_wav no encontrado para perfil {profile_id}: {resolved_wav}")
+        profiles[profile_id] = VoiceProfile(
+            profile_id=profile_id,
+            speaker_wav=resolved_wav,
+            speaker=entry.get("speaker") if isinstance(entry.get("speaker"), str) else None,
+            language=entry.get("language") if isinstance(entry.get("language"), str) else None,
+            label=entry.get("label") if isinstance(entry.get("label"), str) else None,
+        )
+    return profiles
+
+
+def _profile_summary() -> list[str]:
+    return sorted(state.voice_profiles.keys())
+
+
+def _resolve_voice_request(requested_voice: str | None, requested_language: str | None) -> tuple[dict, str | None]:
+    profile_id = requested_voice or state.default_profile
+    profile = state.voice_profiles.get(profile_id) if profile_id else None
+    language = requested_language or DEFAULT_LANGUAGE
+    kwargs: dict = {"language": language}
+
+    if profile:
+        kwargs["speaker_wav"] = profile.speaker_wav
+        kwargs["language"] = requested_language or profile.language or language
+        if profile.speaker:
+            kwargs["speaker"] = profile.speaker
+        return kwargs, profile.label or profile.profile_id
+
+    if SPEAKER_WAV:
+        kwargs["speaker_wav"] = _resolve_repo_path(SPEAKER_WAV)
+        return kwargs, Path(kwargs["speaker_wav"]).stem
+
+    speaker = requested_voice or state.default_speaker
+    if speaker:
+        kwargs["speaker"] = speaker
+    return kwargs, speaker
 
 
 def _stabilize_cuda_inference(model) -> None:
@@ -104,7 +207,17 @@ async def lifespan(_app: FastAPI):
     elif not SPEAKER_WAV and speakers:
         state.default_speaker = speakers[0]
 
-    print(f"[xtts] modelo listo en {state.device} (sr={state.sample_rate}, speaker={state.default_speaker})")
+    state.voice_profiles = _load_voice_profiles()
+    if DEFAULT_PROFILE and DEFAULT_PROFILE in state.voice_profiles:
+        state.default_profile = DEFAULT_PROFILE
+    elif state.voice_profiles:
+        state.default_profile = next(iter(state.voice_profiles.keys()))
+
+    print(
+        "[xtts] modelo listo en "
+        f"{state.device} (sr={state.sample_rate}, speaker={state.default_speaker}, "
+        f"default_profile={state.default_profile}, profiles={_profile_summary()})"
+    )
     yield
     state.tts = None
 
@@ -127,6 +240,29 @@ def health() -> dict:
         "device": state.device,
         "sampleRate": state.sample_rate,
         "speaker": state.default_speaker,
+        "defaultProfile": state.default_profile,
+        "profiles": _profile_summary(),
+    }
+
+
+@app.get("/voices")
+def voices() -> dict:
+    speakers = sorted(getattr(state.tts, "speakers", None) or [])
+    profiles = [
+        {
+            "id": profile.profile_id,
+            "label": profile.label or profile.profile_id,
+            "speaker": profile.speaker,
+            "language": profile.language or DEFAULT_LANGUAGE,
+            "speakerWav": profile.speaker_wav,
+        }
+        for profile in state.voice_profiles.values()
+    ]
+    return {
+        "defaultSpeaker": state.default_speaker,
+        "defaultProfile": state.default_profile,
+        "speakers": speakers,
+        "profiles": profiles,
     }
 
 
@@ -135,20 +271,17 @@ def synthesize(request: SynthesizeRequest) -> Response:
     if state.tts is None:
         raise HTTPException(status_code=503, detail="Modelo XTTS no cargado")
 
-    speaker = request.speaker or state.default_speaker
-    language = request.language or DEFAULT_LANGUAGE
-
-    kwargs: dict = {"text": request.text, "language": language}
-    if SPEAKER_WAV:
-        kwargs["speaker_wav"] = SPEAKER_WAV
-    elif speaker:
-        kwargs["speaker"] = speaker
+    voice_kwargs, resolved_voice = _resolve_voice_request(request.speaker, request.language)
+    kwargs: dict = {"text": request.text, **voice_kwargs}
 
     try:
         with synthesis_lock:
             waveform = state.tts.tts(**kwargs)
     except Exception as error:  # noqa: BLE001 - devolvemos 500 con el detalle
-        raise HTTPException(status_code=500, detail=f"Fallo la sintesis: {error}") from error
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fallo la sintesis ({resolved_voice or 'default'}): {error}",
+        ) from error
 
     buffer = io.BytesIO()
     sf.write(buffer, np.asarray(waveform, dtype=np.float32), state.sample_rate, format="WAV", subtype="PCM_16")

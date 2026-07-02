@@ -1,20 +1,40 @@
-// Director/guionista del directo 24/7. Decide QUE se emite a continuacion (por reglas o con
-// DeepSeek) y lo locuta con la voz. Nunca deja aire muerto: si no hay eventos, mete relleno.
 import { useEffect, useRef, type MutableRefObject } from "react";
 
 import { type SeismicEvent } from "@sismica/shared";
 
-import { fetchDirectorDecision, fetchSegmentText, type DirectorSegmentKind } from "./api";
-import { getEventPlace } from "./presentation";
-import { isSeismicNarrationActive, resolveEventNarration, speakText } from "./seismicVoice";
+import { fetchDirectorDecision, fetchHandoffSegment, fetchSegmentText } from "./api";
+import { broadcastPlace } from "./broadcastPlace";
+import {
+  cueToVoiceDelivery,
+  fallbackSegmentCue,
+  type DirectorSegmentKind,
+  type EditorialCue,
+  type SegmentPacket
+} from "./editorial";
+import {
+  getActiveBroadcastHost,
+  getNextBroadcastHost,
+  isSeismicNarrationActive,
+  prefetchDialogue,
+  prefetchText,
+  resolveEventNarration,
+  setActiveBroadcastHost,
+  speakDialogue,
+  speakText,
+  type BroadcastDialogueTurn
+} from "./seismicVoice";
 
 export type DirectorMode = "off" | "rules" | "ai";
-export type BroadcastSegment = { kind: DirectorSegmentKind | "en-vivo"; text: string };
+export type BroadcastSegmentKind = DirectorSegmentKind | "en-vivo" | "relevo";
+export type BroadcastSegment = { kind: BroadcastSegmentKind; text: string; cue?: EditorialCue };
 
-const MIN_SEGMENT_MS = 9_000;
-const RECAP_DUE_MIN = 30;
+const HANDOFF_DUE_MIN = 30;
+const RECAP_DUE_MIN = 60;
+const EDUCATION_DUE_MIN = 8;
+const EDUCATION_REPEAT_WINDOW_MS = 60 * 60_000;
+const BULLETIN_WINDOWS: Array<60 | 30 | 15> = [60, 30, 15];
+const HANDOFF_CUE: EditorialCue = { urgency: "media", rhythm: "fluido", tone: "directo" };
 
-// Temas didacticos (rotan) con texto de respaldo si /api/segment falla por red.
 const EDUCATIVO_TOPICS: Array<{ topic: string; fallback: string }> = [
   {
     topic: "escala de magnitud logaritmica",
@@ -41,11 +61,6 @@ const EDUCATIVO_TOPICS: Array<{ topic: string; fallback: string }> = [
       "Un sismo superficial suele sentirse mas que uno profundo de igual magnitud, porque la energia viaja menos."
   },
   {
-    topic: "replicas",
-    fallback:
-      "Tras un gran terremoto es normal que haya replicas durante dias, casi siempre de menor magnitud."
-  },
-  {
     topic: "tsunamis",
     fallback: "Un sismo submarino grande y superficial puede desplazar el agua y generar un tsunami."
   },
@@ -69,13 +84,137 @@ type DirectorState = {
   recentCount: number;
   minutesSinceRecap: number;
   minutesSinceEducativo: number;
+  minutesSinceRecommendation: number;
   biggestRecentMagnitude: number | null;
 };
 
-function rulesDecision(state: DirectorState): DirectorSegmentKind {
+function rulesDecision(state: DirectorState): Exclude<DirectorSegmentKind, "boletin"> {
   if (state.minutesSinceRecap >= RECAP_DUE_MIN && state.recentCount > 0) return "resumen";
   if (state.recentCount === 0) return "educativo";
-  return state.minutesSinceEducativo >= 3 ? "educativo" : "recorrido";
+  return state.minutesSinceEducativo >= EDUCATION_DUE_MIN ? "educativo" : "recorrido";
+}
+
+function pickEducationalTopic(
+  topics: Array<{ topic: string; fallback: string }>,
+  recentTopics: Map<string, number>,
+  now: number
+): { topic: string; fallback: string } {
+  const eligible = topics.filter(
+    (entry) => now - (recentTopics.get(entry.topic) ?? 0) >= EDUCATION_REPEAT_WINDOW_MS
+  );
+  const pool = eligible.length > 0 ? eligible : topics;
+  return pool.reduce((oldest, entry) => {
+    const oldestAt = recentTopics.get(oldest.topic) ?? 0;
+    const entryAt = recentTopics.get(entry.topic) ?? 0;
+    return entryAt < oldestAt ? entry : oldest;
+  }, pool[0]);
+}
+
+function normalizeAiKind(
+  kind: Exclude<DirectorSegmentKind, "boletin">,
+  state: DirectorState
+): Exclude<DirectorSegmentKind, "boletin"> {
+  if (kind === "resumen" && (state.minutesSinceRecap < RECAP_DUE_MIN || state.recentCount === 0)) {
+    return rulesDecision(state);
+  }
+  if (kind === "educativo" && state.minutesSinceEducativo < EDUCATION_DUE_MIN) {
+    return state.recentCount === 0 ? "educativo" : "recorrido";
+  }
+  return kind;
+}
+
+function fallbackHandoff(
+  currentHost: string,
+  nextHost: string
+): {
+  overlayText: string;
+  currentHostLine: string;
+  nextHostLine: string;
+} {
+  return {
+    overlayText: `${currentHost} cede el monitoreo a ${nextHost}. Seguimos con cobertura sismica continua.`,
+    currentHostLine: `${nextHost}, te cedo la posta del monitoreo. Seguimos atentos a cualquier actualizacion sismica.`,
+    nextHostLine: `Con gusto, ${currentHost}. Tomo la posta y seguimos con el monitoreo sismico en tiempo real.`
+  };
+}
+
+function eventTimeMs(event: SeismicEvent): number {
+  return new Date(event.eventTimeUtc).getTime();
+}
+
+function pickBiggest(events: SeismicEvent[]): SeismicEvent | null {
+  return events.reduce<SeismicEvent | null>(
+    (best, event) => ((event.magnitude ?? -1) > (best?.magnitude ?? -1) ? event : best),
+    null
+  );
+}
+
+function eventArea(event: SeismicEvent): string {
+  const place = broadcastPlace(event);
+  const parts = place
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length > 1 ? (parts[parts.length - 1] ?? place) : place;
+}
+
+function topAreas(events: SeismicEvent[]): string[] {
+  const counts = new Map<string, number>();
+  for (const event of events) {
+    const area = eventArea(event);
+    counts.set(area, (counts.get(area) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "es"))
+    .slice(0, 3)
+    .map(([area]) => area);
+}
+
+function joinAreas(areas: string[]): string {
+  if (areas.length === 0) return "";
+  if (areas.length === 1) return areas[0] ?? "";
+  if (areas.length === 2) return `${areas[0]} y ${areas[1]}`;
+  return `${areas[0]}, ${areas[1]} y ${areas[2]}`;
+}
+
+function comparisonText(currentCount: number, previousCount: number, windowMinutes: number): string {
+  const delta = currentCount - previousCount;
+  if (delta > 0) return `${delta} mas que en los ${windowMinutes} minutos previos`;
+  if (delta < 0) return `${Math.abs(delta)} menos que en los ${windowMinutes} minutos previos`;
+  return `sin cambio frente a los ${windowMinutes} minutos previos`;
+}
+
+function fallbackBulletinPacket(
+  windowMinutes: 15 | 30 | 60,
+  currentCount: number,
+  previousCount: number,
+  biggest: SeismicEvent | null,
+  activeAreas: string[]
+): SegmentPacket {
+  const parts = [
+    `Boletin de ${windowMinutes} minutos: ${currentCount} sismos detectados, ${comparisonText(currentCount, previousCount, windowMinutes)}.`
+  ];
+  if (typeof biggest?.magnitude === "number") {
+    parts.push(`La mayor magnitud fue ${biggest.magnitude.toFixed(1)} en ${broadcastPlace(biggest)}.`);
+  }
+  if (activeAreas.length > 0) {
+    parts.push(`Actividad concentrada en ${joinAreas(activeAreas)}.`);
+  }
+  return {
+    text: parts.join(" "),
+    cue: fallbackSegmentCue("boletin", {
+      windowMinutes,
+      biggestMagnitude: biggest?.magnitude ?? null,
+      currentCount
+    })
+  };
+}
+
+function segmentCue(kind: BroadcastSegmentKind, cue?: EditorialCue): EditorialCue {
+  if (cue) return cue;
+  if (kind === "relevo") return HANDOFF_CUE;
+  if (kind === "en-vivo") return { urgency: "alta", rhythm: "agil", tone: "directo" };
+  return fallbackSegmentCue(kind);
 }
 
 export function useBroadcastDirector(params: {
@@ -98,17 +237,25 @@ export function useBroadcastDirector(params: {
 
   const busyRef = useRef(false);
   const airingUntilRef = useRef(0);
+  const lastHandoffAtRef = useRef(0);
   const lastRecapAtRef = useRef(0);
   const lastEducativoAtRef = useRef(0);
-  const eduIndexRef = useRef(0);
+  const lastBulletinAtRef = useRef<Record<15 | 30 | 60, number>>({ 15: 0, 30: 0, 60: 0 });
+  const recentEducationalTopicsRef = useRef(new Map<string, number>());
   const tourIndexRef = useRef(-1);
 
   useEffect(() => {
     if (mode === "off") return;
-    // Arranca mostrando actividad, no un resumen/educativo: marca ambos como recientes.
+
     const startedAt = Date.now();
+    if (lastHandoffAtRef.current === 0) lastHandoffAtRef.current = startedAt;
     if (lastRecapAtRef.current === 0) lastRecapAtRef.current = startedAt;
     if (lastEducativoAtRef.current === 0) lastEducativoAtRef.current = startedAt;
+    for (const windowMinutes of BULLETIN_WINDOWS) {
+      if (lastBulletinAtRef.current[windowMinutes] === 0) {
+        lastBulletinAtRef.current[windowMinutes] = startedAt;
+      }
+    }
 
     const computeState = (): DirectorState => {
       const events = eventsRef.current;
@@ -119,6 +266,7 @@ export function useBroadcastDirector(params: {
         recentCount: events.length,
         minutesSinceRecap: (now - lastRecapAtRef.current) / 60_000,
         minutesSinceEducativo: (now - lastEducativoAtRef.current) / 60_000,
+        minutesSinceRecommendation: Number.POSITIVE_INFINITY,
         biggestRecentMagnitude: biggest || null
       };
     };
@@ -131,55 +279,151 @@ export function useBroadcastDirector(params: {
     };
 
     const air = (segment: BroadcastSegment) => {
-      onSegmentRef.current(segment);
-      airingUntilRef.current = Date.now() + MIN_SEGMENT_MS;
-      if (voiceEnabled) speakText(segment.text);
+      const cue = segmentCue(segment.kind, segment.cue);
+      const delivery = cueToVoiceDelivery(cue, { text: segment.text, kind: segment.kind });
+      const payload = { ...segment, cue };
+      onSegmentRef.current(payload);
+      airingUntilRef.current = Date.now() + delivery.minDurationMs;
+      if (voiceEnabled) {
+        prefetchText(payload.text);
+        speakText(payload.text, { cue, kind: payload.kind });
+      }
     };
 
-    const airEvent = async (event: SeismicEvent, kind: BroadcastSegment["kind"], intro?: string) => {
-      const text = await resolveEventNarration(event, intro ? { intro } : {});
+    const airEvent = async (event: SeismicEvent, kind: BroadcastSegmentKind, intro?: string) => {
+      const narration = await resolveEventNarration(event, {
+        intro,
+        mode: kind === "en-vivo" ? "breaking" : "seguimiento"
+      });
       onFocusRef.current(event.eventId);
-      air({ kind, text });
+      air({ kind, text: narration.text, cue: narration.cue });
+    };
+
+    const airHandoff = async () => {
+      const currentHost = getActiveBroadcastHost();
+      const nextHost = getNextBroadcastHost(currentHost.id);
+      const script =
+        (await fetchHandoffSegment(currentHost.name, nextHost.name)) ??
+        fallbackHandoff(currentHost.name, nextHost.name);
+      const turns: BroadcastDialogueTurn[] = [
+        {
+          hostId: currentHost.id,
+          speakerName: currentHost.name,
+          text: script.currentHostLine
+        },
+        {
+          hostId: nextHost.id,
+          speakerName: nextHost.name,
+          text: script.nextHostLine
+        }
+      ];
+
+      setActiveBroadcastHost(nextHost.id);
+      lastHandoffAtRef.current = Date.now();
+      onSegmentRef.current({ kind: "relevo", text: script.overlayText, cue: HANDOFF_CUE });
+      airingUntilRef.current =
+        Date.now() +
+        cueToVoiceDelivery(HANDOFF_CUE, { text: script.overlayText, kind: "relevo" }).minDurationMs;
+      if (voiceEnabled) {
+        prefetchDialogue(turns);
+        speakDialogue(turns);
+      }
     };
 
     const airResumen = async () => {
       const events = eventsRef.current;
       const hourAgo = Date.now() - 3_600_000;
-      const totalLastHour = events.filter(
-        (event) => new Date(event.eventTimeUtc).getTime() >= hourAgo
-      ).length;
-      const biggest = events.reduce<SeismicEvent | null>(
-        (best, event) => ((event.magnitude ?? -1) > (best?.magnitude ?? -1) ? event : best),
-        null
-      );
-      const place = biggest ? getEventPlace(biggest.title) : null;
-      const base = `En la ultima hora se registraron ${totalLastHour} sismos`;
-      const fallback =
-        biggest && place
-          ? `${base}; el mayor, magnitud ${(biggest.magnitude ?? 0).toFixed(1)} en ${place}.`
-          : `${base}.`;
-      const text =
+      const windowEvents = events.filter((event) => eventTimeMs(event) >= hourAgo);
+      const biggest = pickBiggest(windowEvents);
+      const fallback: SegmentPacket = {
+        text:
+          biggest && typeof biggest.magnitude === "number"
+            ? `En la ultima hora se registraron ${windowEvents.length} sismos; el mayor, magnitud ${biggest.magnitude.toFixed(1)} en ${broadcastPlace(biggest)}.`
+            : `En la ultima hora se registraron ${windowEvents.length} sismos.`,
+        cue: fallbackSegmentCue("resumen")
+      };
+      const packet =
         (await fetchSegmentText({
           kind: "resumen",
-          totalLastHour,
+          totalLastHour: windowEvents.length,
           biggestMagnitude: biggest?.magnitude ?? null,
-          biggestPlace: place
+          biggestPlace: biggest ? broadcastPlace(biggest) : null
         })) ?? fallback;
       lastRecapAtRef.current = Date.now();
-      air({ kind: "resumen", text });
+      air({ kind: "resumen", text: packet.text, cue: packet.cue });
     };
 
     const airEducativo = async () => {
-      const idx = eduIndexRef.current % EDUCATIVO_TOPICS.length;
-      eduIndexRef.current = idx + 1;
-      const { topic, fallback } = EDUCATIVO_TOPICS[idx];
-      const text = (await fetchSegmentText({ kind: "educativo", topic })) ?? fallback;
-      lastEducativoAtRef.current = Date.now();
-      air({ kind: "educativo", text });
+      const now = Date.now();
+      const { topic, fallback } = pickEducationalTopic(
+        EDUCATIVO_TOPICS,
+        recentEducationalTopicsRef.current,
+        now
+      );
+      const packet = (await fetchSegmentText({ kind: "educativo", topic })) ?? {
+        text: fallback,
+        cue: fallbackSegmentCue("educativo")
+      };
+      recentEducationalTopicsRef.current.set(topic, now);
+      lastEducativoAtRef.current = now;
+      air({ kind: "educativo", text: packet.text, cue: packet.cue });
+    };
+
+    const dueBulletinWindow = (now: number): 15 | 30 | 60 | null => {
+      for (const windowMinutes of BULLETIN_WINDOWS) {
+        const elapsed = (now - lastBulletinAtRef.current[windowMinutes]) / 60_000;
+        if (elapsed >= windowMinutes) return windowMinutes;
+      }
+      return null;
+    };
+
+    const markBulletinAired = (windowMinutes: 15 | 30 | 60, now: number) => {
+      lastBulletinAtRef.current[windowMinutes] = now;
+      if (windowMinutes >= 30) lastBulletinAtRef.current[15] = now;
+      if (windowMinutes === 60) {
+        lastBulletinAtRef.current[30] = now;
+        lastRecapAtRef.current = now;
+      }
+    };
+
+    const airBulletin = async (windowMinutes: 15 | 30 | 60) => {
+      const now = Date.now();
+      const currentStart = now - windowMinutes * 60_000;
+      const previousStart = now - windowMinutes * 120_000;
+      const events = eventsRef.current;
+      const currentEvents = events.filter((event) => {
+        const time = eventTimeMs(event);
+        return time >= currentStart && time <= now;
+      });
+      const previousEvents = events.filter((event) => {
+        const time = eventTimeMs(event);
+        return time >= previousStart && time < currentStart;
+      });
+      const biggest = pickBiggest(currentEvents);
+      const activeAreas = topAreas(currentEvents);
+      const packet =
+        (await fetchSegmentText({
+          kind: "boletin",
+          windowMinutes,
+          currentCount: currentEvents.length,
+          previousCount: previousEvents.length,
+          biggestMagnitude: biggest?.magnitude ?? null,
+          biggestPlace: biggest ? broadcastPlace(biggest) : null,
+          activeAreas,
+          regionalFocus: activeAreas[0] ?? null
+        })) ??
+        fallbackBulletinPacket(
+          windowMinutes,
+          currentEvents.length,
+          previousEvents.length,
+          biggest,
+          activeAreas
+        );
+      markBulletinAired(windowMinutes, now);
+      air({ kind: "boletin", text: packet.text, cue: packet.cue });
     };
 
     const airNext = async () => {
-      // 1) Sismo EN VIVO (breaking) primero, en ambos modos.
       const queue = queueRef.current;
       const live = queue && queue.length > 0 ? queue.shift() : null;
       if (live) {
@@ -187,17 +431,26 @@ export function useBroadcastDirector(params: {
         return;
       }
 
-      // 2) Elegir el siguiente segmento: reglas o DeepSeek (modo IA).
+      if ((Date.now() - lastHandoffAtRef.current) / 60_000 >= HANDOFF_DUE_MIN) {
+        await airHandoff();
+        return;
+      }
+
+      const bulletinWindow = dueBulletinWindow(Date.now());
+      if (bulletinWindow) {
+        await airBulletin(bulletinWindow);
+        return;
+      }
+
       const state = computeState();
-      let kind: DirectorSegmentKind;
+      let kind: Exclude<DirectorSegmentKind, "boletin">;
       if (mode === "ai") {
         const decision = await fetchDirectorDecision(state);
-        kind = decision?.kind ?? rulesDecision(state);
+        kind = normalizeAiKind(decision?.kind ?? rulesDecision(state), state);
       } else {
         kind = rulesDecision(state);
       }
 
-      // 3) Ejecutar (recorrido sin eventos -> educativo).
       if (kind === "recorrido") {
         const event = nextTourEvent();
         if (event) {
@@ -206,17 +459,19 @@ export function useBroadcastDirector(params: {
         }
         kind = "educativo";
       }
+
       if (kind === "resumen") {
         await airResumen();
         return;
       }
+
       await airEducativo();
     };
 
     const intervalId = window.setInterval(() => {
       if (busyRef.current) return;
-      if (voiceEnabled && isSeismicNarrationActive()) return; // no tapar la voz en curso
-      if (Date.now() < airingUntilRef.current) return; // piso de tiempo por segmento
+      if (voiceEnabled && isSeismicNarrationActive()) return;
+      if (Date.now() < airingUntilRef.current) return;
       busyRef.current = true;
       void airNext().finally(() => {
         busyRef.current = false;

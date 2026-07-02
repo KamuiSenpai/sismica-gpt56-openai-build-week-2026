@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -69,12 +69,32 @@ const DIRECTOR_MODE_LABELS: Record<DirectorMode, string> = {
 const SEGMENT_LABELS: Record<BroadcastSegment["kind"], string> = {
   "en-vivo": "EN VIVO",
   recorrido: "RECORRIDO",
+  boletin: "BOLETIN",
   resumen: "RESUMEN",
-  educativo: "DATO"
+  educativo: "CONTEXTO",
+  relevo: "CABINA"
+};
+const SEGMENT_TITLES: Record<BroadcastSegment["kind"], string> = {
+  "en-vivo": "Actualizacion sismica",
+  recorrido: "Evento en seguimiento",
+  boletin: "Boletin automatico",
+  resumen: "Resumen operativo",
+  educativo: "Contexto sismico",
+  relevo: "Cambio de locutor"
 };
 
 function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | null): SeismicEvent | null {
   return selectedEventId ? (events.find((event) => event.eventId === selectedEventId) ?? null) : null;
+}
+
+function directorOverlayStyle(text: string): CSSProperties {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const length = normalized.length;
+  const targetLines = length <= 72 ? 1 : length <= 132 ? 2 : 3;
+  const idealChars = clampNumber(Math.ceil((length + 18) / targetLines), 36, 68);
+  return {
+    ["--director-overlay-ideal-ch" as string]: `${idealChars}ch`
+  };
 }
 
 const MAGNITUDE_SCALE_LEVELS = [9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
@@ -509,9 +529,17 @@ export default function App() {
 
       <section className="monitor-stage">
         {directorMode !== "off" && overlaySegment ? (
-          <div className={`director-overlay director-${overlaySegment.kind}`}>
-            <span className="director-overlay-kind">{SEGMENT_LABELS[overlaySegment.kind]}</span>
-            <span className="director-overlay-text">{overlaySegment.text}</span>
+          <div
+            className={`director-overlay director-${overlaySegment.kind}`}
+            style={directorOverlayStyle(overlaySegment.text)}
+          >
+            <header className="director-overlay-header">
+              <strong>{SEGMENT_TITLES[overlaySegment.kind]}</strong>
+              <span className="director-overlay-kind">{SEGMENT_LABELS[overlaySegment.kind]}</span>
+            </header>
+            <div className="director-overlay-body">
+              <span className="director-overlay-text">{overlaySegment.text}</span>
+            </div>
           </div>
         ) : null}
         <MapPanel

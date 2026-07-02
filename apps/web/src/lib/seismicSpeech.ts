@@ -1,6 +1,6 @@
 import { type SeismicEvent } from "@sismica/shared";
 
-import { countryCode, countryNameEs, getEventPlace } from "./presentation";
+import { broadcastPlace } from "./broadcastPlace";
 
 const DEFAULT_SPEECH_LANG = "es-PE";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
@@ -17,8 +17,18 @@ function expandSpokenAbbreviations(text: string): string {
   return text.replace(/\bEE\.?\s*UU\.?\b/gu, "Estados Unidos").replace(/\bEEUU\b/gu, "Estados Unidos");
 }
 
-function trimNarrationTail(text: string): string {
-  return text.replace(/[\s,.-]+$/u, "");
+export function normalizeSpokenText(text: string): string {
+  return expandSpokenAbbreviations(text)
+    .replace(/\s*[\r\n]+\s*/gu, ", ")
+    .replace(/\u2026/gu, ", ")
+    .replace(/\s*[;:!?]+\s*/gu, ", ")
+    .replace(/\.(?=\s+\p{Lu})/gu, ",")
+    .replace(/\.(?=\s*$)/gu, "")
+    .replace(/\s+,/gu, ",")
+    .replace(/,\s*,+/gu, ", ")
+    .replace(/\s{2,}/gu, " ")
+    .replace(/,\s*$/gu, "")
+    .trim();
 }
 
 function formatSpokenKilometers(value: number | string): string {
@@ -91,30 +101,45 @@ function normalizeNarrationPlace(place: string): string {
   const normalizedUnits = place.replace(/(\d+(?:[.,]\d+)?)\s*km\b/giu, (_match, rawDistance: string) =>
     formatSpokenKilometers(rawDistance)
   );
-  const spokenAbbreviations = expandSpokenAbbreviations(normalizedUnits);
+  const spokenDirections = normalizedUnits.replace(
+    /\bal\s+(NNO|NNE|ENE|ESE|SSE|SSO|OSO|ONO|NO|NE|SO|SE|N|S|E|O)\s+de\b/giu,
+    (_match, rawDirection: string) => {
+      const labelMap: Record<string, string> = {
+        N: "norte",
+        S: "sur",
+        E: "este",
+        O: "oeste",
+        NE: "noreste",
+        NO: "noroeste",
+        SE: "sureste",
+        SO: "suroeste",
+        NNE: "norte-noreste",
+        ENE: "este-noreste",
+        ESE: "este-sureste",
+        SSE: "sur-sureste",
+        SSO: "sur-suroeste",
+        OSO: "oeste-suroeste",
+        ONO: "oeste-noroeste",
+        NNO: "norte-noroeste"
+      };
+      return `al ${labelMap[rawDirection.toUpperCase()] ?? rawDirection.toLowerCase()} de`;
+    }
+  );
+  const spokenAbbreviations = expandSpokenAbbreviations(spokenDirections);
   if (!NARRATION_DESCRIPTOR_PATTERN.test(spokenAbbreviations)) return spokenAbbreviations;
   return spokenAbbreviations.replace(/^(\p{L})/u, (match) => match.toLocaleLowerCase("es"));
 }
 
 function resolveNarrationPlace(event: SeismicEvent): string {
-  const place = normalizeNarrationPlace(getEventPlace(event.title).trim());
-  if (!place) return "ubicacion no identificada";
-
-  const inferredCountry = countryNameEs(countryCode(event));
-  const spokenCountry = inferredCountry ? expandSpokenAbbreviations(inferredCountry) : null;
-  if (!spokenCountry) return place;
-  if (
-    trimNarrationTail(place)
-      .toLocaleLowerCase("es")
-      .endsWith(trimNarrationTail(spokenCountry).toLocaleLowerCase("es"))
-  ) {
-    return trimNarrationTail(place);
-  }
-  return `${place}, ${spokenCountry}`;
+  const place = normalizeNarrationPlace(broadcastPlace(event).trim());
+  return place || "ubicacion no identificada";
 }
 
-export function buildSeismicNarration(event: SeismicEvent, options: { intro?: string } = {}): string {
-  const place = resolveNarrationPlace(event);
+export function buildSeismicNarration(
+  event: SeismicEvent,
+  options: { intro?: string; place?: string; closing?: string | null } = {}
+): string {
+  const place = options.place?.trim() ? normalizeNarrationPlace(options.place) : resolveNarrationPlace(event);
   const intro = options.intro?.trim() || DEFAULT_NARRATION_INTRO;
   const segments = [`${intro} en ${place}`];
 
@@ -126,13 +151,15 @@ export function buildSeismicNarration(event: SeismicEvent, options: { intro?: st
     segments.push(`a una profundidad de ${formatSpokenKilometers(Math.round(event.depthKm))}`);
   }
 
-  return `${segments.join(", ")}.`;
+  const narration = `${segments.join(", ")}.`;
+  const closing = options.closing?.trim().replace(/[.!,;:]+$/u, "") ?? "";
+  return closing ? `${narration} ${closing}.` : narration;
 }
 
 export function speakSeismicNarration(
   event: SeismicEvent,
   enabled: boolean,
-  options: { force?: boolean; intro?: string; text?: string } = {}
+  options: { force?: boolean; intro?: string; text?: string; closing?: string | null; rate?: number } = {}
 ): boolean {
   if (!enabled || !voiceEnabled) return false;
 
@@ -146,13 +173,13 @@ export function speakSeismicNarration(
   }
 
   // Texto explicito (p. ej. narracion IA) o la plantilla local.
-  const narration = options.text?.trim() || buildSeismicNarration(event, options);
+  const narration = normalizeSpokenText(options.text?.trim() || buildSeismicNarration(event, options));
   const utterance = new SpeechSynthesisUtterance(narration);
   const voice = pickPreferredVoice(synth.getVoices());
 
   utterance.lang = voice?.lang ?? DEFAULT_SPEECH_LANG;
   if (voice) utterance.voice = voice;
-  utterance.rate = 1.02;
+  utterance.rate = options.rate ?? 1.02;
   utterance.pitch = 1;
   utterance.volume = 1;
 
@@ -165,18 +192,18 @@ export function speakSeismicNarration(
 }
 
 // Locuta un texto arbitrario (segmentos del director) por la voz del navegador.
-export function speakSeismicText(text: string): boolean {
+export function speakSeismicText(text: string, options: { rate?: number } = {}): boolean {
   if (!voiceEnabled) return false;
   const synth = getSpeechSynthesis();
   if (!synth) return false;
-  const value = text.trim();
+  const value = normalizeSpokenText(text.trim());
   if (!value) return false;
 
   const utterance = new SpeechSynthesisUtterance(value);
   const voice = pickPreferredVoice(synth.getVoices());
   utterance.lang = voice?.lang ?? DEFAULT_SPEECH_LANG;
   if (voice) utterance.voice = voice;
-  utterance.rate = 1.02;
+  utterance.rate = options.rate ?? 1.02;
   utterance.pitch = 1;
   utterance.volume = 1;
 

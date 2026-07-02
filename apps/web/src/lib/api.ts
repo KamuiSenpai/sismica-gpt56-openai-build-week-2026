@@ -12,6 +12,8 @@ import {
   type UsgsGeoJson
 } from "@sismica/shared";
 
+import type { DirectorSegmentKind, NarrationEditorial, NarrationMode, SegmentPacket } from "./editorial";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 
 type EventsResponse = {
@@ -176,9 +178,16 @@ export async function fetchTopMagnitude(limit = 10): Promise<SeismicEvent[]> {
   }
 }
 
-// Narracion variada por IA (DeepSeek). Devuelve null ante cualquier fallo o si la IA no
-// esta disponible, para que el llamador use la plantilla local (buildSeismicNarration).
-export async function fetchAiNarration(event: SeismicEvent): Promise<string | null> {
+// Pauta editorial de narracion. El backend devuelve solo intro/remate/cue; el texto final
+// se reconstruye localmente con datos deterministas de la tarjeta.
+export async function fetchNarrationEditorial(
+  event: SeismicEvent,
+  input: {
+    normalizedPlace: string;
+    country?: string | null;
+    mode?: NarrationMode;
+  }
+): Promise<NarrationEditorial | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/narration`, {
       method: "POST",
@@ -186,15 +195,19 @@ export async function fetchAiNarration(event: SeismicEvent): Promise<string | nu
       body: JSON.stringify({
         eventId: event.eventId,
         title: event.title,
+        normalizedPlace: input.normalizedPlace,
+        country: input.country ?? null,
+        mode: input.mode ?? "seguimiento",
         magnitude: event.magnitude,
         depthKm: event.depthKm,
         tsunami: event.tsunami,
-        eventTimeUtc: event.eventTimeUtc
+        eventTimeUtc: event.eventTimeUtc,
+        updatedAtUtc: event.updatedAtUtc
       })
     });
     if (!response.ok) return null;
-    const payload = (await response.json()) as { text: string | null };
-    return payload.text ?? null;
+    const payload = (await response.json()) as { editorial: NarrationEditorial | null };
+    return payload.editorial ?? null;
   } catch {
     return null;
   }
@@ -202,18 +215,28 @@ export async function fetchAiNarration(event: SeismicEvent): Promise<string | nu
 
 // --- Director del directo (segmentos + decision IA) ---
 
-export type DirectorSegmentKind = "recorrido" | "resumen" | "educativo";
-
 type SegmentInput = {
-  kind: "resumen" | "educativo";
+  kind: DirectorSegmentKind | "recomendacion";
   totalLastHour?: number | null;
   biggestMagnitude?: number | null;
   biggestPlace?: string | null;
   topic?: string | null;
+  windowMinutes?: 15 | 30 | 60;
+  currentCount?: number | null;
+  previousCount?: number | null;
+  activeAreas?: string[];
+  regionalFocus?: string | null;
 };
 
-// Texto de un segmento de relleno/periodico (resumen/educativo). null solo ante fallo de red.
-export async function fetchSegmentText(input: SegmentInput): Promise<string | null> {
+export type HandoffSegmentPayload = {
+  overlayText: string;
+  currentHostLine: string;
+  nextHostLine: string;
+};
+
+// Texto editorial de un segmento del director. null solo ante fallo de red; el director
+// usa fallback local para texto y cue.
+export async function fetchSegmentText(input: SegmentInput): Promise<SegmentPacket | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/segment`, {
       method: "POST",
@@ -221,8 +244,24 @@ export async function fetchSegmentText(input: SegmentInput): Promise<string | nu
       body: JSON.stringify(input)
     });
     if (!response.ok) return null;
-    const payload = (await response.json()) as { text: string | null };
-    return payload.text ?? null;
+    return (await response.json()) as SegmentPacket;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchHandoffSegment(
+  currentHost: string,
+  nextHost: string
+): Promise<HandoffSegmentPayload | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/segment/handoff`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currentHost, nextHost })
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as HandoffSegmentPayload;
   } catch {
     return null;
   }
@@ -233,13 +272,14 @@ type DirectorState = {
   recentCount: number;
   minutesSinceRecap: number;
   minutesSinceEducativo: number;
+  minutesSinceRecommendation: number;
   biggestRecentMagnitude?: number | null;
 };
 
 // Modo inteligente: DeepSeek decide el siguiente segmento. null ante fallo (el director usa reglas).
 export async function fetchDirectorDecision(
   state: DirectorState
-): Promise<{ kind: DirectorSegmentKind; source: "ai" | "rules" } | null> {
+): Promise<{ kind: Exclude<DirectorSegmentKind, "boletin">; source: "ai" | "rules" } | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/director/decide`, {
       method: "POST",
@@ -247,7 +287,10 @@ export async function fetchDirectorDecision(
       body: JSON.stringify(state)
     });
     if (!response.ok) return null;
-    return (await response.json()) as { kind: DirectorSegmentKind; source: "ai" | "rules" };
+    return (await response.json()) as {
+      kind: Exclude<DirectorSegmentKind, "boletin">;
+      source: "ai" | "rules";
+    };
   } catch {
     return null;
   }
