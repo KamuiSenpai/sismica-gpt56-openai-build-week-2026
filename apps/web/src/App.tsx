@@ -131,6 +131,10 @@ export default function App() {
   const eventsRef = useRef(events);
   eventsRef.current = events;
   const pendingVoiceIntroRef = useRef<{ eventId: string; intro: string } | null>(null);
+  // Cola de sismos EN VIVO que llegaron mientras la voz narraba: se anuncian al terminar.
+  const pendingLiveQueueRef = useRef<SeismicEvent[]>([]);
+  const promotedLiveAtRef = useRef<number | null>(null);
+  const sawNarrationRef = useRef(false);
   const statuses = useSourceStatusesQuery().data ?? [];
   const disasters = useDisastersQuery().data ?? [];
   const tsunamiProducts = useTsunamiQuery().data ?? [];
@@ -165,32 +169,67 @@ export default function App() {
       const isNewLive =
         !current.some((item) => item.eventId === incomingEvent.eventId) &&
         (incomingEvent.magnitude === null || incomingEvent.magnitude >= minMagnitude);
-      const shouldInterruptNarration = isNewLive && !tourPaused && voiceEnabled && isSeismicNarrationActive();
-      if (shouldInterruptNarration) {
-        pendingVoiceIntroRef.current = {
-          eventId: incomingEvent.eventId,
-          intro: "Nuevo sismo detectado"
-        };
-      }
+
+      // Pre-sintetiza ya la narracion del nuevo sismo para anunciarlo al instante.
       if (isNewLive && !tourPaused && voiceEnabled) {
-        prefetchSeismicNarration(
-          incomingEvent,
-          true,
-          shouldInterruptNarration ? { intro: "Nuevo sismo detectado" } : {}
-        );
+        prefetchSeismicNarration(incomingEvent, true, { intro: "Nuevo sismo detectado" });
       }
       queryClient.setQueryData(key, (existing: SeismicEvent[] | undefined) =>
         mergeIncomingEvent(existing, incomingEvent, minMagnitude)
       );
-      // Un sismo EN VIVO (nuevo) interrumpe el recorrido y se muestra de inmediato.
-      if (isNewLive && !tourPaused) {
-        setSelectedEventId(incomingEvent.eventId);
+
+      if (!isNewLive || tourPaused) return;
+
+      // Si la voz esta narrando, NO interrumpe: encola el sismo para anunciarlo al terminar.
+      if (voiceEnabled && isSeismicNarrationActive()) {
+        const queue = pendingLiveQueueRef.current;
+        if (!queue.some((item) => item.eventId === incomingEvent.eventId)) {
+          queue.push(incomingEvent);
+        }
+        return;
       }
+
+      // Silencio (o voz apagada): muestra el nuevo sismo y lo anuncia de inmediato.
+      if (voiceEnabled) {
+        pendingVoiceIntroRef.current = { eventId: incomingEvent.eventId, intro: "Nuevo sismo detectado" };
+      }
+      setSelectedEventId(incomingEvent.eventId);
     },
     [queryClient, minMagnitude, hours, tourPaused, voiceEnabled]
   );
 
   const connectionState = useEventStream(handleIncomingEvent);
+
+  // Vigila la narracion en curso: cuando termina, promueve el siguiente sismo EN VIVO
+  // encolado (lo muestra y lo anuncia como "Nuevo sismo detectado"), sin interrumpir.
+  useEffect(() => {
+    const START_GRACE_MS = 6_000;
+    const intervalId = window.setInterval(() => {
+      const queue = pendingLiveQueueRef.current;
+      if (queue.length === 0) return;
+
+      if (voiceEnabled && isSeismicNarrationActive()) {
+        sawNarrationRef.current = true;
+        return;
+      }
+      // Tras promover, da margen a que su narracion arranque (XTTS puede tardar) antes del siguiente.
+      if (
+        promotedLiveAtRef.current !== null &&
+        !sawNarrationRef.current &&
+        Date.now() - promotedLiveAtRef.current < START_GRACE_MS
+      ) {
+        return;
+      }
+
+      const next = queue.shift();
+      if (!next) return;
+      pendingVoiceIntroRef.current = { eventId: next.eventId, intro: "Nuevo sismo detectado" };
+      promotedLiveAtRef.current = Date.now();
+      sawNarrationRef.current = false;
+      setSelectedEventId(next.eventId);
+    }, 400);
+    return () => window.clearInterval(intervalId);
+  }, [voiceEnabled]);
   const handleStationState = useCallback(
     (incoming: StationState) => {
       queryClient.setQueryData<SeismicStation[]>(["stations"], (current = []) =>
@@ -334,10 +373,9 @@ export default function App() {
     }
   }, [events, selectedEventId]);
 
-  // Auto-recorrido: cada ~25 s (22 s de visualizacion + ~3 s de vuelo) pasa al siguiente
-  // de los ultimos 15 sismos. Da margen a la voz neural (XTTS) para sintetizar y reproducir
-  // la narracion completa antes de avanzar. El timer es estable (no se reinicia con cada
-  // refresco de datos); lee la lista vigente desde una ref.
+  // Auto-recorrido: cada ~16 s (13 s de visualizacion + ~3 s de vuelo) pasa al siguiente
+  // de los ultimos 15 sismos. El timer es estable (no se reinicia con cada refresco de
+  // datos); lee la lista vigente desde una ref.
   useEffect(() => {
     if (tourPaused) return;
     const intervalId = window.setInterval(() => {
@@ -347,7 +385,7 @@ export default function App() {
         const index = tour.findIndex((event) => event.eventId === current);
         return tour[(index + 1) % tour.length].eventId;
       });
-    }, 25_000);
+    }, 16_000);
     return () => window.clearInterval(intervalId);
   }, [tourPaused]);
 
