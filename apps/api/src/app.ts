@@ -34,6 +34,7 @@ import {
   ttsRequestSchema,
   TtsUnavailableError
 } from "./services/ttsService.js";
+import { generateNarration, narrationRequestSchema } from "./services/narrationService.js";
 
 function hasValidEngineToken(candidate: string | undefined): boolean {
   if (!env.seismicEngineToken || !candidate) return false;
@@ -186,6 +187,21 @@ export function createApp(streamBroker: StreamBroker) {
         response.status(503).json({ error: error.message });
         return;
       }
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/narration", async (request, response) => {
+    const parsed = narrationRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Solicitud de narracion invalida", issues: parsed.error.issues });
+      return;
+    }
+    try {
+      // text = null cuando la IA no esta disponible -> el cliente usa la plantilla.
+      const text = await generateNarration(parsed.data);
+      response.json({ text });
+    } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
   });

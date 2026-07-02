@@ -4,6 +4,7 @@
 
 import { type SeismicEvent } from "@sismica/shared";
 
+import { fetchAiNarration } from "./api";
 import {
   cancelNeuralNarration,
   fetchTtsHealth,
@@ -45,6 +46,8 @@ let voiceEngine: VoiceEngine = loadEngine();
 let healthSnapshot: TtsHealth | null = null;
 let lastSpeechKey = "";
 let lastSpeechAt = 0;
+// Secuencia de narraciones: al resolver el texto (IA es async) descarta las superadas.
+let narrationSeq = 0;
 
 function loadEngine(): VoiceEngine {
   try {
@@ -126,6 +129,18 @@ export function setSeismicVoiceEnabled(enabled: boolean): boolean {
 
 export { buildSeismicNarration };
 
+// Narracion variada por IA (DeepSeek) con fallback a la plantilla local. El texto IA se
+// cachea por evento en el servidor, asi que llamarlo varias veces (prefetch + locucion)
+// no regenera ni gasta tokens de mas.
+async function resolveNarrationText(event: SeismicEvent, options: { intro?: string }): Promise<string> {
+  const ai = await fetchAiNarration(event);
+  if (ai) {
+    const intro = options.intro?.trim();
+    return intro ? `${intro}. ${ai}` : ai;
+  }
+  return buildSeismicNarration(event, options);
+}
+
 export function prefetchSeismicNarration(
   event: SeismicEvent,
   enabled: boolean,
@@ -136,8 +151,7 @@ export function prefetchSeismicNarration(
   const engine = voiceEngine as NeuralEngine;
   if (!isEngineAvailable(engine)) return;
 
-  const text = buildSeismicNarration(event, options);
-  void prefetchNeural(text, engine);
+  void resolveNarrationText(event, options).then((text) => prefetchNeural(text, engine));
 }
 
 // Orden de intentos: el motor elegido primero, luego el resto de neurales por prioridad.
@@ -165,7 +179,28 @@ async function runNeuralCascade(
   }
   // Respaldo del navegador: corta cualquier audio neural para no solaparse.
   cancelNeuralNarration();
-  speakBrowserNarration(event, true, { ...options, force: true });
+  speakBrowserNarration(event, true, { ...options, text, force: true });
+}
+
+// Resuelve el texto (IA -> plantilla, async) y locuta con el motor activo, descartando la
+// narracion si otra mas reciente la supero mientras se resolvia el texto.
+async function dispatchNarration(
+  event: SeismicEvent,
+  options: { force?: boolean; intro?: string },
+  seq: number
+): Promise<void> {
+  const text = await resolveNarrationText(event, options);
+  if (seq !== narrationSeq) return;
+
+  if (voiceEngine === "browser") {
+    // Corta cualquier audio neural en curso para no solaparse con el navegador.
+    cancelNeuralNarration();
+    speakBrowserNarration(event, true, { ...options, text, force: true });
+    return;
+  }
+  // Corta cualquier locucion del navegador (respaldo previo) antes de la voz neural.
+  cancelBrowserNarration();
+  await runNeuralCascade(event, text, voiceEngine as NeuralEngine, options);
 }
 
 export function speakSeismicNarration(
@@ -175,13 +210,7 @@ export function speakSeismicNarration(
 ): boolean {
   if (!enabled || !voiceEnabled) return false;
 
-  if (voiceEngine === "browser") {
-    // Corta cualquier audio neural en curso para no solaparse con el navegador.
-    cancelNeuralNarration();
-    return speakBrowserNarration(event, enabled, options);
-  }
-
-  // Dedup del camino neural (equivalente al de seismicSpeech.ts).
+  // Dedup para ambos motores (equivalente al de seismicSpeech.ts).
   const key = `${event.eventId}:${event.updatedAtUtc ?? event.eventTimeUtc}`;
   const now = Date.now();
   if (!options.force && key === lastSpeechKey && now - lastSpeechAt < SPEECH_DEDUP_WINDOW_MS) {
@@ -190,10 +219,7 @@ export function speakSeismicNarration(
   lastSpeechKey = key;
   lastSpeechAt = now;
 
-  // Corta cualquier locucion del navegador (respaldo previo) antes de la voz neural.
-  cancelBrowserNarration();
-  const text = buildSeismicNarration(event, options);
-  void runNeuralCascade(event, text, voiceEngine as NeuralEngine, options);
-
+  const seq = ++narrationSeq;
+  void dispatchNarration(event, options, seq);
   return true;
 }

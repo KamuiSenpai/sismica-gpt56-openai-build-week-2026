@@ -176,6 +176,30 @@ export async function fetchTopMagnitude(limit = 10): Promise<SeismicEvent[]> {
   }
 }
 
+// Narracion variada por IA (DeepSeek). Devuelve null ante cualquier fallo o si la IA no
+// esta disponible, para que el llamador use la plantilla local (buildSeismicNarration).
+export async function fetchAiNarration(event: SeismicEvent): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/narration`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        eventId: event.eventId,
+        title: event.title,
+        magnitude: event.magnitude,
+        depthKm: event.depthKm,
+        tsunami: event.tsunami,
+        eventTimeUtc: event.eventTimeUtc
+      })
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { text: string | null };
+    return payload.text ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildStreamUrl(): string {
   return `${API_BASE_URL}/api/stream`;
 }

@@ -36,7 +36,14 @@ const envSchema = z.object({
   PIPER_USE_CUDA: booleanEnv(false),
   XTTS_SERVICE_URL: z.string().url().optional(),
   TTS_CACHE_DIR: z.string().min(1).optional(),
-  TTS_MAX_TEXT_LENGTH: numberEnv(600)
+  TTS_MAX_TEXT_LENGTH: numberEnv(600),
+  // --- Narracion por IA (DeepSeek) ---
+  DEEPSEEK_ENABLED: booleanEnv(false),
+  DEEPSEEK_API_KEY: z.string().min(1).optional(),
+  DEEPSEEK_BASE_URL: z.string().url().default("https://api.deepseek.com"),
+  DEEPSEEK_MODEL: z.string().min(1).default("deepseek-chat"),
+  DEEPSEEK_MAX_TOKENS: numberEnv(120),
+  DEEPSEEK_RATE_PER_MIN: numberEnv(30)
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -60,5 +67,11 @@ export const env = {
   piperUseCuda: parsed.data.PIPER_USE_CUDA,
   xttsServiceUrl: parsed.data.XTTS_SERVICE_URL,
   ttsCacheDir: parsed.data.TTS_CACHE_DIR,
-  ttsMaxTextLength: parsed.data.TTS_MAX_TEXT_LENGTH
+  ttsMaxTextLength: parsed.data.TTS_MAX_TEXT_LENGTH,
+  deepseekEnabled: parsed.data.DEEPSEEK_ENABLED,
+  deepseekApiKey: parsed.data.DEEPSEEK_API_KEY,
+  deepseekBaseUrl: parsed.data.DEEPSEEK_BASE_URL,
+  deepseekModel: parsed.data.DEEPSEEK_MODEL,
+  deepseekMaxTokens: parsed.data.DEEPSEEK_MAX_TOKENS,
+  deepseekRatePerMin: parsed.data.DEEPSEEK_RATE_PER_MIN
 };

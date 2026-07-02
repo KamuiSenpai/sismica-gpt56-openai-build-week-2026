@@ -13,6 +13,14 @@ let voiceEnabled = false;
 let lastSpeechKey = "";
 let lastSpeechAt = 0;
 
+function expandSpokenAbbreviations(text: string): string {
+  return text.replace(/\bEE\.?\s*UU\.?\b/gu, "Estados Unidos").replace(/\bEEUU\b/gu, "Estados Unidos");
+}
+
+function trimNarrationTail(text: string): string {
+  return text.replace(/[\s,.-]+$/u, "");
+}
+
 function formatSpokenKilometers(value: number | string): string {
   const numericValue = typeof value === "number" ? value : Number.parseFloat(value.replace(",", "."));
   const label = numericValue === 1 ? "kilometro" : "kilometros";
@@ -83,8 +91,9 @@ function normalizeNarrationPlace(place: string): string {
   const normalizedUnits = place.replace(/(\d+(?:[.,]\d+)?)\s*km\b/giu, (_match, rawDistance: string) =>
     formatSpokenKilometers(rawDistance)
   );
-  if (!NARRATION_DESCRIPTOR_PATTERN.test(normalizedUnits)) return normalizedUnits;
-  return normalizedUnits.replace(/^(\p{L})/u, (match) => match.toLocaleLowerCase("es"));
+  const spokenAbbreviations = expandSpokenAbbreviations(normalizedUnits);
+  if (!NARRATION_DESCRIPTOR_PATTERN.test(spokenAbbreviations)) return spokenAbbreviations;
+  return spokenAbbreviations.replace(/^(\p{L})/u, (match) => match.toLocaleLowerCase("es"));
 }
 
 function resolveNarrationPlace(event: SeismicEvent): string {
@@ -92,9 +101,16 @@ function resolveNarrationPlace(event: SeismicEvent): string {
   if (!place) return "ubicacion no identificada";
 
   const inferredCountry = countryNameEs(countryCode(event));
-  if (!inferredCountry) return place;
-  if (place.toLocaleLowerCase("es").endsWith(inferredCountry.toLocaleLowerCase("es"))) return place;
-  return `${place}, ${inferredCountry}`;
+  const spokenCountry = inferredCountry ? expandSpokenAbbreviations(inferredCountry) : null;
+  if (!spokenCountry) return place;
+  if (
+    trimNarrationTail(place)
+      .toLocaleLowerCase("es")
+      .endsWith(trimNarrationTail(spokenCountry).toLocaleLowerCase("es"))
+  ) {
+    return trimNarrationTail(place);
+  }
+  return `${place}, ${spokenCountry}`;
 }
 
 export function buildSeismicNarration(event: SeismicEvent, options: { intro?: string } = {}): string {
@@ -116,7 +132,7 @@ export function buildSeismicNarration(event: SeismicEvent, options: { intro?: st
 export function speakSeismicNarration(
   event: SeismicEvent,
   enabled: boolean,
-  options: { force?: boolean; intro?: string } = {}
+  options: { force?: boolean; intro?: string; text?: string } = {}
 ): boolean {
   if (!enabled || !voiceEnabled) return false;
 
@@ -129,7 +145,9 @@ export function speakSeismicNarration(
     return false;
   }
 
-  const utterance = new SpeechSynthesisUtterance(buildSeismicNarration(event, options));
+  // Texto explicito (p. ej. narracion IA) o la plantilla local.
+  const narration = options.text?.trim() || buildSeismicNarration(event, options);
+  const utterance = new SpeechSynthesisUtterance(narration);
   const voice = pickPreferredVoice(synth.getVoices());
 
   utterance.lang = voice?.lang ?? DEFAULT_SPEECH_LANG;

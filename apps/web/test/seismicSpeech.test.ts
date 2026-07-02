@@ -133,3 +133,17 @@ test("buildSeismicNarration uses singular kilometro when the value is one", () =
     "Sismo detectado en 1 kilometro al norte de prueba, de magnitud 2.1, a una profundidad de 1 kilometro."
   );
 });
+
+test("buildSeismicNarration expands EE. UU. for speech", () => {
+  const narration = buildSeismicNarration(
+    makeEvent({
+      title: "M2.7 - 91 km al sur de Sand Point, Alaska - EE. UU.",
+      magnitude: 2.7,
+      depthKm: 1
+    })
+  );
+  assert.equal(
+    narration,
+    "Sismo detectado en 91 kilometros al sur de Sand Point, Alaska- Estados Unidos, de magnitud 2.7, a una profundidad de 1 kilometro."
+  );
+});
