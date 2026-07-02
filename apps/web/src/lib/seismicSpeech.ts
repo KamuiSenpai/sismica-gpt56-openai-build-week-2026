@@ -163,3 +163,24 @@ export function speakSeismicNarration(
   synth.speak(utterance);
   return true;
 }
+
+// Locuta un texto arbitrario (segmentos del director) por la voz del navegador.
+export function speakSeismicText(text: string): boolean {
+  if (!voiceEnabled) return false;
+  const synth = getSpeechSynthesis();
+  if (!synth) return false;
+  const value = text.trim();
+  if (!value) return false;
+
+  const utterance = new SpeechSynthesisUtterance(value);
+  const voice = pickPreferredVoice(synth.getVoices());
+  utterance.lang = voice?.lang ?? DEFAULT_SPEECH_LANG;
+  if (voice) utterance.voice = voice;
+  utterance.rate = 1.02;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  synth.cancel();
+  synth.speak(utterance);
+  return true;
+}

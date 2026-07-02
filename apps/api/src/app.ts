@@ -35,6 +35,8 @@ import {
   TtsUnavailableError
 } from "./services/ttsService.js";
 import { generateNarration, narrationRequestSchema } from "./services/narrationService.js";
+import { generateSegment, segmentRequestSchema } from "./services/segmentService.js";
+import { decideNext, directorStateSchema } from "./services/directorService.js";
 
 function hasValidEngineToken(candidate: string | undefined): boolean {
   if (!env.seismicEngineToken || !candidate) return false;
@@ -201,6 +203,32 @@ export function createApp(streamBroker: StreamBroker) {
       // text = null cuando la IA no esta disponible -> el cliente usa la plantilla.
       const text = await generateNarration(parsed.data);
       response.json({ text });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/segment", async (request, response) => {
+    const parsed = segmentRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Solicitud de segmento invalida", issues: parsed.error.issues });
+      return;
+    }
+    try {
+      response.json({ text: await generateSegment(parsed.data) });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/director/decide", async (request, response) => {
+    const parsed = directorStateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Estado del director invalido", issues: parsed.error.issues });
+      return;
+    }
+    try {
+      response.json(await decideNext(parsed.data));
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }

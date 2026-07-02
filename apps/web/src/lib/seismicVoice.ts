@@ -21,7 +21,8 @@ import {
   isSeismicVoiceSupported as isBrowserVoiceSupported,
   primeSeismicVoices as primeBrowserVoices,
   setSeismicVoiceEnabled as setBrowserVoiceEnabled,
-  speakSeismicNarration as speakBrowserNarration
+  speakSeismicNarration as speakBrowserNarration,
+  speakSeismicText as speakBrowserText
 } from "./seismicSpeech";
 
 export type VoiceEngine = "piper" | "xtts" | "browser";
@@ -132,7 +133,10 @@ export { buildSeismicNarration };
 // Narracion variada por IA (DeepSeek) con fallback a la plantilla local. El texto IA se
 // cachea por evento en el servidor, asi que llamarlo varias veces (prefetch + locucion)
 // no regenera ni gasta tokens de mas.
-async function resolveNarrationText(event: SeismicEvent, options: { intro?: string }): Promise<string> {
+export async function resolveEventNarration(
+  event: SeismicEvent,
+  options: { intro?: string } = {}
+): Promise<string> {
   const ai = await fetchAiNarration(event);
   if (ai) {
     const intro = options.intro?.trim();
@@ -151,7 +155,7 @@ export function prefetchSeismicNarration(
   const engine = voiceEngine as NeuralEngine;
   if (!isEngineAvailable(engine)) return;
 
-  void resolveNarrationText(event, options).then((text) => prefetchNeural(text, engine));
+  void resolveEventNarration(event, options).then((text) => prefetchNeural(text, engine));
 }
 
 // Orden de intentos: el motor elegido primero, luego el resto de neurales por prioridad.
@@ -189,7 +193,7 @@ async function dispatchNarration(
   options: { force?: boolean; intro?: string },
   seq: number
 ): Promise<void> {
-  const text = await resolveNarrationText(event, options);
+  const text = await resolveEventNarration(event, options);
   if (seq !== narrationSeq) return;
 
   if (voiceEngine === "browser") {
@@ -222,4 +226,44 @@ export function speakSeismicNarration(
   const seq = ++narrationSeq;
   void dispatchNarration(event, options, seq);
   return true;
+}
+
+// Locuta un texto arbitrario (segmentos del director) con la misma cascada y cancelacion
+// cruzada que la narracion de eventos.
+async function dispatchText(text: string, seq: number): Promise<void> {
+  if (seq !== narrationSeq) return;
+  if (voiceEngine === "browser") {
+    cancelNeuralNarration();
+    speakBrowserText(text);
+    return;
+  }
+  cancelBrowserNarration();
+  for (const engine of neuralFallbackOrder(voiceEngine as NeuralEngine)) {
+    if (!isEngineAvailable(engine)) continue;
+    try {
+      await speakNeural(text, engine);
+      return;
+    } catch (error) {
+      console.warn(`Voz neural (${engine}) fallo; probando el siguiente motor.`, error);
+    }
+  }
+  cancelNeuralNarration();
+  speakBrowserText(text);
+}
+
+export function speakText(text: string): boolean {
+  if (!voiceEnabled) return false;
+  const value = text.trim();
+  if (!value) return false;
+  const seq = ++narrationSeq;
+  void dispatchText(value, seq);
+  return true;
+}
+
+export function prefetchText(text: string): void {
+  if (!voiceEnabled || voiceEngine === "browser") return;
+  const engine = voiceEngine as NeuralEngine;
+  if (!isEngineAvailable(engine)) return;
+  const value = text.trim();
+  if (value) void prefetchNeural(value, engine);
 }

@@ -58,6 +58,20 @@ import {
 } from "./lib/seismicVoice";
 import { CountryFlag } from "./components/CountryFlag";
 import { Marquee } from "./components/Marquee";
+import { useBroadcastDirector, type BroadcastSegment, type DirectorMode } from "./lib/broadcastDirector";
+
+const DIRECTOR_MODES: DirectorMode[] = ["off", "rules", "ai"];
+const DIRECTOR_MODE_LABELS: Record<DirectorMode, string> = {
+  off: "Recorrido",
+  rules: "Director reglas",
+  ai: "Director IA"
+};
+const SEGMENT_LABELS: Record<BroadcastSegment["kind"], string> = {
+  "en-vivo": "EN VIVO",
+  recorrido: "RECORRIDO",
+  resumen: "RESUMEN",
+  educativo: "DATO"
+};
 
 function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | null): SeismicEvent | null {
   return selectedEventId ? (events.find((event) => event.eventId === selectedEventId) ?? null) : null;
@@ -128,6 +142,8 @@ export default function App() {
     xtts: false,
     browser: isEngineAvailable("browser")
   }));
+  const [directorMode, setDirectorMode] = useState<DirectorMode>("off");
+  const [overlaySegment, setOverlaySegment] = useState<BroadcastSegment | null>(null);
   const minMagnitude = DEFAULT_MIN_MAGNITUDE;
   const hours = DEFAULT_HOURS;
 
@@ -204,9 +220,20 @@ export default function App() {
 
   const connectionState = useEventStream(handleIncomingEvent);
 
+  useBroadcastDirector({
+    mode: directorMode,
+    voiceEnabled,
+    events,
+    pendingLiveQueueRef,
+    onFocusEvent: setSelectedEventId,
+    onSegment: setOverlaySegment
+  });
+
   // Vigila la narracion en curso: cuando termina, promueve el siguiente sismo EN VIVO
   // encolado (lo muestra y lo anuncia como "Nuevo sismo detectado"), sin interrumpir.
+  // Con el director activo, es el director quien gobierna la cola.
   useEffect(() => {
+    if (directorMode !== "off") return;
     const intervalId = window.setInterval(() => {
       const queue = pendingLiveQueueRef.current;
       if (queue.length === 0) return;
@@ -231,7 +258,7 @@ export default function App() {
       setSelectedEventId(next.eventId);
     }, 400);
     return () => window.clearInterval(intervalId);
-  }, [voiceEnabled]);
+  }, [voiceEnabled, directorMode]);
   const handleStationState = useCallback(
     (incoming: StationState) => {
       queryClient.setQueryData<SeismicStation[]>(["stations"], (current = []) =>
@@ -342,7 +369,8 @@ export default function App() {
 
   useEffect(() => {
     const event = focusEventRef.current;
-    if (!voiceEnabled || !event) return;
+    // Con el director activo, es el director quien narra (no este efecto de foco).
+    if (!voiceEnabled || !event || directorMode !== "off") return;
     const pendingVoiceIntro =
       pendingVoiceIntroRef.current?.eventId === event.eventId
         ? pendingVoiceIntroRef.current.intro
@@ -352,11 +380,11 @@ export default function App() {
     }
     speakSeismicNarration(event, true, pendingVoiceIntro ? { force: true, intro: pendingVoiceIntro } : {});
     // Solo por cambio de sismo (ID) o de habilitacion; NO por refrescos de datos.
-  }, [focusEventId, voiceEnabled]);
+  }, [focusEventId, voiceEnabled, directorMode]);
 
   useEffect(() => {
     const event = focusEventRef.current;
-    if (!voiceEnabled || tourPaused || voiceEngine === "browser" || !event) return;
+    if (!voiceEnabled || tourPaused || voiceEngine === "browser" || !event || directorMode !== "off") return;
     // Cachea la narracion del sismo actual y del siguiente para que suene sincronizada.
     prefetchSeismicNarration(event, true);
     const tour = eventsRef.current.slice(0, 15);
@@ -364,7 +392,7 @@ export default function App() {
     const index = tour.findIndex((item) => item.eventId === event.eventId);
     const nextEvent = tour[(index + 1) % tour.length] ?? tour[0];
     if (nextEvent && nextEvent.eventId !== event.eventId) prefetchSeismicNarration(nextEvent, true);
-  }, [focusEventId, tourPaused, voiceEnabled, voiceEngine]);
+  }, [focusEventId, tourPaused, voiceEnabled, voiceEngine, directorMode]);
 
   // Arranca el recorrido: selecciona el primer sismo en cuanto hay datos.
   useEffect(() => {
@@ -377,7 +405,7 @@ export default function App() {
   // de los ultimos 15 sismos. El timer es estable (no se reinicia con cada refresco de
   // datos); lee la lista vigente desde una ref.
   useEffect(() => {
-    if (tourPaused) return;
+    if (tourPaused || directorMode !== "off") return;
     const intervalId = window.setInterval(() => {
       // Cede el turno mientras se presentan sismos EN VIVO (cola o hold vigente).
       if (pendingLiveQueueRef.current.length > 0 || Date.now() < liveHoldUntilRef.current) return;
@@ -389,7 +417,7 @@ export default function App() {
       });
     }, 16_000);
     return () => window.clearInterval(intervalId);
-  }, [tourPaused]);
+  }, [tourPaused, directorMode]);
 
   return (
     <main className={activeTsunami ? "monitor-shell has-tsunami" : "monitor-shell"}>
@@ -439,6 +467,20 @@ export default function App() {
               ))}
             </select>
           </label>
+          <label className="voice-engine" title="Director del directo: recorrido, por reglas o con IA">
+            <span className="voice-engine-label">DIRECTOR</span>
+            <select
+              className="voice-engine-select"
+              value={directorMode}
+              onChange={(event) => setDirectorMode(event.target.value as DirectorMode)}
+            >
+              {DIRECTOR_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {DIRECTOR_MODE_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="sound-toggle voice-repeat"
@@ -466,6 +508,12 @@ export default function App() {
       ) : null}
 
       <section className="monitor-stage">
+        {directorMode !== "off" && overlaySegment ? (
+          <div className={`director-overlay director-${overlaySegment.kind}`}>
+            <span className="director-overlay-kind">{SEGMENT_LABELS[overlaySegment.kind]}</span>
+            <span className="director-overlay-text">{overlaySegment.text}</span>
+          </div>
+        ) : null}
         <MapPanel
           disasters={disasters}
           events={events}

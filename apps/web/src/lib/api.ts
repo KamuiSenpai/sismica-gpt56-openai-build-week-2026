@@ -200,6 +200,59 @@ export async function fetchAiNarration(event: SeismicEvent): Promise<string | nu
   }
 }
 
+// --- Director del directo (segmentos + decision IA) ---
+
+export type DirectorSegmentKind = "recorrido" | "resumen" | "educativo";
+
+type SegmentInput = {
+  kind: "resumen" | "educativo";
+  totalLastHour?: number | null;
+  biggestMagnitude?: number | null;
+  biggestPlace?: string | null;
+  topic?: string | null;
+};
+
+// Texto de un segmento de relleno/periodico (resumen/educativo). null solo ante fallo de red.
+export async function fetchSegmentText(input: SegmentInput): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/segment`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input)
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { text: string | null };
+    return payload.text ?? null;
+  } catch {
+    return null;
+  }
+}
+
+type DirectorState = {
+  livePending: number;
+  recentCount: number;
+  minutesSinceRecap: number;
+  minutesSinceEducativo: number;
+  biggestRecentMagnitude?: number | null;
+};
+
+// Modo inteligente: DeepSeek decide el siguiente segmento. null ante fallo (el director usa reglas).
+export async function fetchDirectorDecision(
+  state: DirectorState
+): Promise<{ kind: DirectorSegmentKind; source: "ai" | "rules" } | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/director/decide`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(state)
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as { kind: DirectorSegmentKind; source: "ai" | "rules" };
+  } catch {
+    return null;
+  }
+}
+
 export function buildStreamUrl(): string {
   return `${API_BASE_URL}/api/stream`;
 }
