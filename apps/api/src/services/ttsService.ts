@@ -3,12 +3,23 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
 import { env } from "../config/env.js";
+
+// Las rutas de assets en .env se interpretan relativas a la raiz del repo (donde vive .env),
+// no al cwd del proceso (apps/api). Las rutas absolutas se usan tal cual.
+const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
+function resolveAsset(pathValue: string): string {
+  return isAbsolute(pathValue) ? pathValue : resolve(REPO_ROOT, pathValue);
+}
+const resolvedPiperBinary = env.piperBinaryPath ? resolveAsset(env.piperBinaryPath) : undefined;
+const resolvedPiperVoice = env.piperVoiceModel ? resolveAsset(env.piperVoiceModel) : undefined;
+const resolvedCacheDir = env.ttsCacheDir ? resolveAsset(env.ttsCacheDir) : undefined;
 
 // Motores de sintesis disponibles: Piper (binario local) y XTTS-v2 (microservicio Python).
 export const ttsEngineSchema = z.enum(["piper", "xtts"]);
@@ -48,7 +59,7 @@ const audioCache = new LRUCache<string, Buffer>({ max: 200 });
 let cacheDirReady: Promise<void> | null = null;
 
 function piperVoiceLabel(): string | undefined {
-  return env.piperVoiceModel ? basename(env.piperVoiceModel).replace(/\.onnx$/i, "") : undefined;
+  return resolvedPiperVoice ? basename(resolvedPiperVoice).replace(/\.onnx$/i, "") : undefined;
 }
 
 function effectiveVoice(engine: TtsEngine, requested?: string): string {
@@ -66,8 +77,8 @@ async function ensureCacheDir(dir: string): Promise<void> {
 }
 
 async function readDiskCache(key: string): Promise<Buffer | null> {
-  if (!env.ttsCacheDir) return null;
-  const filePath = join(env.ttsCacheDir, `${key}.wav`);
+  if (!resolvedCacheDir) return null;
+  const filePath = join(resolvedCacheDir, `${key}.wav`);
   if (!existsSync(filePath)) return null;
   try {
     return await readFile(filePath);
@@ -77,10 +88,10 @@ async function readDiskCache(key: string): Promise<Buffer | null> {
 }
 
 async function writeDiskCache(key: string, audio: Buffer): Promise<void> {
-  if (!env.ttsCacheDir) return;
+  if (!resolvedCacheDir) return;
   try {
-    await ensureCacheDir(env.ttsCacheDir);
-    await writeFile(join(env.ttsCacheDir, `${key}.wav`), audio);
+    await ensureCacheDir(resolvedCacheDir);
+    await writeFile(join(resolvedCacheDir, `${key}.wav`), audio);
   } catch {
     // El cache en disco es best-effort; un fallo no debe romper la sintesis.
   }
@@ -89,8 +100,8 @@ async function writeDiskCache(key: string, audio: Buffer): Promise<void> {
 // Lanza el binario Piper: recibe el texto por stdin y escribe un WAV en outPath.
 function runPiper(text: string, outPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const binary = env.piperBinaryPath as string;
-    const args = ["-m", env.piperVoiceModel as string, "-f", outPath];
+    const binary = resolvedPiperBinary as string;
+    const args = ["-m", resolvedPiperVoice as string, "-f", outPath];
     if (env.piperUseCuda) args.push("--cuda");
 
     const child = spawn(binary, args, { stdio: ["pipe", "ignore", "pipe"] });
@@ -119,10 +130,10 @@ function runPiper(text: string, outPath: string): Promise<void> {
 }
 
 async function synthesizePiper(text: string): Promise<Buffer> {
-  if (!env.piperBinaryPath || !env.piperVoiceModel) {
+  if (!resolvedPiperBinary || !resolvedPiperVoice) {
     throw new TtsUnavailableError("Piper no esta configurado (PIPER_BINARY_PATH / PIPER_VOICE_MODEL)");
   }
-  if (!existsSync(env.piperBinaryPath) || !existsSync(env.piperVoiceModel)) {
+  if (!existsSync(resolvedPiperBinary) || !existsSync(resolvedPiperVoice)) {
     throw new TtsUnavailableError("Binario o modelo de Piper no encontrado en disco");
   }
 
@@ -184,10 +195,10 @@ export async function synthesize(engine: TtsEngine, request: TtsRequest): Promis
 }
 
 function piperHealth(): EngineHealth {
-  if (!env.piperBinaryPath || !env.piperVoiceModel) {
+  if (!resolvedPiperBinary || !resolvedPiperVoice) {
     return { ok: false, detail: "PIPER_BINARY_PATH / PIPER_VOICE_MODEL sin configurar" };
   }
-  if (!existsSync(env.piperBinaryPath) || !existsSync(env.piperVoiceModel)) {
+  if (!existsSync(resolvedPiperBinary) || !existsSync(resolvedPiperVoice)) {
     return { ok: false, detail: "binario o modelo no encontrado en disco" };
   }
   return { ok: true, voice: piperVoiceLabel() };
