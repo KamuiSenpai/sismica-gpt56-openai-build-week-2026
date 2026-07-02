@@ -52,10 +52,7 @@ test("generateNarration devuelve pauta editorial local con DeepSeek deshabilitad
     recentLines: ["Nuevo sismo detectado en Chile"]
   });
   assert.equal(typeof editorial.intro, "string");
-  assert.equal(typeof editorial.formats.overlay, "string");
-  assert.equal(typeof editorial.formats.narration, "string");
-  assert.equal(typeof editorial.formats.ticker, "string");
   assert.deepEqual(editorial.cue, { urgency: "alta", rhythm: "agil", tone: "directo" });
   assert.notEqual(editorial.intro, "Nuevo sismo detectado");
-  assert.equal(editorial.formats.narration.includes("Cerca de la costa de Lima, Peru"), true);
+  assert.equal(/sin reportes?/iu.test([editorial.intro, editorial.closing].join(" ")), false);
 });

@@ -656,6 +656,9 @@ test("traduce descriptores geograficos legacy en ingles a espanol", () => {
     "59 km al sur de Boca de Yuma, República Dominicana"
   );
   assert.equal(normalizeSourceLocationText("ISC", "Sea of Okhotsk"), "Mar de Ojotsk");
+  assert.equal(normalizeSourceLocationText("EMSC", "Ceram Sea, Indonesia"), "Mar de Ceram, Indonesia");
+  assert.equal(normalizeSourceLocationText("EMSC", "Crete, Greece"), "Creta, Grecia");
+  assert.equal(normalizeSourceLocationText("GEOFON", "Bonin Islands, Japan"), "Islas Bonin, Jap\u00f3n");
   assert.equal(normalizeSourceLocationText("EMSC", "Celebes Sea"), "Mar de Célebes");
   assert.equal(normalizeSourceLocationText("EMSC", "Banda Sea"), "Mar de Banda");
   assert.equal(normalizeSourceLocationText("EMSC", "Savu Sea"), "Mar de Savu");
@@ -671,6 +674,10 @@ test("traduce descriptores geograficos legacy en ingles a espanol", () => {
     "región de frontera entre Panamá y Colombia"
   );
   assert.equal(normalizeSourceLocationText("SGC", "Mona Passage"), "Canal de la Mona");
+  assert.equal(
+    normalizeSourceLocationText("SGC", "Colombia-Ecuador Border region"),
+    "regi\u00f3n de frontera entre Colombia y Ecuador"
+  );
   assert.equal(normalizeSourceLocationText("EMSC", "Kepulauan Talaud, Indonesia"), "Islas Talaud, Indonesia");
   assert.equal(
     normalizeSourceLocationText("EMSC", "Kepulauan Sangihe, Indonesia"),

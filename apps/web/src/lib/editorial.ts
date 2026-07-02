@@ -15,11 +15,6 @@ export type NarrationEditorial = {
   intro: string;
   closing: string | null;
   tectonicContext: string | null;
-  formats: {
-    overlay: string;
-    narration: string;
-    ticker: string;
-  };
   cue: EditorialCue;
 };
 
@@ -45,11 +40,6 @@ export function fallbackNarrationEditorial(mode: NarrationMode): NarrationEditor
       intro: "Nuevo sismo detectado",
       closing: "Seguimos monitoreando la zona",
       tectonicContext: null,
-      formats: {
-        overlay: "Nuevo sismo detectado",
-        narration: "",
-        ticker: "Nuevo sismo detectado"
-      },
       cue: { urgency: "alta", rhythm: "agil", tone: "directo" }
     };
   }
@@ -57,11 +47,6 @@ export function fallbackNarrationEditorial(mode: NarrationMode): NarrationEditor
     intro: "Sismo detectado",
     closing: null,
     tectonicContext: null,
-    formats: {
-      overlay: "Sismo detectado",
-      narration: "",
-      ticker: "Sismo detectado"
-    },
     cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
   };
 }

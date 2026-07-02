@@ -54,8 +54,6 @@ export type BroadcastDialogueTurn = {
 export type ResolvedNarrationPacket = {
   text: string;
   cue: EditorialCue;
-  overlayText: string;
-  tickerText: string;
   tectonicContext: string | null;
 };
 
@@ -73,6 +71,54 @@ export const BROADCAST_VOICE_HOSTS: readonly BroadcastVoiceHost[] = [
 // Orden de preferencia neural (autoseleccion y cascada de fallback): XTTS-v2 primero,
 // luego Piper y, si todos fallan, la voz del navegador.
 const NEURAL_PRIORITY: readonly NeuralEngine[] = ["xtts", "piper"] as const;
+const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?)\b/u;
+const SAFE_EDITORIAL_INTROS = new Set([
+  "nuevo sismo detectado",
+  "se registra un nuevo sismo",
+  "actualizacion sismica reciente",
+  "nuevo evento sismico en monitoreo",
+  "sismo detectado",
+  "evento sismico en seguimiento",
+  "reporte sismico en monitoreo"
+]);
+const LOCATION_NOISE_TERMS = new Set([
+  "a",
+  "al",
+  "area",
+  "actualizacion",
+  "actualizacionsismica",
+  "baja",
+  "cerca",
+  "continuo",
+  "de",
+  "del",
+  "desde",
+  "detectado",
+  "directo",
+  "el",
+  "en",
+  "evento",
+  "foco",
+  "frente",
+  "intermedio",
+  "km",
+  "kilometro",
+  "kilometros",
+  "la",
+  "magnitud",
+  "media",
+  "monitoreo",
+  "nuevo",
+  "oeste",
+  "profundidad",
+  "region",
+  "reporte",
+  "seguimiento",
+  "sismo",
+  "sur",
+  "zona"
+]);
 
 const STORAGE_KEY = "sismica.voiceEngine";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
@@ -86,6 +132,67 @@ let lastSpeechAt = 0;
 let activeBroadcastHostId: BroadcastVoiceHostId = BROADCAST_VOICE_HOSTS[0].id;
 // Secuencia de narraciones: al resolver el texto (IA es async) descarta las superadas.
 let narrationSeq = 0;
+
+function canonicalizeEditorialText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLocaleLowerCase("es")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function extractMeaningfulTerms(value: string): string[] {
+  return canonicalizeEditorialText(value)
+    .split(" ")
+    .filter((term) => term.length >= 3)
+    .filter((term) => !LOCATION_NOISE_TERMS.has(term))
+    .filter((term) => !/^\d+$/u.test(term));
+}
+
+function sharesLocationTerms(text: string, place: string, country?: string | null): boolean {
+  const textTerms = new Set(extractMeaningfulTerms(text));
+  if (textTerms.size === 0) return false;
+
+  const placeTerms = Array.from(
+    new Set([...extractMeaningfulTerms(place), ...extractMeaningfulTerms(country ?? "")])
+  );
+  if (placeTerms.length === 0) return false;
+
+  const overlap = placeTerms.filter((term) => textTerms.has(term));
+  if (overlap.length >= Math.min(2, placeTerms.length)) return true;
+  return overlap.some((term) => term.length >= 6);
+}
+
+function introMentionsLocation(intro: string, place: string, country?: string | null): boolean {
+  return sharesLocationTerms(intro, place, country);
+}
+
+function pickEditorialIntro(
+  requestedIntro: string | undefined,
+  editorialIntro: string,
+  place: string,
+  country: string | null,
+  mode: NarrationMode
+): string {
+  if (requestedIntro?.trim()) return requestedIntro.trim();
+  const normalized = editorialIntro.trim();
+  if (
+    !normalized ||
+    containsUnsupportedEditorialText(normalized) ||
+    !SAFE_EDITORIAL_INTROS.has(canonicalizeEditorialText(normalized))
+  ) {
+    return fallbackNarrationEditorial(mode).intro;
+  }
+  if (introMentionsLocation(normalized, place, country)) {
+    return fallbackNarrationEditorial(mode).intro;
+  }
+  return normalized;
+}
+
+function containsUnsupportedEditorialText(value: string): boolean {
+  return UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(canonicalizeEditorialText(value));
+}
 
 function loadEngine(): VoiceEngine {
   try {
@@ -225,6 +332,7 @@ export async function resolveEventNarration(
   const mode = options.mode ?? (options.intro ? "breaking" : "seguimiento");
   const place = broadcastPlace(event);
   const country = broadcastCountryName(countryCode(event));
+  const intro = options.intro?.trim() || undefined;
   const editorial =
     (await fetchNarrationEditorial(event, {
       normalizedPlace: place,
@@ -232,23 +340,26 @@ export async function resolveEventNarration(
       mode,
       recentLines: getRecentEditorialLines()
     })) ?? fallbackNarrationEditorial(mode);
+  const narrationIntro = pickEditorialIntro(intro, editorial.intro, place, country, mode);
   const mergedClosing = [
     editorial.tectonicContext,
     options.closing === undefined ? editorial.closing : options.closing
   ]
     .filter((value): value is string => Boolean(value && value.trim()))
+    .filter((value, index, values) => {
+      if (containsUnsupportedEditorialText(value)) return false;
+      const canonical = canonicalizeEditorialText(value);
+      return values.findIndex((candidate) => canonicalizeEditorialText(candidate) === canonical) === index;
+    })
     .join(". ");
-  const fallbackNarration = buildSeismicNarration(event, {
-    intro: options.intro?.trim() || editorial.intro,
+  const text = buildSeismicNarration(event, {
+    intro: narrationIntro,
     place,
     closing: mergedClosing || null
   });
-  const text = editorial.formats.narration.trim() || fallbackNarration;
   return {
     text,
     cue: editorial.cue,
-    overlayText: editorial.formats.overlay.trim() || text,
-    tickerText: editorial.formats.ticker.trim() || text,
     tectonicContext: editorial.tectonicContext
   };
 }

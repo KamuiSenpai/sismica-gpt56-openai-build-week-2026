@@ -8,7 +8,6 @@ export const directorStateSchema = z.object({
   recentCount: z.number().int().nonnegative(),
   minutesSinceRecap: z.number().nonnegative(),
   minutesSinceEducativo: z.number().nonnegative(),
-  minutesSinceRecommendation: z.number().nonnegative(),
   biggestRecentMagnitude: z.number().finite().nullish()
 });
 export type DirectorState = z.infer<typeof directorStateSchema>;

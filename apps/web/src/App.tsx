@@ -52,6 +52,7 @@ import {
   setSeismicVoiceEnabled,
   setVoiceEngine,
   speakSeismicNarration,
+  speakText,
   VOICE_ENGINE_LABELS,
   VOICE_ENGINES,
   type VoiceEngine
@@ -313,27 +314,36 @@ export default function App() {
     setSoundEnabled(nextEnabled);
     void setSeismicAudioEnabled(nextEnabled).catch(() => undefined);
   }, [soundEnabled]);
+  const speakVisibleContent = useCallback(
+    (enabled: boolean) => {
+      if (!enabled) return;
+      if (directorMode !== "off" && overlaySegment) {
+        speakText(overlaySegment.text, {
+          cue: overlaySegment.cue,
+          kind: overlaySegment.kind
+        });
+        return;
+      }
+      if (focusEvent) speakSeismicNarration(focusEvent, true, { force: true });
+    },
+    [directorMode, focusEvent, overlaySegment]
+  );
   const toggleVoice = useCallback(() => {
     const nextEnabled = !voiceEnabled;
     setVoiceEnabled(nextEnabled);
     const ready = setSeismicVoiceEnabled(nextEnabled);
-    if (nextEnabled && ready && focusEvent) {
-      speakSeismicNarration(focusEvent, true, { force: true });
-    }
-  }, [focusEvent, voiceEnabled]);
+    if (nextEnabled && ready) speakVisibleContent(true);
+  }, [speakVisibleContent, voiceEnabled]);
   const replayVoice = useCallback(() => {
-    if (!focusEvent) return;
-    speakSeismicNarration(focusEvent, voiceEnabled, { force: true });
-  }, [focusEvent, voiceEnabled]);
+    speakVisibleContent(voiceEnabled);
+  }, [speakVisibleContent, voiceEnabled]);
   const handleVoiceEngineChange = useCallback(
     (engine: VoiceEngine) => {
       setVoiceEngine(engine);
       setVoiceEngineState(engine);
-      if (voiceEnabled && focusEvent) {
-        speakSeismicNarration(focusEvent, true, { force: true });
-      }
+      speakVisibleContent(voiceEnabled);
     },
-    [voiceEnabled, focusEvent]
+    [speakVisibleContent, voiceEnabled]
   );
 
   useEffect(() => {
@@ -531,19 +541,14 @@ export default function App() {
         {directorMode !== "off" && overlaySegment ? (
           <div
             className={`director-overlay director-${overlaySegment.kind}`}
-            style={directorOverlayStyle(overlaySegment.overlayText ?? overlaySegment.text)}
+            style={directorOverlayStyle(overlaySegment.text)}
           >
             <header className="director-overlay-header">
               <strong>{SEGMENT_TITLES[overlaySegment.kind]}</strong>
               <span className="director-overlay-kind">{SEGMENT_LABELS[overlaySegment.kind]}</span>
             </header>
             <div className="director-overlay-body">
-              <span className="director-overlay-text">
-                {overlaySegment.overlayText ?? overlaySegment.text}
-              </span>
-              {overlaySegment.tickerText ? (
-                <small className="director-overlay-ticker">{overlaySegment.tickerText}</small>
-              ) : null}
+              <span className="director-overlay-text">{overlaySegment.text}</span>
             </div>
           </div>
         ) : null}

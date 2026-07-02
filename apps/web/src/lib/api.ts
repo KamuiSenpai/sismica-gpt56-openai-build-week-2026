@@ -14,7 +14,9 @@ import {
 
 import type { DirectorSegmentKind, NarrationEditorial, NarrationMode, SegmentPacket } from "./editorial";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+const API_BASE_URL =
+  (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL ??
+  "http://localhost:3000";
 
 type EventsResponse = {
   items: SeismicEvent[];
@@ -235,7 +237,6 @@ type SegmentInput = {
 };
 
 export type HandoffSegmentPayload = {
-  overlayText: string;
   currentHostLine: string;
   nextHostLine: string;
 };
@@ -278,7 +279,6 @@ type DirectorState = {
   recentCount: number;
   minutesSinceRecap: number;
   minutesSinceEducativo: number;
-  minutesSinceRecommendation: number;
   biggestRecentMagnitude?: number | null;
 };
 

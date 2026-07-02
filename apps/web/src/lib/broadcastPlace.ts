@@ -8,6 +8,7 @@ const FULL_COUNTRY_OVERRIDES: Record<string, string> = {
 
 const DIRECT_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bMolucca Sea\b/giu, "Mar de Molucas"],
+  [/\b(?:Ceram|Seram) Sea\b/giu, "Mar de Ceram"],
   [/\bSunda Strait\b/giu, "Estrecho de Sonda"],
   [/\bCook Strait\b/giu, "Estrecho de Cook"],
   [/\bSea of Okhotsk\b/giu, "Mar de Ojotsk"],
@@ -18,6 +19,10 @@ const DIRECT_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bEastern Mediterranean Sea\b/giu, "Mar Mediterraneo oriental"],
   [/\bMediterranean Sea\b/giu, "Mar Mediterraneo"],
   [/\bPoland\b/giu, "Polonia"],
+  [/\bBonin Islands\b/giu, "Islas Bonin"],
+  [/\bColombia-Ecuador Border\b/giu, "frontera entre Colombia y Ecuador"],
+  [/\bCrete\b/giu, "Creta"],
+  [/\bGreece\b/giu, "Grecia"],
   [/\bPapua\b/giu, "Papua"],
   [/\bPeru\b/giu, "Peru"],
   [/\bMexico\b/giu, "Mexico"],
@@ -111,6 +116,30 @@ function normalizeSpaces(text: string): string {
   return text.replace(/\s+/gu, " ").trim();
 }
 
+function canonicalLocationPart(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLocaleLowerCase("es")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function dedupeLocationParts(text: string): string {
+  const seen = new Set<string>();
+  return text
+    .split(/\s*,\s*|\s*-\s+(?=\p{L})/u)
+    .map((part) => normalizeSpaces(part))
+    .filter(Boolean)
+    .filter((part) => {
+      const key = canonicalLocationPart(part);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(", ");
+}
+
 function titleCase(text: string): string {
   return text
     .toLocaleLowerCase("es")
@@ -122,6 +151,10 @@ function titleCase(text: string): string {
 
 function capitalize(text: string): string {
   return text.replace(/^(\p{L})/u, (letter) => letter.toLocaleUpperCase("es"));
+}
+
+function decapitalize(text: string): string {
+  return text.replace(/^(\p{L})/u, (letter) => letter.toLocaleLowerCase("es"));
 }
 
 function beautify(text: string): string {
@@ -193,7 +226,14 @@ function replaceTrailingNamedCountry(text: string): string {
 
 function appendCountry(descriptor: string, country: string | null): string {
   if (!country) return descriptor;
-  if (descriptor.toLocaleLowerCase("es").endsWith(country.toLocaleLowerCase("es"))) {
+  const canonicalDescriptor = canonicalLocationPart(descriptor);
+  const canonicalCountry = canonicalLocationPart(country);
+  if (
+    canonicalDescriptor === canonicalCountry ||
+    canonicalDescriptor.startsWith(`${canonicalCountry} `) ||
+    canonicalDescriptor.endsWith(` ${canonicalCountry}`) ||
+    canonicalDescriptor.includes(` ${canonicalCountry} `)
+  ) {
     return descriptor;
   }
   return `${descriptor}, ${country}`;
@@ -204,6 +244,12 @@ function normalizeBroadcastDescriptor(raw: string, depth = 0): string {
     replaceTrailingIsoCountry(applyDirectReplacements(normalizeSpaces(raw)))
   );
   if (!text || depth > 4) return beautify(text);
+
+  const regionSuffixMatch = text.match(/^(.+?)\s+region$/iu);
+  if (regionSuffixMatch) {
+    const place = normalizeBroadcastDescriptor(regionSuffixMatch[1], depth + 1);
+    return beautify(`region de ${decapitalize(place)}`);
+  }
 
   const distanceMatch = text.match(/^(\d+(?:[.,]\d+)?)\s*km\s+([A-Za-z.-]+)\s+(?:of|from)\s+(.+)$/iu);
   if (distanceMatch) {
@@ -299,5 +345,5 @@ function normalizeBroadcastDescriptor(raw: string, depth = 0): string {
 
 export function broadcastPlace(event: SeismicEvent): string {
   const descriptor = normalizeBroadcastDescriptor(getEventPlace(event.title));
-  return appendCountry(descriptor, broadcastCountryName(countryCode(event)));
+  return dedupeLocationParts(appendCountry(descriptor, broadcastCountryName(countryCode(event))));
 }

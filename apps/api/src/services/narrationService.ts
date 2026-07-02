@@ -20,27 +20,16 @@ export type EditorialCue = z.infer<typeof editorialCueSchema>;
 export const narrationModeSchema = z.enum(["breaking", "seguimiento"]);
 export type NarrationMode = z.infer<typeof narrationModeSchema>;
 
-const narrationFormatsSchema = z.object({
-  overlay: z.string().trim().min(1).max(160),
-  ticker: z.string().trim().min(1).max(180)
-});
-
 export const narrationEditorialSchema = z.object({
   intro: z.string().trim().min(1).max(80),
   closing: z.string().trim().max(120).nullable().optional(),
   tectonicContext: z.string().trim().max(120).nullable().optional(),
-  formats: narrationFormatsSchema,
   cue: editorialCueSchema
 });
 export type NarrationEditorial = {
   intro: string;
   closing: string | null;
   tectonicContext: string | null;
-  formats: {
-    overlay: string;
-    narration: string;
-    ticker: string;
-  };
   cue: EditorialCue;
 };
 
@@ -91,6 +80,7 @@ const FOLLOWUP_INTROS = [
   "Evento sismico en seguimiento",
   "Reporte sismico en monitoreo"
 ] as const;
+const EDITORIAL_INTROS = new Set<string>([...BREAKING_INTROS, ...FOLLOWUP_INTROS].map(canonicalize));
 
 const SUBDUCTION_KEYWORDS = [
   "alaska",
@@ -150,12 +140,13 @@ const CONTINENTAL_KEYWORDS = [
 ] as const;
 const OFFSHORE_PATTERN = /\b(costa|mar|estrecho|offshore|frente a la costa)\b/iu;
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo)\b/iu;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?)\b/u;
 const SYSTEM_PROMPT =
   "Eres el editor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
-  'este formato exacto: {"intro":"...","closing":"...","tectonicContext":"...","formats":{"overlay":"...","ticker":"..."},"cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
-  "No cambies magnitud, profundidad, pais, lugar ni hora. Usa las lineas recientes solo para evitar repeticiones de apertura, cierre y tono. " +
-  "tectonicContext debe ser null o una sola frase breve basada SOLO en la pista tectonica entregada. No inventes replicas, danos, alertas, riesgo, tsunami ni evacuaciones.";
+  'este formato exacto: {"intro":"...","closing":"...","tectonicContext":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
+  `intro debe ser exactamente una de estas aperturas: ${[...BREAKING_INTROS, ...FOLLOWUP_INTROS].join("; ")}. ` +
+  "No agregues lugar, pais, magnitud ni profundidad a intro. Usa las lineas recientes solo para evitar repeticiones de apertura, cierre y tono. " +
+  "tectonicContext debe ser null o una sola frase breve basada SOLO en la pista tectonica entregada. No inventes replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
 
 function normalizeEditorialText(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
@@ -165,6 +156,11 @@ function normalizeEditorialText(value: string | null | undefined): string | null
     .trim()
     .replace(/[.!,;:]+$/u, "");
   return normalized || null;
+}
+
+function containsUnsupportedEditorialClaim(value: string | null | undefined): boolean {
+  if (typeof value !== "string") return false;
+  return UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(canonicalize(value));
 }
 
 function stripMarkdownFence(raw: string): string {
@@ -196,16 +192,12 @@ function cacheKey(request: NarrationRequest): string {
   return createHash("sha1").update(buildNarrationRevision(request)).digest("hex");
 }
 
-async function readDiskCache(
-  key: string,
-  request: NarrationRequest,
-  fallback: NarrationEditorial
-): Promise<NarrationEditorial | null> {
+async function readDiskCache(key: string, fallback: NarrationEditorial): Promise<NarrationEditorial | null> {
   if (!cacheDir) return null;
   const filePath = join(cacheDir, `${key}.json`);
   if (!existsSync(filePath)) return null;
   try {
-    return sanitizeNarrationEditorial(JSON.parse(await readFile(filePath, "utf8")), request, fallback);
+    return sanitizeNarrationEditorial(JSON.parse(await readFile(filePath, "utf8")), fallback);
   } catch {
     return null;
   }
@@ -237,6 +229,8 @@ function withinRateLimit(): boolean {
 
 function canonicalize(text: string): string {
   return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/gu, "")
     .toLocaleLowerCase("es")
     .replace(/[.,;:!?]+/gu, " ")
     .replace(/\s+/gu, " ")
@@ -253,21 +247,6 @@ function pickNonRepeated(candidates: readonly string[], recentLines: string[]): 
     candidates[0] ??
     ""
   );
-}
-
-function formatMagnitude(value: number | null | undefined): string | null {
-  return typeof value === "number" ? `M${value.toFixed(1)}` : null;
-}
-
-function formatSpokenKilometers(value: number | null | undefined): string | null {
-  if (typeof value !== "number") return null;
-  const rounded = Math.round(value);
-  return `${rounded} ${rounded === 1 ? "kilometro" : "kilometros"}`;
-}
-
-function formatShortDepth(value: number | null | undefined): string | null {
-  if (typeof value !== "number") return null;
-  return `${Math.round(value)} km`;
 }
 
 function containsKeyword(text: string, keywords: readonly string[]): boolean {
@@ -349,50 +328,6 @@ function inferTectonicHint(request: NarrationRequest): TectonicHint {
   return { summary: "sin contexto tectonico distintivo", contextLine: null };
 }
 
-function joinSentences(parts: Array<string | null | undefined>): string {
-  return parts
-    .map((part) => normalizeEditorialText(part))
-    .filter((part): part is string => Boolean(part))
-    .map((part) => `${part}.`)
-    .join(" ");
-}
-
-function buildNarrationText(
-  request: NarrationRequest,
-  intro: string,
-  tectonicContext: string | null,
-  closing: string | null
-): string {
-  const parts = [`${intro} en ${request.normalizedPlace}`];
-  const magnitude = formatMagnitude(request.magnitude);
-  if (magnitude) parts.push(`de magnitud ${magnitude.replace(/^M/u, "")}`);
-  const depth = formatSpokenKilometers(request.depthKm);
-  if (depth) parts.push(`a una profundidad de ${depth}`);
-  return joinSentences([parts.join(", "), tectonicContext, closing]);
-}
-
-function buildFallbackFormats(
-  request: NarrationRequest,
-  intro: string,
-  narration: string,
-  tectonicContext: string | null
-): NarrationEditorial["formats"] {
-  const magnitude = formatMagnitude(request.magnitude);
-  const depth = formatShortDepth(request.depthKm);
-  const overlay = joinSentences([
-    magnitude ? `${magnitude} en ${request.normalizedPlace}` : `${intro} en ${request.normalizedPlace}`,
-    tectonicContext
-  ]);
-  const tickerParts = [magnitude, request.normalizedPlace, depth ? `Prof. ${depth}` : null, tectonicContext]
-    .filter((part): part is string => Boolean(part))
-    .join(" | ");
-  return {
-    overlay,
-    narration,
-    ticker: tickerParts || request.normalizedPlace
-  };
-}
-
 function fallbackNarrationEditorial(request: NarrationRequest): NarrationEditorial {
   const recentLines = request.recentLines ?? [];
   const intro =
@@ -401,12 +336,10 @@ function fallbackNarrationEditorial(request: NarrationRequest): NarrationEditori
       : pickNonRepeated(FOLLOWUP_INTROS, recentLines);
   const closing = request.mode === "breaking" ? pickNonRepeated(BREAKING_CLOSINGS, recentLines) : null;
   const tectonicContext = inferTectonicHint(request).contextLine;
-  const narration = buildNarrationText(request, intro, tectonicContext, closing);
   return {
     intro,
     closing,
     tectonicContext,
-    formats: buildFallbackFormats(request, intro, narration, tectonicContext),
     cue:
       request.mode === "breaking"
         ? { urgency: "alta", rhythm: "agil", tone: "directo" }
@@ -430,40 +363,27 @@ function buildUserMessage(request: NarrationRequest, hint: TectonicHint): string
   return `Contexto del aviso: ${JSON.stringify(data)}`;
 }
 
-function sanitizeNarrationEditorial(
-  raw: unknown,
-  request: NarrationRequest,
-  fallback: NarrationEditorial
-): NarrationEditorial | null {
+function sanitizeNarrationEditorial(raw: unknown, fallback: NarrationEditorial): NarrationEditorial | null {
   const parsed = narrationEditorialSchema.safeParse(raw);
   if (!parsed.success) return null;
 
   const intro = normalizeEditorialText(parsed.data.intro);
   const closing = normalizeEditorialText(parsed.data.closing);
   const tectonicContext = normalizeEditorialText(parsed.data.tectonicContext);
-  const overlay = normalizeEditorialText(parsed.data.formats.overlay);
-  const ticker = normalizeEditorialText(parsed.data.formats.ticker);
-  if (!intro || !overlay || !ticker) return null;
+  if (!intro) return null;
   if (
-    UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(intro) ||
-    (closing && UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(closing)) ||
-    (tectonicContext && UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(tectonicContext)) ||
-    UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(overlay) ||
-    UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(ticker)
+    containsUnsupportedEditorialClaim(intro) ||
+    containsUnsupportedEditorialClaim(closing) ||
+    containsUnsupportedEditorialClaim(tectonicContext)
   ) {
     return fallback;
   }
+  const safeIntro = EDITORIAL_INTROS.has(canonicalize(intro)) ? intro : fallback.intro;
 
-  const narration = buildNarrationText(request, intro, tectonicContext, closing);
   return {
-    intro,
+    intro: safeIntro,
     closing,
     tectonicContext,
-    formats: {
-      overlay,
-      narration,
-      ticker
-    },
     cue: parsed.data.cue
   };
 }
@@ -475,7 +395,7 @@ export async function generateNarration(request: NarrationRequest): Promise<Narr
   const memoryHit = memoryCache.get(key);
   if (memoryHit) return memoryHit;
 
-  const diskHit = await readDiskCache(key, request, fallback);
+  const diskHit = await readDiskCache(key, fallback);
   if (diskHit) {
     memoryCache.set(key, diskHit);
     return diskHit;
@@ -491,8 +411,7 @@ export async function generateNarration(request: NarrationRequest): Promise<Narr
       ],
       { maxTokens: Math.max(env.deepseekMaxTokens, 260), temperature: 0.68 }
     );
-    const parsed =
-      sanitizeNarrationEditorial(JSON.parse(stripMarkdownFence(raw)), request, fallback) ?? fallback;
+    const parsed = sanitizeNarrationEditorial(JSON.parse(stripMarkdownFence(raw)), fallback) ?? fallback;
     memoryCache.set(key, parsed);
     await writeDiskCache(key, parsed);
     return parsed;

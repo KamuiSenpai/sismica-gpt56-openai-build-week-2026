@@ -30,8 +30,6 @@ export type BroadcastSegmentKind = DirectorSegmentKind | "en-vivo" | "relevo";
 export type BroadcastSegment = {
   kind: BroadcastSegmentKind;
   text: string;
-  overlayText?: string;
-  tickerText?: string;
   cue?: EditorialCue;
 };
 
@@ -39,8 +37,10 @@ const HANDOFF_DUE_MIN = 30;
 const RECAP_DUE_MIN = 60;
 const EDUCATION_DUE_MIN = 8;
 const EDUCATION_REPEAT_WINDOW_MS = 60 * 60_000;
+const EVENT_REPEAT_WINDOW_MS = 10 * 60_000;
 const BULLETIN_WINDOWS: Array<60 | 30 | 15> = [60, 30, 15];
 const HANDOFF_CUE: EditorialCue = { urgency: "media", rhythm: "fluido", tone: "directo" };
+const DIRECTOR_DEBUG = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 const EDUCATIVO_TOPICS: Array<{ topic: string; fallback: string }> = [
   {
@@ -91,7 +91,6 @@ type DirectorState = {
   recentCount: number;
   minutesSinceRecap: number;
   minutesSinceEducativo: number;
-  minutesSinceRecommendation: number;
   biggestRecentMagnitude: number | null;
 };
 
@@ -134,15 +133,20 @@ function fallbackHandoff(
   currentHost: string,
   nextHost: string
 ): {
-  overlayText: string;
   currentHostLine: string;
   nextHostLine: string;
 } {
   return {
-    overlayText: `${currentHost} cede el monitoreo a ${nextHost}. Seguimos con cobertura sismica continua.`,
     currentHostLine: `${nextHost}, te cedo la posta del monitoreo. Seguimos atentos a cualquier actualizacion sismica.`,
     nextHostLine: `Con gusto, ${currentHost}. Tomo la posta y seguimos con el monitoreo sismico en tiempo real.`
   };
+}
+
+export function dialogueDisplayText(turns: BroadcastDialogueTurn[]): string {
+  return turns
+    .map((turn) => turn.text.trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 function eventTimeMs(event: SeismicEvent): number {
@@ -224,6 +228,51 @@ function segmentCue(kind: BroadcastSegmentKind, cue?: EditorialCue): EditorialCu
   return fallbackSegmentCue(kind);
 }
 
+function traceDirectorEvent(stage: string, payload: Record<string, unknown>): void {
+  if (!DIRECTOR_DEBUG) return;
+  console.debug(`[director:${stage}]`, payload);
+}
+
+function pruneRecentEvents(recentEventIds: Map<string, number>, now: number): void {
+  for (const [eventId, announcedAt] of recentEventIds.entries()) {
+    if (now - announcedAt >= EVENT_REPEAT_WINDOW_MS) {
+      recentEventIds.delete(eventId);
+    }
+  }
+}
+
+export function pickNextTourEvent(
+  events: SeismicEvent[],
+  currentIndex: number,
+  recentEventIds: Map<string, number>,
+  now = Date.now()
+): { event: SeismicEvent | null; nextIndex: number; skippedEventIds: string[] } {
+  const tour = events.slice(0, 15);
+  if (tour.length === 0) {
+    return { event: null, nextIndex: currentIndex, skippedEventIds: [] };
+  }
+
+  pruneRecentEvents(recentEventIds, now);
+
+  const skippedEventIds: string[] = [];
+  for (let offset = 1; offset <= tour.length; offset += 1) {
+    const index = (currentIndex + offset + tour.length) % tour.length;
+    const candidate = tour[index];
+    if (!candidate) continue;
+    if (recentEventIds.has(candidate.eventId)) {
+      skippedEventIds.push(candidate.eventId);
+      continue;
+    }
+    return { event: candidate, nextIndex: index, skippedEventIds };
+  }
+
+  return {
+    event: null,
+    nextIndex: currentIndex < 0 ? 0 : currentIndex % tour.length,
+    skippedEventIds
+  };
+}
+
 export function useBroadcastDirector(params: {
   mode: DirectorMode;
   voiceEnabled: boolean;
@@ -232,10 +281,12 @@ export function useBroadcastDirector(params: {
   onFocusEvent: (eventId: string) => void;
   onSegment: (segment: BroadcastSegment) => void;
 }): void {
-  const { mode, voiceEnabled } = params;
+  const { mode } = params;
 
   const eventsRef = useRef(params.events);
   eventsRef.current = params.events;
+  const voiceEnabledRef = useRef(params.voiceEnabled);
+  voiceEnabledRef.current = params.voiceEnabled;
   const queueRef = params.pendingLiveQueueRef;
   const onFocusRef = useRef(params.onFocusEvent);
   onFocusRef.current = params.onFocusEvent;
@@ -250,6 +301,7 @@ export function useBroadcastDirector(params: {
   const lastBulletinAtRef = useRef<Record<15 | 30 | 60, number>>({ 15: 0, 30: 0, 60: 0 });
   const recentEducationalTopicsRef = useRef(new Map<string, number>());
   const tourIndexRef = useRef(-1);
+  const recentAiredEventsRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     if (mode === "off") return;
@@ -273,16 +325,26 @@ export function useBroadcastDirector(params: {
         recentCount: events.length,
         minutesSinceRecap: (now - lastRecapAtRef.current) / 60_000,
         minutesSinceEducativo: (now - lastEducativoAtRef.current) / 60_000,
-        minutesSinceRecommendation: Number.POSITIVE_INFINITY,
         biggestRecentMagnitude: biggest || null
       };
     };
 
     const nextTourEvent = (): SeismicEvent | null => {
-      const tour = eventsRef.current.slice(0, 15);
-      if (tour.length === 0) return null;
-      tourIndexRef.current = (tourIndexRef.current + 1) % tour.length;
-      return tour[tourIndexRef.current] ?? null;
+      const next = pickNextTourEvent(
+        eventsRef.current,
+        tourIndexRef.current,
+        recentAiredEventsRef.current,
+        Date.now()
+      );
+      if (next.skippedEventIds.length > 0) {
+        traceDirectorEvent("skip-repeat", {
+          skippedEventIds: next.skippedEventIds,
+          windowMs: EVENT_REPEAT_WINDOW_MS
+        });
+      }
+      if (!next.event) return null;
+      tourIndexRef.current = next.nextIndex;
+      return next.event;
     };
 
     const air = (segment: BroadcastSegment) => {
@@ -292,7 +354,7 @@ export function useBroadcastDirector(params: {
       onSegmentRef.current(payload);
       rememberEditorialLine(segment.text);
       airingUntilRef.current = Date.now() + delivery.minDurationMs;
-      if (voiceEnabled) {
+      if (voiceEnabledRef.current) {
         prefetchText(payload.text);
         speakText(payload.text, { cue, kind: payload.kind });
       }
@@ -303,12 +365,17 @@ export function useBroadcastDirector(params: {
         intro,
         mode: kind === "en-vivo" ? "breaking" : "seguimiento"
       });
+      recentAiredEventsRef.current.set(event.eventId, Date.now());
+      traceDirectorEvent("emit-event", {
+        kind,
+        eventId: event.eventId,
+        place: broadcastPlace(event),
+        text: narration.text
+      });
       onFocusRef.current(event.eventId);
       air({
         kind,
         text: narration.text,
-        overlayText: narration.overlayText,
-        tickerText: narration.tickerText,
         cue: narration.cue
       });
     };
@@ -331,15 +398,15 @@ export function useBroadcastDirector(params: {
           text: script.nextHostLine
         }
       ];
+      const dialogueText = dialogueDisplayText(turns);
 
       setActiveBroadcastHost(nextHost.id);
       lastHandoffAtRef.current = Date.now();
-      onSegmentRef.current({ kind: "relevo", text: script.overlayText, cue: HANDOFF_CUE });
-      rememberEditorialLine(script.overlayText);
+      onSegmentRef.current({ kind: "relevo", text: dialogueText, cue: HANDOFF_CUE });
+      rememberEditorialLine(dialogueText);
       airingUntilRef.current =
-        Date.now() +
-        cueToVoiceDelivery(HANDOFF_CUE, { text: script.overlayText, kind: "relevo" }).minDurationMs;
-      if (voiceEnabled) {
+        Date.now() + cueToVoiceDelivery(HANDOFF_CUE, { text: dialogueText, kind: "relevo" }).minDurationMs;
+      if (voiceEnabledRef.current) {
         prefetchDialogue(turns);
         speakDialogue(turns);
       }
@@ -491,7 +558,7 @@ export function useBroadcastDirector(params: {
 
     const intervalId = window.setInterval(() => {
       if (busyRef.current) return;
-      if (voiceEnabled && isSeismicNarrationActive()) return;
+      if (voiceEnabledRef.current && isSeismicNarrationActive()) return;
       if (Date.now() < airingUntilRef.current) return;
       busyRef.current = true;
       void airNext().finally(() => {
@@ -500,5 +567,5 @@ export function useBroadcastDirector(params: {
     }, 500);
 
     return () => window.clearInterval(intervalId);
-  }, [mode, voiceEnabled, queueRef]);
+  }, [mode, queueRef]);
 }

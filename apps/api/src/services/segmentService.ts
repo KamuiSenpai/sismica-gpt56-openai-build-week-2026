@@ -44,7 +44,6 @@ export const handoffRequestSchema = z.object({
 });
 export type HandoffRequest = z.infer<typeof handoffRequestSchema>;
 export type HandoffSegment = {
-  overlayText: string;
   currentHostLine: string;
   nextHostLine: string;
 };
@@ -157,18 +156,17 @@ let cacheDirReady: Promise<void> | null = null;
 
 const UNSUPPORTED_LIVE_CLAIM_PATTERN = /\breplic(?:a|as)\b/iu;
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo)\b/iu;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?)\b/u;
 const SEGMENT_SYSTEM_PROMPT =
   "Eres el redactor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"text":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
   "El texto debe ser breve, claro y listo para overlay y voz. Usa espanol neutro. Considera las lineas recientes solo para evitar repetir aperturas o remates. No inventes " +
-  "replicas, danos, alertas, riesgo, tsunami ni evacuaciones.";
+  "replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
 const HANDOFF_SYSTEM_PROMPT =
   "Eres el productor editorial de un canal sismico 24/7. Redacta un relevo breve y natural " +
   "entre dos locutores. Devuelve SOLO JSON valido con este formato exacto: " +
-  '{"overlayText":"...","currentHostLine":"...","nextHostLine":"..."} ' +
+  '{"currentHostLine":"...","nextHostLine":"..."} ' +
   "Usa espanol neutro, tono profesional de broadcast y una sola frase por campo. " +
-  "overlayText debe mencionar por nombre a ambos locutores. " +
   "currentHostLine es dicha por el locutor saliente y debe ceder la posta al locutor entrante, mencionandolo por nombre. " +
   "nextHostLine es dicha por el locutor entrante y debe tomar la posta, mencionando por nombre al locutor saliente. " +
   "No inventes sismos, replicas, danos, alertas, riesgos ni cifras.";
@@ -265,6 +263,38 @@ function sanitizePlainText(text: string): string {
     .trim();
 }
 
+function canonicalizeEditorialText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLocaleLowerCase("es")
+    .replace(/[.,;:!?]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function containsUnsupportedEditorialClaim(text: string): boolean {
+  return UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(canonicalizeEditorialText(text));
+}
+
+function dedupeRepeatedSentences(text: string): string {
+  const fragments = text.split(/(?<=[.!?])\s+(?=\p{Lu})/u);
+  const seen = new Set<string>();
+  const unique = fragments
+    .map((fragment) => sanitizePlainText(fragment).replace(/[.!?]+$/u, ""))
+    .filter(Boolean)
+    .filter((fragment) => {
+      const canonical = canonicalizeEditorialText(fragment);
+      if (!canonical || seen.has(canonical)) return false;
+      seen.add(canonical);
+      return true;
+    });
+  return unique
+    .map((fragment) => `${fragment}.`)
+    .join(" ")
+    .trim();
+}
+
 function stripMarkdownFence(raw: string): string {
   return raw
     .trim()
@@ -282,7 +312,6 @@ function stripSpeakerPrefix(text: string, speakerName: string): string {
 
 function fallbackHandoffSegment(request: HandoffRequest): HandoffSegment {
   return {
-    overlayText: `${request.currentHost} cede el monitoreo a ${request.nextHost}. Seguimos con cobertura sismica continua.`,
     currentHostLine: `${request.nextHost}, te cedo la posta del monitoreo. Seguimos atentos a cualquier actualizacion sismica.`,
     nextHostLine: `Con gusto, ${request.currentHost}. Tomo la posta y seguimos con el monitoreo sismico en tiempo real.`
   };
@@ -308,11 +337,9 @@ function parseHandoffSegment(raw: string, request: HandoffRequest): HandoffSegme
   const takePattern = /\b(gracias|tomo|recibo|continuo|seguimos)\b/iu;
   try {
     const parsed = JSON.parse(stripMarkdownFence(raw)) as {
-      overlayText?: unknown;
       currentHostLine?: unknown;
       nextHostLine?: unknown;
     };
-    let overlayText = typeof parsed.overlayText === "string" ? sanitizePlainText(parsed.overlayText) : "";
     const currentHostLine =
       typeof parsed.currentHostLine === "string"
         ? stripSpeakerPrefix(sanitizePlainText(parsed.currentHostLine), request.currentHost)
@@ -321,23 +348,15 @@ function parseHandoffSegment(raw: string, request: HandoffRequest): HandoffSegme
       typeof parsed.nextHostLine === "string"
         ? stripSpeakerPrefix(sanitizePlainText(parsed.nextHostLine), request.nextHost)
         : "";
-    if (!overlayText || !currentHostLine || !nextHostLine) return fallback;
+    if (!currentHostLine || !nextHostLine) return fallback;
     if (
-      UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(overlayText) ||
-      UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(currentHostLine) ||
-      UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(nextHostLine)
+      containsUnsupportedEditorialClaim(currentHostLine) ||
+      containsUnsupportedEditorialClaim(nextHostLine)
     ) {
       return fallback;
     }
-    const overlayLower = overlayText.toLowerCase();
     const currentLower = currentHostLine.toLowerCase();
     const nextLower = nextHostLine.toLowerCase();
-    if (
-      !overlayLower.includes(request.currentHost.toLowerCase()) ||
-      !overlayLower.includes(request.nextHost.toLowerCase())
-    ) {
-      overlayText = fallback.overlayText;
-    }
     if (
       !currentLower.includes(request.nextHost.toLowerCase()) ||
       !nextLower.includes(request.currentHost.toLowerCase())
@@ -347,7 +366,7 @@ function parseHandoffSegment(raw: string, request: HandoffRequest): HandoffSegme
     if (!yieldPattern.test(currentHostLine) || !takePattern.test(nextHostLine)) {
       return fallback;
     }
-    return { overlayText, currentHostLine, nextHostLine };
+    return { currentHostLine, nextHostLine };
   } catch {
     return fallback;
   }
@@ -471,10 +490,10 @@ function sanitizeGeneratedSegmentPacket(raw: unknown, request: SegmentRequest): 
   });
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return fallback;
-  const text = sanitizePlainText(parsed.data.text);
+  const text = dedupeRepeatedSentences(sanitizePlainText(parsed.data.text));
   if (!text) return fallback;
   if (request.kind !== "recomendacion" && UNSUPPORTED_LIVE_CLAIM_PATTERN.test(text)) return fallback;
-  if (UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(text)) return fallback;
+  if (containsUnsupportedEditorialClaim(text)) return fallback;
   return { text, cue: parsed.data.cue };
 }
 

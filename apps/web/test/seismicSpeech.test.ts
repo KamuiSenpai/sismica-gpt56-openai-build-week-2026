@@ -169,6 +169,32 @@ test("broadcastPlace resolves ISO suffixes into full country names", () => {
   assert.equal(place, "Polonia");
 });
 
+test("broadcastPlace removes repeated location and country components", () => {
+  const place = broadcastPlace(
+    makeEvent({
+      title: "M3.2 - Mindanao, Philippines - Philippines",
+      source: "EMSC"
+    })
+  );
+  assert.equal(place, "Mindanao, Filipinas");
+});
+
+test("broadcastPlace translates live legacy descriptors before narration", () => {
+  assert.equal(
+    broadcastPlace(makeEvent({ title: "M2.5 - Ceram Sea, Indonesia", source: "EMSC" })),
+    "Mar de Ceram, Indonesia"
+  );
+  assert.equal(broadcastPlace(makeEvent({ title: "M2.5 - Crete, Greece", source: "EMSC" })), "Creta, Grecia");
+  assert.equal(
+    broadcastPlace(makeEvent({ title: "M4.8 - Bonin Islands, Japan", source: "GEOFON" })),
+    "Islas Bonin, Japon"
+  );
+  assert.equal(
+    broadcastPlace(makeEvent({ title: "M2.5 - Colombia-Ecuador Border region", source: "SGC" })),
+    "Region de frontera entre Colombia y Ecuador"
+  );
+});
+
 test("buildSeismicNarration appends a closing line when provided", () => {
   const narration = buildSeismicNarration(makeEvent(), { closing: "Seguimos monitoreando la zona" });
   assert.equal(

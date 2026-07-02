@@ -11,6 +11,7 @@ const {
   handoffRequestSchema,
   segmentRequestSchema
 } = await import("../src/services/segmentService.js");
+const { directorStateSchema } = await import("../src/services/directorService.js");
 
 test("segmentRequestSchema acepta recomendaciones", () => {
   assert.equal(
@@ -75,12 +76,24 @@ test("handoffRequestSchema acepta relevo entre Claribel y Andrew", () => {
   );
 });
 
+test("directorStateSchema acepta el estado real del director IA", () => {
+  assert.equal(
+    directorStateSchema.safeParse({
+      livePending: 0,
+      recentCount: 100,
+      minutesSinceRecap: 0.2,
+      minutesSinceEducativo: 0.2,
+      biggestRecentMagnitude: 5.1
+    }).success,
+    true
+  );
+});
+
 test("generateHandoffSegment usa pauta local si DeepSeek esta deshabilitado", async () => {
   const handoff = await generateHandoffSegment({
     currentHost: "Claribel",
     nextHost: "Andrew"
   });
-  assert.equal(handoff.overlayText.includes("Andrew"), true);
   assert.equal(handoff.currentHostLine.includes("Andrew"), true);
   assert.equal(handoff.nextHostLine.includes("Claribel"), true);
 });
