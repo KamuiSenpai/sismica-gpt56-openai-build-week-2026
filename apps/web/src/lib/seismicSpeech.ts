@@ -59,6 +59,11 @@ export function primeSeismicVoices(): boolean {
   return true;
 }
 
+// Corta la locucion del navegador en curso (sin deshabilitar la voz).
+export function cancelSeismicNarration(): void {
+  getSpeechSynthesis()?.cancel();
+}
+
 export function setSeismicVoiceEnabled(enabled: boolean): boolean {
   voiceEnabled = enabled;
 

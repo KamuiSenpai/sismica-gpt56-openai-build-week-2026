@@ -150,6 +150,11 @@ export default function App() {
 
   const selectedEvent = useMemo(() => findSelectedEvent(events, selectedEventId), [events, selectedEventId]);
   const focusEvent = selectedEvent ?? events[0] ?? null;
+  // Identidad del sismo enfocado: la narracion se dispara por ID, no por la referencia del
+  // objeto (que cambia en cada refresco de datos y reiniciaria la voz -> "eco").
+  const focusEventId = focusEvent?.eventId ?? null;
+  const focusEventRef = useRef(focusEvent);
+  focusEventRef.current = focusEvent;
   const focusStatus = focusEvent ? getEventStatusBadge(focusEvent.status) : null;
   const focusContext = focusEvent
     ? (disasters.find((context) => context.eventId === focusEvent.eventId) ?? null)
@@ -339,32 +344,30 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!voiceEnabled || !focusEvent) return;
+    const event = focusEventRef.current;
+    if (!voiceEnabled || !event) return;
     const pendingVoiceIntro =
-      pendingVoiceIntroRef.current?.eventId === focusEvent.eventId
+      pendingVoiceIntroRef.current?.eventId === event.eventId
         ? pendingVoiceIntroRef.current.intro
         : undefined;
     if (pendingVoiceIntro) {
       pendingVoiceIntroRef.current = null;
     }
-    speakSeismicNarration(
-      focusEvent,
-      true,
-      pendingVoiceIntro ? { force: true, intro: pendingVoiceIntro } : {}
-    );
-  }, [focusEvent, voiceEnabled]);
+    speakSeismicNarration(event, true, pendingVoiceIntro ? { force: true, intro: pendingVoiceIntro } : {});
+    // Solo por cambio de sismo (ID) o de habilitacion; NO por refrescos de datos.
+  }, [focusEventId, voiceEnabled]);
 
   useEffect(() => {
-    if (!voiceEnabled || tourPaused || voiceEngine === "browser" || !focusEvent) return;
-    const tour = events.slice(0, 15);
+    const event = focusEventRef.current;
+    if (!voiceEnabled || tourPaused || voiceEngine === "browser" || !event) return;
+    // Cachea la narracion del sismo actual y del siguiente para que suene sincronizada.
+    prefetchSeismicNarration(event, true);
+    const tour = eventsRef.current.slice(0, 15);
     if (tour.length < 2) return;
-
-    const index = tour.findIndex((event) => event.eventId === focusEvent.eventId);
+    const index = tour.findIndex((item) => item.eventId === event.eventId);
     const nextEvent = tour[(index + 1) % tour.length] ?? tour[0];
-    if (!nextEvent || nextEvent.eventId === focusEvent.eventId) return;
-
-    prefetchSeismicNarration(nextEvent, true);
-  }, [events, focusEvent, tourPaused, voiceEnabled, voiceEngine]);
+    if (nextEvent && nextEvent.eventId !== event.eventId) prefetchSeismicNarration(nextEvent, true);
+  }, [focusEventId, tourPaused, voiceEnabled, voiceEngine]);
 
   // Arranca el recorrido: selecciona el primer sismo en cuanto hay datos.
   useEffect(() => {

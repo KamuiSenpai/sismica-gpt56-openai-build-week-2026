@@ -15,6 +15,7 @@ import {
 } from "./seismicNeuralSpeech";
 import {
   buildSeismicNarration,
+  cancelSeismicNarration as cancelBrowserNarration,
   isSeismicNarrationActive as isBrowserNarrationActive,
   isSeismicVoiceSupported as isBrowserVoiceSupported,
   primeSeismicVoices as primeBrowserVoices,
@@ -162,6 +163,8 @@ async function runNeuralCascade(
       console.warn(`Voz neural (${engine}) fallo; probando el siguiente motor.`, error);
     }
   }
+  // Respaldo del navegador: corta cualquier audio neural para no solaparse.
+  cancelNeuralNarration();
   speakBrowserNarration(event, true, { ...options, force: true });
 }
 
@@ -173,6 +176,8 @@ export function speakSeismicNarration(
   if (!enabled || !voiceEnabled) return false;
 
   if (voiceEngine === "browser") {
+    // Corta cualquier audio neural en curso para no solaparse con el navegador.
+    cancelNeuralNarration();
     return speakBrowserNarration(event, enabled, options);
   }
 
@@ -185,6 +190,8 @@ export function speakSeismicNarration(
   lastSpeechKey = key;
   lastSpeechAt = now;
 
+  // Corta cualquier locucion del navegador (respaldo previo) antes de la voz neural.
+  cancelBrowserNarration();
   const text = buildSeismicNarration(event, options);
   void runNeuralCascade(event, text, voiceEngine as NeuralEngine, options);
 
