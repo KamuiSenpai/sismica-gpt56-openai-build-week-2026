@@ -146,7 +146,7 @@ button {
 .director-overlay {
   position: absolute;
   left: 50%;
-  bottom: 26px;
+  top: 22px;
   transform: translateX(-50%);
   z-index: 30;
   max-width: min(78%, 900px);
@@ -204,7 +204,7 @@ button {
 @keyframes director-overlay-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 12px);
+    transform: translate(-50%, -12px);
   }
   to {
     opacity: 1;
