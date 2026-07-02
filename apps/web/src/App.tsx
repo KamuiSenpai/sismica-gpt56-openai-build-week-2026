@@ -65,6 +65,11 @@ function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | nul
 
 const MAGNITUDE_SCALE_LEVELS = [9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
 
+// Presentacion de sismos EN VIVO: tiempo minimo que cada uno permanece en foco y tope de la
+// cola, para que un lote grande ingresado de golpe no salte erraticamente ni tape la voz.
+const MIN_LIVE_DISPLAY_MS = 8_000;
+const MAX_LIVE_QUEUE = 5;
+
 function MagnitudeScale({ magnitude }: { magnitude: number | null }) {
   const normalizedMagnitude = clampNumber(magnitude ?? 0, 0, 9);
   return (
@@ -134,7 +139,8 @@ export default function App() {
   // Cola de sismos EN VIVO que llegaron mientras la voz narraba: se anuncian al terminar.
   const pendingLiveQueueRef = useRef<SeismicEvent[]>([]);
   const promotedLiveAtRef = useRef<number | null>(null);
-  const sawNarrationRef = useRef(false);
+  // Hasta cuando un sismo EN VIVO retiene el foco (el recorrido cede el turno mientras tanto).
+  const liveHoldUntilRef = useRef(0);
   const statuses = useSourceStatusesQuery().data ?? [];
   const disasters = useDisastersQuery().data ?? [];
   const tsunamiProducts = useTsunamiQuery().data ?? [];
@@ -175,30 +181,23 @@ export default function App() {
         !current.some((item) => item.eventId === incomingEvent.eventId) &&
         (incomingEvent.magnitude === null || incomingEvent.magnitude >= minMagnitude);
 
-      // Pre-sintetiza ya la narracion del nuevo sismo para anunciarlo al instante.
-      if (isNewLive && !tourPaused && voiceEnabled) {
-        prefetchSeismicNarration(incomingEvent, true, { intro: "Nuevo sismo detectado" });
-      }
       queryClient.setQueryData(key, (existing: SeismicEvent[] | undefined) =>
         mergeIncomingEvent(existing, incomingEvent, minMagnitude)
       );
 
       if (!isNewLive || tourPaused) return;
 
-      // Si la voz esta narrando, NO interrumpe: encola el sismo para anunciarlo al terminar.
-      if (voiceEnabled && isSeismicNarrationActive()) {
-        const queue = pendingLiveQueueRef.current;
-        if (!queue.some((item) => item.eventId === incomingEvent.eventId)) {
-          queue.push(incomingEvent);
-        }
+      // Encola SIEMPRE (el watcher los presenta de a uno, con tiempo minimo y sin tapar la
+      // voz). Un tope evita que un lote grande de golpe genere una avalancha de anuncios;
+      // los sobrantes quedan igualmente en la lista/globo y el recorrido los recorrera.
+      const queue = pendingLiveQueueRef.current;
+      if (queue.some((item) => item.eventId === incomingEvent.eventId) || queue.length >= MAX_LIVE_QUEUE) {
         return;
       }
-
-      // Silencio (o voz apagada): muestra el nuevo sismo y lo anuncia de inmediato.
+      queue.push(incomingEvent);
       if (voiceEnabled) {
-        pendingVoiceIntroRef.current = { eventId: incomingEvent.eventId, intro: "Nuevo sismo detectado" };
+        prefetchSeismicNarration(incomingEvent, true, { intro: "Nuevo sismo detectado" });
       }
-      setSelectedEventId(incomingEvent.eventId);
     },
     [queryClient, minMagnitude, hours, tourPaused, voiceEnabled]
   );
@@ -208,29 +207,27 @@ export default function App() {
   // Vigila la narracion en curso: cuando termina, promueve el siguiente sismo EN VIVO
   // encolado (lo muestra y lo anuncia como "Nuevo sismo detectado"), sin interrumpir.
   useEffect(() => {
-    const START_GRACE_MS = 6_000;
     const intervalId = window.setInterval(() => {
       const queue = pendingLiveQueueRef.current;
       if (queue.length === 0) return;
 
-      if (voiceEnabled && isSeismicNarrationActive()) {
-        sawNarrationRef.current = true;
-        return;
-      }
-      // Tras promover, da margen a que su narracion arranque (XTTS puede tardar) antes del siguiente.
-      if (
-        promotedLiveAtRef.current !== null &&
-        !sawNarrationRef.current &&
-        Date.now() - promotedLiveAtRef.current < START_GRACE_MS
-      ) {
-        return;
-      }
+      // 1) No tapar la voz: esperar a que termine la narracion en curso.
+      if (voiceEnabled && isSeismicNarrationActive()) return;
+      // 2) Piso de exhibicion: cada sismo permanece un minimo antes del siguiente (evita
+      //    saltos erraticos aunque la voz este apagada o la narracion sea corta).
+      const sincePromote =
+        promotedLiveAtRef.current === null
+          ? Number.POSITIVE_INFINITY
+          : Date.now() - promotedLiveAtRef.current;
+      if (sincePromote < MIN_LIVE_DISPLAY_MS) return;
 
       const next = queue.shift();
       if (!next) return;
-      pendingVoiceIntroRef.current = { eventId: next.eventId, intro: "Nuevo sismo detectado" };
+      pendingVoiceIntroRef.current = voiceEnabled
+        ? { eventId: next.eventId, intro: "Nuevo sismo detectado" }
+        : null;
       promotedLiveAtRef.current = Date.now();
-      sawNarrationRef.current = false;
+      liveHoldUntilRef.current = Date.now() + MIN_LIVE_DISPLAY_MS;
       setSelectedEventId(next.eventId);
     }, 400);
     return () => window.clearInterval(intervalId);
@@ -382,6 +379,8 @@ export default function App() {
   useEffect(() => {
     if (tourPaused) return;
     const intervalId = window.setInterval(() => {
+      // Cede el turno mientras se presentan sismos EN VIVO (cola o hold vigente).
+      if (pendingLiveQueueRef.current.length > 0 || Date.now() < liveHoldUntilRef.current) return;
       const tour = eventsRef.current.slice(0, 15);
       if (tour.length === 0) return;
       setSelectedEventId((current) => {
