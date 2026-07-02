@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import io
 import os
+from threading import Lock
 from contextlib import asynccontextmanager
 
 import numpy as np
@@ -30,6 +31,7 @@ import soundfile as sf
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+import torch
 
 # Acepta la licencia del modelo de forma no interactiva (necesario en servidor).
 os.environ.setdefault("COQUI_TOS_AGREED", "1")
@@ -60,6 +62,27 @@ class _State:
 
 
 state = _State()
+synthesis_lock = Lock()
+
+
+def _stabilize_cuda_inference(model) -> None:
+    if state.device != "cuda":
+        return
+
+    # XTTS-v2 en GPUs de consumo (RTX 40) puede fallar con el kernel SDP "flash".
+    # Desactivamos SOLO flash y dejamos "mem_efficient" activo: es estable y rapido
+    # (forzar solo "math" funciona pero es varias veces mas lento).
+    if hasattr(torch.backends, "cuda"):
+        torch.backends.cuda.enable_flash_sdp(False)
+        torch.backends.cuda.enable_mem_efficient_sdp(True)
+        torch.backends.cuda.enable_math_sdp(True)
+
+    # cuda_config = EfficientAttentionConfig(enable_flash, enable_math, enable_mem_efficient).
+    for module in model.modules():
+        if hasattr(module, "cuda_config") and hasattr(module, "config"):
+            module.cuda_config = module.config(False, True, True)
+        if hasattr(module, "use_flash"):
+            module.use_flash = False
 
 
 @asynccontextmanager
@@ -68,6 +91,7 @@ async def lifespan(_app: FastAPI):
 
     state.device = _resolve_device()
     state.tts = TTS(MODEL_NAME).to(state.device)
+    _stabilize_cuda_inference(state.tts.synthesizer.tts_model)
 
     synthesizer = getattr(state.tts, "synthesizer", None)
     if synthesizer is not None and getattr(synthesizer, "output_sample_rate", None):
@@ -121,7 +145,8 @@ def synthesize(request: SynthesizeRequest) -> Response:
         kwargs["speaker"] = speaker
 
     try:
-        waveform = state.tts.tts(**kwargs)
+        with synthesis_lock:
+            waveform = state.tts.tts(**kwargs)
     except Exception as error:  # noqa: BLE001 - devolvemos 500 con el detalle
         raise HTTPException(status_code=500, detail=f"Fallo la sintesis: {error}") from error
 
