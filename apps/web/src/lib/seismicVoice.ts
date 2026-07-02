@@ -8,6 +8,7 @@ import {
   cancelNeuralNarration,
   fetchTtsHealth,
   isNeuralNarrationActive,
+  prefetchNeural,
   speakNeural,
   type NeuralEngine,
   type TtsHealth
@@ -29,6 +30,10 @@ export const VOICE_ENGINE_LABELS: Record<VoiceEngine, string> = {
   xtts: "XTTS-v2",
   browser: "Navegador"
 };
+
+// Orden de preferencia neural (autoseleccion y cascada de fallback): XTTS-v2 primero,
+// luego Piper y, si todos fallan, la voz del navegador.
+const NEURAL_PRIORITY: readonly NeuralEngine[] = ["xtts", "piper"] as const;
 
 const STORAGE_KEY = "sismica.voiceEngine";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
@@ -82,10 +87,11 @@ export function isEngineAvailable(engine: VoiceEngine): boolean {
 
 export async function refreshTtsHealth(signal?: AbortSignal): Promise<TtsHealth | null> {
   healthSnapshot = await fetchTtsHealth(signal);
-  // Si el usuario no eligio motor y hay uno neural disponible, seleccionarlo por defecto.
+  // Si el usuario no eligio motor y hay uno neural disponible, seleccionarlo por defecto
+  // segun la prioridad (XTTS-v2 primero, luego Piper).
   if (!engineExplicit && healthSnapshot?.enabled) {
-    if (healthSnapshot.engines.piper?.ok) voiceEngine = "piper";
-    else if (healthSnapshot.engines.xtts?.ok) voiceEngine = "xtts";
+    const preferred = NEURAL_PRIORITY.find((engine) => healthSnapshot?.engines[engine]?.ok);
+    if (preferred) voiceEngine = preferred;
   }
   return healthSnapshot;
 }
@@ -119,6 +125,46 @@ export function setSeismicVoiceEnabled(enabled: boolean): boolean {
 
 export { buildSeismicNarration };
 
+export function prefetchSeismicNarration(
+  event: SeismicEvent,
+  enabled: boolean,
+  options: { intro?: string } = {}
+): void {
+  if (!enabled || !voiceEnabled || voiceEngine === "browser") return;
+
+  const engine = voiceEngine as NeuralEngine;
+  if (!isEngineAvailable(engine)) return;
+
+  const text = buildSeismicNarration(event, options);
+  void prefetchNeural(text, engine);
+}
+
+// Orden de intentos: el motor elegido primero, luego el resto de neurales por prioridad.
+function neuralFallbackOrder(start: NeuralEngine): NeuralEngine[] {
+  return [start, ...NEURAL_PRIORITY.filter((engine) => engine !== start)];
+}
+
+// Cascada XTTS-v2 -> Piper -> Navegador: prueba cada motor neural disponible en orden y,
+// solo si todos fallan de verdad, cae a la voz del navegador. Una narracion superada por
+// otra mas reciente termina en silencio (speakNeural resuelve sin lanzar).
+async function runNeuralCascade(
+  event: SeismicEvent,
+  text: string,
+  start: NeuralEngine,
+  options: { force?: boolean; intro?: string }
+): Promise<void> {
+  for (const engine of neuralFallbackOrder(start)) {
+    if (!isEngineAvailable(engine)) continue;
+    try {
+      await speakNeural(text, engine);
+      return;
+    } catch (error) {
+      console.warn(`Voz neural (${engine}) fallo; probando el siguiente motor.`, error);
+    }
+  }
+  speakBrowserNarration(event, true, { ...options, force: true });
+}
+
 export function speakSeismicNarration(
   event: SeismicEvent,
   enabled: boolean,
@@ -140,12 +186,7 @@ export function speakSeismicNarration(
   lastSpeechAt = now;
 
   const text = buildSeismicNarration(event, options);
-  const engine = voiceEngine as NeuralEngine;
-
-  void speakNeural(text, engine).catch((error) => {
-    console.warn(`Voz neural (${engine}) no disponible; uso respaldo del navegador.`, error);
-    speakBrowserNarration(event, true, { ...options, force: true });
-  });
+  void runNeuralCascade(event, text, voiceEngine as NeuralEngine, options);
 
   return true;
 }

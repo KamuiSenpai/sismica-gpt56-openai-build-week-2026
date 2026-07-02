@@ -46,6 +46,7 @@ import {
   isEngineAvailable,
   isSeismicNarrationActive,
   isSeismicVoiceSupported,
+  prefetchSeismicNarration,
   primeSeismicVoices,
   refreshTtsHealth,
   setSeismicVoiceEnabled,
@@ -164,11 +165,19 @@ export default function App() {
       const isNewLive =
         !current.some((item) => item.eventId === incomingEvent.eventId) &&
         (incomingEvent.magnitude === null || incomingEvent.magnitude >= minMagnitude);
-      if (isNewLive && !tourPaused && voiceEnabled && isSeismicNarrationActive()) {
+      const shouldInterruptNarration = isNewLive && !tourPaused && voiceEnabled && isSeismicNarrationActive();
+      if (shouldInterruptNarration) {
         pendingVoiceIntroRef.current = {
           eventId: incomingEvent.eventId,
           intro: "Nuevo sismo detectado"
         };
+      }
+      if (isNewLive && !tourPaused && voiceEnabled) {
+        prefetchSeismicNarration(
+          incomingEvent,
+          true,
+          shouldInterruptNarration ? { intro: "Nuevo sismo detectado" } : {}
+        );
       }
       queryClient.setQueryData(key, (existing: SeismicEvent[] | undefined) =>
         mergeIncomingEvent(existing, incomingEvent, minMagnitude)
@@ -305,6 +314,18 @@ export default function App() {
       pendingVoiceIntro ? { force: true, intro: pendingVoiceIntro } : {}
     );
   }, [focusEvent, voiceEnabled]);
+
+  useEffect(() => {
+    if (!voiceEnabled || tourPaused || voiceEngine === "browser" || !focusEvent) return;
+    const tour = events.slice(0, 15);
+    if (tour.length < 2) return;
+
+    const index = tour.findIndex((event) => event.eventId === focusEvent.eventId);
+    const nextEvent = tour[(index + 1) % tour.length] ?? tour[0];
+    if (!nextEvent || nextEvent.eventId === focusEvent.eventId) return;
+
+    prefetchSeismicNarration(nextEvent, true);
+  }, [events, focusEvent, tourPaused, voiceEnabled, voiceEngine]);
 
   // Arranca el recorrido: selecciona el primer sismo en cuanto hay datos.
   useEffect(() => {
