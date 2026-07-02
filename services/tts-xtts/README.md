@@ -16,15 +16,19 @@ neural con **XTTS-v2** para la plataforma sísmica. El API de Node le hace proxy
 
 ```powershell
 cd services/tts-xtts
-py -3.11 -m venv .venv
+py -3.10 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# 1) Instala torch con el wheel de tu CUDA (ejemplo CUDA 12.1):
-pip install torch --index-url https://download.pytorch.org/whl/cu121
+# 1) Instala torch y torchaudio con el wheel de tu CUDA (ejemplo CUDA 12.1):
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# 2) Instala el resto de dependencias:
+# 2) Instala el resto de dependencias (fija transformers<5, requerido por coqui-tts):
 pip install -r requirements.txt
 ```
+
+> **Nota:** `coqui-tts` 0.27.x usa APIs de `transformers` 4.x; `requirements.txt` ya fija
+> `transformers>=4.57,<5`. Con torch 2.5 es indispensable `torchaudio` (lo importa XTTS).
+> Verificado en Python 3.10 + RTX 4060 Ti (CUDA), voz por defecto "Claribel Dervla".
 
 ## Arranque
 
