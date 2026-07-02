@@ -1,6 +1,6 @@
 import { type SeismicEvent } from "@sismica/shared";
 
-import { getEventPlace } from "./presentation";
+import { countryCode, countryNameEs, getEventPlace } from "./presentation";
 
 const DEFAULT_SPEECH_LANG = "es-PE";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
@@ -12,6 +12,12 @@ const NARRATION_DESCRIPTOR_PATTERN =
 let voiceEnabled = false;
 let lastSpeechKey = "";
 let lastSpeechAt = 0;
+
+function formatSpokenKilometers(value: number | string): string {
+  const numericValue = typeof value === "number" ? value : Number.parseFloat(value.replace(",", "."));
+  const label = numericValue === 1 ? "kilometro" : "kilometros";
+  return `${value} ${label}`;
+}
 
 function getSpeechSynthesis(): SpeechSynthesis | null {
   if (typeof window === "undefined") return null;
@@ -69,12 +75,25 @@ export function setSeismicVoiceEnabled(enabled: boolean): boolean {
 }
 
 function normalizeNarrationPlace(place: string): string {
-  if (!NARRATION_DESCRIPTOR_PATTERN.test(place)) return place;
-  return place.replace(/^(\p{L})/u, (match) => match.toLocaleLowerCase("es"));
+  const normalizedUnits = place.replace(/(\d+(?:[.,]\d+)?)\s*km\b/giu, (_match, rawDistance: string) =>
+    formatSpokenKilometers(rawDistance)
+  );
+  if (!NARRATION_DESCRIPTOR_PATTERN.test(normalizedUnits)) return normalizedUnits;
+  return normalizedUnits.replace(/^(\p{L})/u, (match) => match.toLocaleLowerCase("es"));
+}
+
+function resolveNarrationPlace(event: SeismicEvent): string {
+  const place = normalizeNarrationPlace(getEventPlace(event.title).trim());
+  if (!place) return "ubicacion no identificada";
+
+  const inferredCountry = countryNameEs(countryCode(event));
+  if (!inferredCountry) return place;
+  if (place.toLocaleLowerCase("es").endsWith(inferredCountry.toLocaleLowerCase("es"))) return place;
+  return `${place}, ${inferredCountry}`;
 }
 
 export function buildSeismicNarration(event: SeismicEvent, options: { intro?: string } = {}): string {
-  const place = normalizeNarrationPlace(getEventPlace(event.title).trim()) || "ubicacion no identificada";
+  const place = resolveNarrationPlace(event);
   const intro = options.intro?.trim() || DEFAULT_NARRATION_INTRO;
   const segments = [`${intro} en ${place}`];
 
@@ -83,7 +102,7 @@ export function buildSeismicNarration(event: SeismicEvent, options: { intro?: st
   }
 
   if (typeof event.depthKm === "number") {
-    segments.push(`a una profundidad de ${Math.round(event.depthKm)} kilometros`);
+    segments.push(`a una profundidad de ${formatSpokenKilometers(Math.round(event.depthKm))}`);
   }
 
   return `${segments.join(", ")}.`;

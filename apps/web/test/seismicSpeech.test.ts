@@ -3,8 +3,8 @@ import test from "node:test";
 
 import { type SeismicEvent } from "@sismica/shared";
 
-import { buildSeismicNarration } from "../src/lib/seismicSpeech";
 import { getEventPlace } from "../src/lib/presentation";
+import { buildSeismicNarration } from "../src/lib/seismicSpeech";
 
 function makeEvent(overrides: Partial<SeismicEvent> = {}): SeismicEvent {
   return {
@@ -62,6 +62,21 @@ test("buildSeismicNarration omits missing values cleanly", () => {
   assert.equal(narration, "Sismo detectado en Northern Sumatra, Indonesia.");
 });
 
+test("buildSeismicNarration appends inferred country for national-source titles", () => {
+  const narration = buildSeismicNarration(
+    makeEvent({
+      source: "CSN",
+      title: "M2.6 - 112 km al O de Caldera",
+      magnitude: 2.6,
+      depthKm: 28
+    })
+  );
+  assert.equal(
+    narration,
+    "Sismo detectado en 112 kilometros al O de Caldera, Chile, de magnitud 2.6, a una profundidad de 28 kilometros."
+  );
+});
+
 test("buildSeismicNarration can announce a newly detected quake", () => {
   const narration = buildSeismicNarration(makeEvent(), { intro: "Nuevo sismo detectado" });
   assert.equal(
@@ -71,23 +86,50 @@ test("buildSeismicNarration can announce a newly detected quake", () => {
 });
 
 test("getEventPlace capitalizes sentence-style descriptors for cards", () => {
-  assert.equal(getEventPlace("M4.7 - sur de Perú"), "Sur de Perú");
+  assert.equal(getEventPlace("M4.7 - sur de Per\u00fa"), "Sur de Per\u00fa");
   assert.equal(
-    getEventPlace("M3.2 - cerca de la costa norte de Papúa, Indonesia"),
-    "Cerca de la costa norte de Papúa, Indonesia"
+    getEventPlace("M3.2 - cerca de la costa norte de Pap\u00faa, Indonesia"),
+    "Cerca de la costa norte de Pap\u00faa, Indonesia"
   );
 });
 
 test("buildSeismicNarration lowers descriptor openings so speech stays natural", () => {
   const narration = buildSeismicNarration(
     makeEvent({
-      title: "M4.7 - Sur de Perú",
+      title: "M4.7 - Sur de Per\u00fa",
       magnitude: 4.7,
       depthKm: 0
     })
   );
   assert.equal(
     narration,
-    "Sismo detectado en sur de Perú, de magnitud 4.7, a una profundidad de 0 kilometros."
+    "Sismo detectado en sur de Per\u00fa, de magnitud 4.7, a una profundidad de 0 kilometros."
+  );
+});
+
+test("buildSeismicNarration expands km inside the location text for speech", () => {
+  const narration = buildSeismicNarration(
+    makeEvent({
+      title: "M3.5 - 19.3 km al suroeste de la sede del condado de Hualien",
+      depthKm: 14
+    })
+  );
+  assert.equal(
+    narration,
+    "Sismo detectado en 19.3 kilometros al suroeste de la sede del condado de Hualien, de magnitud 3.5, a una profundidad de 14 kilometros."
+  );
+});
+
+test("buildSeismicNarration uses singular kilometro when the value is one", () => {
+  const narration = buildSeismicNarration(
+    makeEvent({
+      title: "M2.1 - 1 km al norte de prueba",
+      magnitude: 2.1,
+      depthKm: 1
+    })
+  );
+  assert.equal(
+    narration,
+    "Sismo detectado en 1 kilometro al norte de prueba, de magnitud 2.1, a una profundidad de 1 kilometro."
   );
 });

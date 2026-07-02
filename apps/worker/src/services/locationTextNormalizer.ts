@@ -39,10 +39,15 @@ const BMKG_DIRECTION_PHRASES: Array<[source: string, target: string]> = [
 ];
 
 const DIRECT_LOCATION_REPLACEMENTS: Array<[pattern: RegExp, replacement: string]> = [
+  [/\bPoland\b/giu, "Polonia"],
   [/\bSouth Sandwich Islands\b/giu, "Islas Sandwich del Sur"],
+  [/\bDodecanese Islands\b/giu, "Islas del Dodecaneso"],
   [/\bPhilippine Islands\b/giu, "Islas Filipinas"],
   [/\bHawaiian Islands\b/giu, "Islas de Haw\u00e1i"],
   [/\bFiji Islands\b/giu, "Islas Fiyi"],
+  [/\bSunda Strait\b/giu, "Estrecho de Sonda"],
+  [/\bCook Strait\b/giu, "Estrecho de Cook"],
+  [/\bKiisuido Strait\b/giu, "Estrecho de Kiisuido"],
   [/\bNorth Island Of New Zealand\b/giu, "Isla Norte de Nueva Zelanda"],
   [/\bSouth Island Of New Zealand\b/giu, "Isla Sur de Nueva Zelanda"],
   [/\bMolucca Sea\b/giu, "Mar de Molucas"],
@@ -503,6 +508,22 @@ function normalizeGenericLocationText(text: string): string {
     const label = compassLabel(direction);
     if (label) {
       return beautifyDescriptor(`al ${label} de ${normalizeGenericLocationText(place)}`);
+    }
+  }
+
+  const jmaPlainAreaMatch = translatedBase.match(
+    /^Plain Area of (North|Northern|South|Southern|East|Eastern|West|Western|Central) (.+) Prefecture$/iu
+  );
+  if (jmaPlainAreaMatch) {
+    const [, direction, place] = jmaPlainAreaMatch;
+    const label = regionLabel(direction);
+    if (label === "central") {
+      return beautifyDescriptor(`llanura central de la prefectura de ${normalizeGenericLocationText(place)}`);
+    }
+    if (label) {
+      return beautifyDescriptor(
+        `llanura del ${label} de la prefectura de ${normalizeGenericLocationText(place)}`
+      );
     }
   }
 

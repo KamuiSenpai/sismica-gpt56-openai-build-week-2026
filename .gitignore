@@ -9,7 +9,9 @@ coverage/
 # Temporales / runtime / herramientas
 tmp/
 .runtime/
+.runtime-logs/
 .playwright-cli/
+logs/
 
 # TTS neural local: binarios/modelos grandes y cache de audios (no se versionan)
 models/

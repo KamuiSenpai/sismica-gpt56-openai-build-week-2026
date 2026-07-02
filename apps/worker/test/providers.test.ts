@@ -29,7 +29,11 @@ import {
 } from "../src/providers/ingvProvider.js";
 import { normalizeIgepnRecord, parseIgepnCsv } from "../src/providers/igepnProvider.js";
 import { normalizeInpresItem, parseInpresXml } from "../src/providers/inpresProvider.js";
-import { normalizeInsivumehRecord, parseInsivumehMarkers } from "../src/providers/insivumehProvider.js";
+import {
+  describeInsivumehLocation,
+  normalizeInsivumehRecord,
+  parseInsivumehMarkers
+} from "../src/providers/insivumehProvider.js";
 import { consolidateJmaRecords, normalizeJmaRecord } from "../src/providers/jmaProvider.js";
 import { normalizeMarnRecord, parseMarnHtml } from "../src/providers/marnProvider.js";
 import { parseNoaaCap } from "../src/providers/noaaProvider.js";
@@ -552,6 +556,12 @@ test("parsea HTML Leaflet INSIVUMEH con metadatos tecnicos", () => {
   assert.equal(event.rmsSec, 0.28);
   assert.equal(event.azimuthalGapDeg, 0.28);
   assert.equal(event.depthKm, 37);
+  assert.equal(event.title, "M2.6 - frente a la costa de Jutiapa");
+});
+
+test("deriva una referencia geografica util para INSIVUMEH cuando la fuente no trae lugar", () => {
+  assert.equal(describeInsivumehLocation(14.452, -93.235), "frente a la costa de San Marcos");
+  assert.equal(describeInsivumehLocation(14.475, -90.74), "20 km al norte de Escuintla");
 });
 
 test("normaliza evento oficial BMKG con intensidad y sin falso tsunami", () => {
@@ -618,6 +628,11 @@ test("traduce descriptores geograficos legacy en ingles a espanol", () => {
     "cerca de Mamoudzou (Mayotte)"
   );
   assert.equal(normalizeSourceLocationText("EMSC", "Bosnia And Herzegovina"), "Bosnia y Herzegovina");
+  assert.equal(normalizeSourceLocationText("GEOFON", "Poland"), "Polonia");
+  assert.equal(
+    normalizeSourceLocationText("EMSC", "Dodecanese Islands, Greece"),
+    "Islas del Dodecaneso, Grecia"
+  );
   assert.equal(normalizeSourceLocationText("EMSC", "Mindanao, Philippines"), "Mindanao, Filipinas");
   assert.equal(
     normalizeSourceLocationText("EMSC", "KEPULAUAN BARAT DAYA, INDONESIA"),
@@ -646,6 +661,12 @@ test("traduce descriptores geograficos legacy en ingles a espanol", () => {
   assert.equal(normalizeSourceLocationText("EMSC", "Savu Sea"), "Mar de Savu");
   assert.equal(normalizeSourceLocationText("ISC", "Hawaiian Islands"), "Islas de Hawái");
   assert.equal(
+    normalizeSourceLocationText("EMSC", "SUNDA STRAIT, INDONESIA"),
+    "Estrecho de Sonda, Indonesia"
+  );
+  assert.equal(normalizeSourceLocationText("ISC", "Cook Strait"), "Estrecho de Cook");
+  assert.equal(normalizeSourceLocationText("JMA", "Kiisuido Strait"), "Estrecho de Kiisuido");
+  assert.equal(
     normalizeSourceLocationText("SGC", "Panama-Colombia Border region"),
     "región de frontera entre Panamá y Colombia"
   );
@@ -658,6 +679,10 @@ test("traduce descriptores geograficos legacy en ingles a espanol", () => {
   assert.equal(
     normalizeSourceLocationText("JMA", "Off the Coast of Iwate Prefecture"),
     "frente a la costa de la prefectura de Iwate"
+  );
+  assert.equal(
+    normalizeSourceLocationText("JMA", "Plain Area of Northern Miyazaki Prefecture"),
+    "llanura del norte de la prefectura de Miyazaki"
   );
   assert.equal(
     normalizeSourceLocationText("JMA", "Off the East Coast of North Island, New Zealand."),

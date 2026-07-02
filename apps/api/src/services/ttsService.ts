@@ -50,7 +50,7 @@ export class TtsUnavailableError extends Error {
 }
 
 const PIPER_TIMEOUT_MS = 20_000;
-const XTTS_TIMEOUT_MS = 30_000;
+const XTTS_TIMEOUT_MS = 120_000;
 const XTTS_HEALTH_TIMEOUT_MS = 1_500;
 const XTTS_HEALTH_TTL_MS = 10_000;
 
