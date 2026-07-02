@@ -313,9 +313,10 @@ export default function App() {
     }
   }, [events, selectedEventId]);
 
-  // Auto-recorrido: cada ~18 s (15 s de visualizacion + ~3 s de vuelo) pasa al siguiente
-  // de los ultimos 15 sismos. El timer es estable (no se reinicia con cada refresco de
-  // datos); lee la lista vigente desde una ref.
+  // Auto-recorrido: cada ~25 s (22 s de visualizacion + ~3 s de vuelo) pasa al siguiente
+  // de los ultimos 15 sismos. Da margen a la voz neural (XTTS) para sintetizar y reproducir
+  // la narracion completa antes de avanzar. El timer es estable (no se reinicia con cada
+  // refresco de datos); lee la lista vigente desde una ref.
   useEffect(() => {
     if (tourPaused) return;
     const intervalId = window.setInterval(() => {
@@ -325,7 +326,7 @@ export default function App() {
         const index = tour.findIndex((event) => event.eventId === current);
         return tour[(index + 1) % tour.length].eventId;
       });
-    }, 18_200);
+    }, 25_000);
     return () => window.clearInterval(intervalId);
   }, [tourPaused]);
 
