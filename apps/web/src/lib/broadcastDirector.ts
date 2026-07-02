@@ -3,6 +3,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import { type SeismicEvent } from "@sismica/shared";
 
 import { fetchDirectorDecision, fetchHandoffSegment, fetchSegmentText } from "./api";
+import { getRecentEditorialLines, rememberEditorialLine } from "./editorialHistory";
 import { broadcastPlace } from "./broadcastPlace";
 import {
   cueToVoiceDelivery,
@@ -26,7 +27,13 @@ import {
 
 export type DirectorMode = "off" | "rules" | "ai";
 export type BroadcastSegmentKind = DirectorSegmentKind | "en-vivo" | "relevo";
-export type BroadcastSegment = { kind: BroadcastSegmentKind; text: string; cue?: EditorialCue };
+export type BroadcastSegment = {
+  kind: BroadcastSegmentKind;
+  text: string;
+  overlayText?: string;
+  tickerText?: string;
+  cue?: EditorialCue;
+};
 
 const HANDOFF_DUE_MIN = 30;
 const RECAP_DUE_MIN = 60;
@@ -283,6 +290,7 @@ export function useBroadcastDirector(params: {
       const delivery = cueToVoiceDelivery(cue, { text: segment.text, kind: segment.kind });
       const payload = { ...segment, cue };
       onSegmentRef.current(payload);
+      rememberEditorialLine(segment.text);
       airingUntilRef.current = Date.now() + delivery.minDurationMs;
       if (voiceEnabled) {
         prefetchText(payload.text);
@@ -296,7 +304,13 @@ export function useBroadcastDirector(params: {
         mode: kind === "en-vivo" ? "breaking" : "seguimiento"
       });
       onFocusRef.current(event.eventId);
-      air({ kind, text: narration.text, cue: narration.cue });
+      air({
+        kind,
+        text: narration.text,
+        overlayText: narration.overlayText,
+        tickerText: narration.tickerText,
+        cue: narration.cue
+      });
     };
 
     const airHandoff = async () => {
@@ -321,6 +335,7 @@ export function useBroadcastDirector(params: {
       setActiveBroadcastHost(nextHost.id);
       lastHandoffAtRef.current = Date.now();
       onSegmentRef.current({ kind: "relevo", text: script.overlayText, cue: HANDOFF_CUE });
+      rememberEditorialLine(script.overlayText);
       airingUntilRef.current =
         Date.now() +
         cueToVoiceDelivery(HANDOFF_CUE, { text: script.overlayText, kind: "relevo" }).minDurationMs;
@@ -347,7 +362,8 @@ export function useBroadcastDirector(params: {
           kind: "resumen",
           totalLastHour: windowEvents.length,
           biggestMagnitude: biggest?.magnitude ?? null,
-          biggestPlace: biggest ? broadcastPlace(biggest) : null
+          biggestPlace: biggest ? broadcastPlace(biggest) : null,
+          recentLines: getRecentEditorialLines()
         })) ?? fallback;
       lastRecapAtRef.current = Date.now();
       air({ kind: "resumen", text: packet.text, cue: packet.cue });
@@ -360,7 +376,11 @@ export function useBroadcastDirector(params: {
         recentEducationalTopicsRef.current,
         now
       );
-      const packet = (await fetchSegmentText({ kind: "educativo", topic })) ?? {
+      const packet = (await fetchSegmentText({
+        kind: "educativo",
+        topic,
+        recentLines: getRecentEditorialLines()
+      })) ?? {
         text: fallback,
         cue: fallbackSegmentCue("educativo")
       };
@@ -410,7 +430,8 @@ export function useBroadcastDirector(params: {
           biggestMagnitude: biggest?.magnitude ?? null,
           biggestPlace: biggest ? broadcastPlace(biggest) : null,
           activeAreas,
-          regionalFocus: activeAreas[0] ?? null
+          regionalFocus: activeAreas[0] ?? null,
+          recentLines: getRecentEditorialLines()
         })) ??
         fallbackBulletinPacket(
           windowMinutes,

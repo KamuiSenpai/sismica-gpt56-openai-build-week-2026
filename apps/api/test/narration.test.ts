@@ -10,20 +10,27 @@ test("narrationRequestSchema exige eventId y titulo", () => {
   assert.equal(
     narrationRequestSchema.safeParse({
       eventId: "USGS:1",
+      source: "USGS",
       title: "M5.4 - Lima",
       normalizedPlace: "Lima, Peru",
-      mode: "breaking"
+      mode: "breaking",
+      latitude: -12.05,
+      longitude: -77.04
     }).success,
     true
   );
   assert.equal(
     narrationRequestSchema.safeParse({
       eventId: "USGS:1",
+      source: "USGS",
       title: "M5.4 - Lima",
       normalizedPlace: "Lima, Peru",
+      latitude: -12.05,
+      longitude: -77.04,
       magnitude: 5.44,
       depthKm: 14.2,
-      updatedAtUtc: "2026-07-02T15:40:40.000Z"
+      updatedAtUtc: "2026-07-02T15:40:40.000Z",
+      recentLines: ["Nuevo sismo detectado en Chile"]
     }).success,
     true
   );
@@ -34,15 +41,21 @@ test("narrationRequestSchema exige eventId y titulo", () => {
 test("generateNarration devuelve pauta editorial local con DeepSeek deshabilitado", async () => {
   const editorial = await generateNarration({
     eventId: "USGS:test",
+    source: "USGS",
     title: "M5.4 - Cerca de la costa de Lima",
     normalizedPlace: "Cerca de la costa de Lima, Peru",
     mode: "breaking",
+    latitude: -12.1,
+    longitude: -77.2,
     magnitude: 5.4,
-    depthKm: 30
+    depthKm: 30,
+    recentLines: ["Nuevo sismo detectado en Chile"]
   });
-  assert.deepEqual(editorial, {
-    intro: "Nuevo sismo detectado",
-    closing: "Seguimos monitoreando la zona",
-    cue: { urgency: "alta", rhythm: "agil", tone: "directo" }
-  });
+  assert.equal(typeof editorial.intro, "string");
+  assert.equal(typeof editorial.formats.overlay, "string");
+  assert.equal(typeof editorial.formats.narration, "string");
+  assert.equal(typeof editorial.formats.ticker, "string");
+  assert.deepEqual(editorial.cue, { urgency: "alta", rhythm: "agil", tone: "directo" });
+  assert.notEqual(editorial.intro, "Nuevo sismo detectado");
+  assert.equal(editorial.formats.narration.includes("Cerca de la costa de Lima, Peru"), true);
 });

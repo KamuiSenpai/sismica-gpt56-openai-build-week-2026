@@ -186,6 +186,7 @@ export async function fetchNarrationEditorial(
     normalizedPlace: string;
     country?: string | null;
     mode?: NarrationMode;
+    recentLines?: string[];
   }
 ): Promise<NarrationEditorial | null> {
   try {
@@ -198,6 +199,10 @@ export async function fetchNarrationEditorial(
         normalizedPlace: input.normalizedPlace,
         country: input.country ?? null,
         mode: input.mode ?? "seguimiento",
+        source: event.source,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        recentLines: input.recentLines ?? [],
         magnitude: event.magnitude,
         depthKm: event.depthKm,
         tsunami: event.tsunami,
@@ -226,6 +231,7 @@ type SegmentInput = {
   previousCount?: number | null;
   activeAreas?: string[];
   regionalFocus?: string | null;
+  recentLines?: string[];
 };
 
 export type HandoffSegmentPayload = {

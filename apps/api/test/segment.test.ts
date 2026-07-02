@@ -31,7 +31,8 @@ test("segmentRequestSchema acepta boletines de 15 minutos", () => {
       previousCount: 4,
       biggestMagnitude: 4.8,
       biggestPlace: "Frente a la costa de Taiwan",
-      activeAreas: ["Indonesia", "Chile", "Taiwan"]
+      activeAreas: ["Indonesia", "Chile", "Taiwan"],
+      recentLines: ["Boletin de 15 minutos anterior"]
     }).success,
     true
   );

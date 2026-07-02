@@ -531,14 +531,19 @@ export default function App() {
         {directorMode !== "off" && overlaySegment ? (
           <div
             className={`director-overlay director-${overlaySegment.kind}`}
-            style={directorOverlayStyle(overlaySegment.text)}
+            style={directorOverlayStyle(overlaySegment.overlayText ?? overlaySegment.text)}
           >
             <header className="director-overlay-header">
               <strong>{SEGMENT_TITLES[overlaySegment.kind]}</strong>
               <span className="director-overlay-kind">{SEGMENT_LABELS[overlaySegment.kind]}</span>
             </header>
             <div className="director-overlay-body">
-              <span className="director-overlay-text">{overlaySegment.text}</span>
+              <span className="director-overlay-text">
+                {overlaySegment.overlayText ?? overlaySegment.text}
+              </span>
+              {overlaySegment.tickerText ? (
+                <small className="director-overlay-ticker">{overlaySegment.tickerText}</small>
+              ) : null}
             </div>
           </div>
         ) : null}

@@ -214,6 +214,18 @@ button {
   text-wrap: pretty;
 }
 
+.director-overlay-ticker {
+  display: block;
+  margin-top: 6px;
+  max-inline-size: 100%;
+  color: #b8d4ea;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: 0.01em;
+  opacity: 0.94;
+}
+
 .director-overlay.director-en-vivo .director-overlay-body {
   border-left-color: var(--red);
   background: linear-gradient(180deg, rgba(27, 17, 22, 0.97) 0%, rgba(18, 12, 16, 0.96) 100%);

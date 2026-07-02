@@ -33,7 +33,8 @@ export const segmentRequestSchema = z.object({
   currentCount: z.number().int().nonnegative().nullish(),
   previousCount: z.number().int().nonnegative().nullish(),
   activeAreas: z.array(z.string().trim().min(1).max(80)).max(5).optional(),
-  regionalFocus: z.string().trim().max(120).nullish()
+  regionalFocus: z.string().trim().max(120).nullish(),
+  recentLines: z.array(z.string().trim().min(1).max(320)).max(20).optional()
 });
 export type SegmentRequest = z.infer<typeof segmentRequestSchema>;
 
@@ -160,7 +161,7 @@ const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
 const SEGMENT_SYSTEM_PROMPT =
   "Eres el redactor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"text":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
-  "El texto debe ser breve, claro y listo para overlay y voz. Usa espanol neutro. No inventes " +
+  "El texto debe ser breve, claro y listo para overlay y voz. Usa espanol neutro. Considera las lineas recientes solo para evitar repetir aperturas o remates. No inventes " +
   "replicas, danos, alertas, riesgo, tsunami ni evacuaciones.";
 const HANDOFF_SYSTEM_PROMPT =
   "Eres el productor editorial de un canal sismico 24/7. Redacta un relevo breve y natural " +
@@ -412,7 +413,8 @@ function buildUserMessage(request: SegmentRequest): string {
   if (request.kind === "resumen") {
     const data: Record<string, unknown> = {
       pieza: "resumen del periodo",
-      sismos_ultima_hora: request.totalLastHour ?? 0
+      sismos_ultima_hora: request.totalLastHour ?? 0,
+      lineas_recientes: (request.recentLines ?? []).slice(-12)
     };
     if (typeof request.biggestMagnitude === "number") data.mayor_magnitud = request.biggestMagnitude;
     if (request.biggestPlace) data.mayor_lugar = request.biggestPlace;
@@ -423,7 +425,8 @@ function buildUserMessage(request: SegmentRequest): string {
     const data: Record<string, unknown> = {
       pieza: `boletin de ${request.windowMinutes ?? 15} minutos`,
       sismos_ventana_actual: request.currentCount ?? 0,
-      sismos_ventana_previa: request.previousCount ?? 0
+      sismos_ventana_previa: request.previousCount ?? 0,
+      lineas_recientes: (request.recentLines ?? []).slice(-12)
     };
     if (typeof request.biggestMagnitude === "number") data.mayor_magnitud = request.biggestMagnitude;
     if (request.biggestPlace) data.mayor_lugar = request.biggestPlace;
@@ -444,7 +447,7 @@ function buildUserMessage(request: SegmentRequest): string {
   }
 
   const topic = request.topic ?? EDUCATIVO_TOPICS[0].topic;
-  return `Redacta un aviso breve de contexto sismico sobre el tema: "${topic}". Debe sonar util, directo y listo para pantalla y voz.`;
+  return `Redacta un aviso breve de contexto sismico sobre el tema: "${topic}". Debe sonar util, directo y listo para pantalla y voz. Lineas recientes: ${JSON.stringify((request.recentLines ?? []).slice(-12))}`;
 }
 
 function parseRecommendationVariants(raw: string, fallbackVariants: string[]): string[] {

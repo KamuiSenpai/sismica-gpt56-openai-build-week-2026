@@ -5,6 +5,7 @@
 import { type SeismicEvent } from "@sismica/shared";
 
 import { fetchNarrationEditorial } from "./api";
+import { getRecentEditorialLines, rememberEditorialLine } from "./editorialHistory";
 import { broadcastCountryName, broadcastPlace } from "./broadcastPlace";
 import {
   cueToVoiceDelivery,
@@ -50,7 +51,13 @@ export type BroadcastDialogueTurn = {
   speakerName: string;
   text: string;
 };
-type ResolvedNarration = { text: string; cue: EditorialCue };
+export type ResolvedNarrationPacket = {
+  text: string;
+  cue: EditorialCue;
+  overlayText: string;
+  tickerText: string;
+  tectonicContext: string | null;
+};
 
 export const VOICE_ENGINES: readonly VoiceEngine[] = ["piper", "xtts", "browser"] as const;
 export const VOICE_ENGINE_LABELS: Record<VoiceEngine, string> = {
@@ -214,7 +221,7 @@ export { buildSeismicNarration };
 export async function resolveEventNarration(
   event: SeismicEvent,
   options: { intro?: string; closing?: string | null; mode?: NarrationMode } = {}
-): Promise<ResolvedNarration> {
+): Promise<ResolvedNarrationPacket> {
   const mode = options.mode ?? (options.intro ? "breaking" : "seguimiento");
   const place = broadcastPlace(event);
   const country = broadcastCountryName(countryCode(event));
@@ -222,14 +229,28 @@ export async function resolveEventNarration(
     (await fetchNarrationEditorial(event, {
       normalizedPlace: place,
       country,
-      mode
+      mode,
+      recentLines: getRecentEditorialLines()
     })) ?? fallbackNarrationEditorial(mode);
-  const text = buildSeismicNarration(event, {
+  const mergedClosing = [
+    editorial.tectonicContext,
+    options.closing === undefined ? editorial.closing : options.closing
+  ]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(". ");
+  const fallbackNarration = buildSeismicNarration(event, {
     intro: options.intro?.trim() || editorial.intro,
     place,
-    closing: options.closing === undefined ? editorial.closing : options.closing
+    closing: mergedClosing || null
   });
-  return { text, cue: editorial.cue };
+  const text = editorial.formats.narration.trim() || fallbackNarration;
+  return {
+    text,
+    cue: editorial.cue,
+    overlayText: editorial.formats.overlay.trim() || text,
+    tickerText: editorial.formats.ticker.trim() || text,
+    tectonicContext: editorial.tectonicContext
+  };
 }
 
 export function prefetchSeismicNarration(
@@ -323,6 +344,7 @@ async function dispatchNarration(
   const { text, cue } = await resolveEventNarration(event, options);
   if (seq !== narrationSeq) return;
   const delivery = deliveryForCue(text, cue, "evento");
+  rememberEditorialLine(text);
 
   if (voiceEngine === "browser") {
     // Corta cualquier audio neural en curso para no solaparse con el navegador.
