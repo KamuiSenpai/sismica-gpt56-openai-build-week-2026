@@ -340,13 +340,92 @@ export function countryNameEs(code: string | null): string | null {
   return COUNTRY_NAMES_ES[code] ?? code.toUpperCase();
 }
 
+function deaccent(text: string): string {
+  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
+// Mapa nombre-en-ingles -> nombre-en-espanol de pais, para traducir el pais al final del
+// descriptor y evitar redundancias tipo "Peru - Perú". Excluye estados de EE. UU.
+const US_STATE_NAMES = new Set(["alaska", "california", "hawaii", "oregon", "nevada"]);
+const ENGLISH_TO_ES_COUNTRY: Record<string, string> = {};
+for (const [english, code] of COUNTRY_CODES) {
+  if (US_STATE_NAMES.has(english)) continue;
+  const spanish = COUNTRY_NAMES_ES[code];
+  if (spanish) ENGLISH_TO_ES_COUNTRY[english] = spanish;
+}
+
+// Traduce el pais al final del descriptor ("..., Peru" -> "..., Perú"). Sin pais al final,
+// devuelve el texto sin cambios.
+function translateTrailingCountry(descriptor: string): string {
+  const idx = descriptor.lastIndexOf(",");
+  if (idx === -1) return descriptor;
+  const head = descriptor.slice(0, idx).trim();
+  const tail = deaccent(
+    descriptor
+      .slice(idx + 1)
+      .trim()
+      .toLowerCase()
+  );
+  const spanish = ENGLISH_TO_ES_COUNTRY[tail];
+  return spanish ? `${head}, ${spanish}` : descriptor;
+}
+
 // Lugar normalizado: descriptor de la fuente + pais en espanol, formato unico.
 export function normalizedPlace(event: SeismicEvent, code: string | null): string {
-  const descriptor = getEventPlace(event.title).trim();
+  const descriptor = translateTrailingCountry(getEventPlace(event.title).trim());
   const country = countryNameEs(code);
   if (!country) return descriptor;
   if (descriptor.toLowerCase().endsWith(country.toLowerCase())) return descriptor;
   return `${descriptor} · ${country}`;
+}
+
+export type TopMagnitudePlace = { place: string; code: string | null };
+
+// Overrides curados del Top-10 historico: nombre en espanol + contexto geografico y, cuando
+// aplica, el pais para forzar la bandera (los sismos mar adentro no tienen pais por geo).
+const TOP_PLACE_OVERRIDES: Record<string, TopMagnitudePlace> = {
+  "great tohoku": { place: "Gran terremoto de Tohoku", code: "jp" },
+  tohoku: { place: "Tohoku", code: "jp" },
+  "sumatra-andaman islands": { place: "Sumatra-Andamán", code: "id" },
+  "sumatra-andaman": { place: "Sumatra-Andamán", code: "id" },
+  "kamchatka peninsula": { place: "Península de Kamchatka", code: "ru" },
+  kamchatka: { place: "Península de Kamchatka", code: "ru" },
+  maule: { place: "Maule", code: "cl" },
+  "wharton basin": { place: "Cuenca de Wharton (océano Índico)", code: null },
+  atico: { place: "Atico, Arequipa", code: "pe" },
+  singkil: { place: "Singkil, Aceh", code: "id" },
+  bengkulu: { place: "Bengkulu", code: "id" },
+  illapel: { place: "Illapel, Coquimbo", code: "cl" },
+  "sea of okhotsk": { place: "Mar de Ojotsk", code: "ru" }
+};
+
+function stripYear(text: string): string {
+  return text.replace(/^\s*(?:19|20)\d{2}\s+/, "");
+}
+
+// Quita el prefijo de distancia/direccion: "6 km SSW of", "122 km al suroeste de",
+// "km al oeste-suroeste de", etc.
+function stripDistancePrefix(text: string): string {
+  return text
+    .replace(/^\s*\d*(?:[.,]\d+)?\s*km\s+(?:al\s+[\p{L}-]+\s+de\s+|[\p{L}.]+\s+(?:of|from)\s+)/iu, "")
+    .trim();
+}
+
+function coreLocality(descriptor: string): string {
+  const firstPart = (descriptor.split(",")[0] ?? descriptor).trim();
+  return deaccent(firstPart.toLowerCase())
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Lugar para el Top-10: sin año duplicado ni distancia en km; nombre en espanol + contexto
+// (curado) cuando se reconoce, o limpieza generica. `code` fuerza la bandera si aplica.
+export function topMagnitudePlace(event: SeismicEvent): TopMagnitudePlace {
+  const withoutKm = stripDistancePrefix(stripYear(getEventPlace(event.title).trim()));
+  const override = TOP_PLACE_OVERRIDES[coreLocality(withoutKm)];
+  if (override) return override;
+  return { place: translateTrailingCountry(withoutKm) || withoutKm, code: null };
 }
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];

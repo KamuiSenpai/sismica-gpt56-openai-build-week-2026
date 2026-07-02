@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { type SeismicEvent } from "@sismica/shared";
 
 import { resolveCountryCode } from "../lib/countryGeocoder";
-import { formatMagnitude, magnitudeCssColor, normalizedPlace } from "../lib/presentation";
+import { countryNameEs, formatMagnitude, magnitudeCssColor, topMagnitudePlace } from "../lib/presentation";
 import { CountryFlag } from "./CountryFlag";
 import { Marquee } from "./Marquee";
 
@@ -47,17 +47,22 @@ export function TopMagnitudeTable({ historical, liveEvents }: TopMagnitudeTableP
         ) : (
           rows.map((event, index) => {
             const isLive = now - new Date(event.eventTimeUtc).getTime() < LIVE_WINDOW_MS;
+            const place = topMagnitudePlace(event);
+            const code = place.code ?? resolveCountryCode(event);
+            const country = countryNameEs(code);
+            // Anexa "- Pais" si corresponde y no esta ya en el texto del lugar.
+            const label =
+              country && !place.place.toLowerCase().includes(country.toLowerCase())
+                ? `${place.place} - ${country}`
+                : place.place;
             return (
               <li key={event.eventId} className={isLive ? "top-mag-row is-live" : "top-mag-row"}>
                 <span className="top-mag-rank">{index + 1}</span>
                 <span className="top-mag-mag" style={{ color: magnitudeCssColor(event.magnitude) }}>
                   {formatMagnitude(event.magnitude)}
                 </span>
-                <CountryFlag event={event} className="top-mag-flag" />
-                <Marquee
-                  text={normalizedPlace(event, resolveCountryCode(event))}
-                  className="top-mag-place-marquee"
-                />
+                <CountryFlag event={event} code={code} className="top-mag-flag" />
+                <Marquee text={label} className="top-mag-place-marquee" />
                 {isLive ? (
                   <span className="top-mag-live">EN VIVO</span>
                 ) : (
