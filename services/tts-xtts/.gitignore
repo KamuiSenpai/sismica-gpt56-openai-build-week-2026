@@ -1,0 +1,11 @@
+# Entorno virtual y artefactos de Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Modelos y voces descargadas por Coqui (varios GB)
+models/
+*.pth
+*.onnx
+speaker_*.wav

@@ -11,3 +11,7 @@ tmp/
 .runtime/
 .playwright-cli/
 
+# TTS neural local: binarios/modelos grandes y cache de audios (no se versionan)
+models/
+.tts-cache/
+

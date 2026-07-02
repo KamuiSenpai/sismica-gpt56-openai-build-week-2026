@@ -42,12 +42,19 @@ import {
 import { resolveCountryCode, useCountryGeocoder } from "./lib/countryGeocoder";
 import { setSeismicAudioEnabled } from "./lib/seismicAudio";
 import {
+  getVoiceEngine,
+  isEngineAvailable,
   isSeismicNarrationActive,
   isSeismicVoiceSupported,
   primeSeismicVoices,
+  refreshTtsHealth,
   setSeismicVoiceEnabled,
-  speakSeismicNarration
-} from "./lib/seismicSpeech";
+  setVoiceEngine,
+  speakSeismicNarration,
+  VOICE_ENGINE_LABELS,
+  VOICE_ENGINES,
+  type VoiceEngine
+} from "./lib/seismicVoice";
 import { CountryFlag } from "./components/CountryFlag";
 import { Marquee } from "./components/Marquee";
 
@@ -109,6 +116,12 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
+  const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(() => getVoiceEngine());
+  const [engineAvailability, setEngineAvailability] = useState<Record<VoiceEngine, boolean>>(() => ({
+    piper: false,
+    xtts: false,
+    browser: isEngineAvailable("browser")
+  }));
   const minMagnitude = DEFAULT_MIN_MAGNITUDE;
   const hours = DEFAULT_HOURS;
 
@@ -215,6 +228,16 @@ export default function App() {
     if (!focusEvent) return;
     speakSeismicNarration(focusEvent, voiceEnabled, { force: true });
   }, [focusEvent, voiceEnabled]);
+  const handleVoiceEngineChange = useCallback(
+    (engine: VoiceEngine) => {
+      setVoiceEngine(engine);
+      setVoiceEngineState(engine);
+      if (voiceEnabled && focusEvent) {
+        speakSeismicNarration(focusEvent, true, { force: true });
+      }
+    },
+    [voiceEnabled, focusEvent]
+  );
 
   useEffect(() => {
     if (!soundEnabled) {
@@ -246,6 +269,24 @@ export default function App() {
     return () => {
       window.removeEventListener("pointerdown", primeVoices, true);
       window.removeEventListener("keydown", primeVoices, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void refreshTtsHealth().then(() => {
+      if (cancelled) return;
+      setEngineAvailability({
+        piper: isEngineAvailable("piper"),
+        xtts: isEngineAvailable("xtts"),
+        browser: isEngineAvailable("browser")
+      });
+      // refreshTtsHealth puede autoseleccionar un motor neural disponible.
+      setVoiceEngineState(getVoiceEngine());
+      setVoiceSupported(isSeismicVoiceSupported());
+    });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -321,6 +362,21 @@ export default function App() {
           >
             VOZ {voiceEnabled ? "ON" : "OFF"}
           </button>
+          <label className="voice-engine" title="Motor de sintesis de voz para la narracion">
+            <span className="voice-engine-label">MOTOR</span>
+            <select
+              className="voice-engine-select"
+              value={voiceEngine}
+              onChange={(event) => handleVoiceEngineChange(event.target.value as VoiceEngine)}
+            >
+              {VOICE_ENGINES.map((engine) => (
+                <option key={engine} value={engine} disabled={!engineAvailability[engine]}>
+                  {VOICE_ENGINE_LABELS[engine]}
+                  {engine !== "browser" && !engineAvailability[engine] ? " (no disp.)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="sound-toggle voice-repeat"

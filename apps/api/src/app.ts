@@ -27,6 +27,13 @@ import {
   persistStationSnapshot,
   stationSnapshotSchema
 } from "./services/seismicEngineRepository.js";
+import {
+  getHealth as getTtsHealth,
+  synthesize as synthesizeTts,
+  ttsEngineSchema,
+  ttsRequestSchema,
+  TtsUnavailableError
+} from "./services/ttsService.js";
 
 function hasValidEngineToken(candidate: string | undefined): boolean {
   if (!env.seismicEngineToken || !candidate) return false;
@@ -145,6 +152,40 @@ export function createApp(streamBroker: StreamBroker) {
     try {
       response.json({ items: await getActiveTsunamiProducts(pool) });
     } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/tts/health", async (_request, response) => {
+    try {
+      response.json(await getTtsHealth());
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/tts", async (request, response) => {
+    const engine = ttsEngineSchema.safeParse(request.query.engine);
+    if (!engine.success) {
+      response.status(400).json({ error: "El parametro 'engine' debe ser 'piper' o 'xtts'" });
+      return;
+    }
+    const body = ttsRequestSchema.safeParse(request.body);
+    if (!body.success) {
+      response.status(400).json({ error: "Solicitud TTS invalida", issues: body.error.issues });
+      return;
+    }
+    try {
+      const result = await synthesizeTts(engine.data, body.data);
+      response.setHeader("Content-Type", result.contentType);
+      response.setHeader("Cache-Control", "public, max-age=86400");
+      response.setHeader("X-TTS-Cache", result.cached ? "hit" : "miss");
+      response.send(result.audio);
+    } catch (error) {
+      if (error instanceof TtsUnavailableError) {
+        response.status(503).json({ error: error.message });
+        return;
+      }
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
   });

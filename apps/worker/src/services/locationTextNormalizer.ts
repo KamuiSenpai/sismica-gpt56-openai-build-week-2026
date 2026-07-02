@@ -41,48 +41,48 @@ const BMKG_DIRECTION_PHRASES: Array<[source: string, target: string]> = [
 const DIRECT_LOCATION_REPLACEMENTS: Array<[pattern: RegExp, replacement: string]> = [
   [/\bSouth Sandwich Islands\b/giu, "Islas Sandwich del Sur"],
   [/\bPhilippine Islands\b/giu, "Islas Filipinas"],
-  [/\bHawaiian Islands\b/giu, "Islas de Hawái"],
+  [/\bHawaiian Islands\b/giu, "Islas de Haw\u00e1i"],
   [/\bFiji Islands\b/giu, "Islas Fiyi"],
   [/\bNorth Island Of New Zealand\b/giu, "Isla Norte de Nueva Zelanda"],
   [/\bSouth Island Of New Zealand\b/giu, "Isla Sur de Nueva Zelanda"],
   [/\bMolucca Sea\b/giu, "Mar de Molucas"],
-  [/\bEastern Mediterranean Sea\b/giu, "Mar Mediterráneo oriental"],
-  [/\bMediterranean Sea\b/giu, "Mar Mediterráneo"],
+  [/\bEastern Mediterranean Sea\b/giu, "Mar Mediterr\u00e1neo oriental"],
+  [/\bMediterranean Sea\b/giu, "Mar Mediterr\u00e1neo"],
   [/\bSea Of Okhotsk\b/giu, "Mar de Ojotsk"],
   [/\bBanda Sea\b/giu, "Mar de Banda"],
-  [/\bCelebes Sea\b/giu, "Mar de Célebes"],
+  [/\bCelebes Sea\b/giu, "Mar de C\u00e9lebes"],
   [/\bFlores Sea\b/giu, "Mar de Flores"],
   [/\bSavu Sea\b/giu, "Mar de Savu"],
   [/\bMona Passage\b/giu, "Canal de la Mona"],
-  [/\bPanama-Colombia Border\b/giu, "frontera entre Panamá y Colombia"],
+  [/\bPanama-Colombia Border\b/giu, "frontera entre Panam\u00e1 y Colombia"],
   [/\bKepulauan Barat Daya\b/giu, "Islas del Suroeste"],
   [/\bCosta Siciliana nord-orientale\b/giu, "costa nororiental de Sicilia"],
   [/\bCosta Siciliana centro-settentrionale\b/giu, "costa centro-septentrional de Sicilia"],
   [/\bCosta Ligure Occidentale\b/giu, "costa occidental de Liguria"],
   [/\bNorth Island\b/giu, "Isla Norte"],
   [/\bSouth Island\b/giu, "Isla Sur"],
-  [/\bU\.?\s*S\.?\s*Virgin Islands\b/giu, "Islas Vírgenes de EE. UU."],
+  [/\bU\.?\s*S\.?\s*Virgin Islands\b/giu, "Islas V\u00edrgenes de EE. UU."],
   [/\bBosnia\s+And\s+Herzegovina\b/giu, "Bosnia y Herzegovina"],
-  [/\bDominican Republic\b/giu, "República Dominicana"],
+  [/\bDominican Republic\b/giu, "Rep\u00fablica Dominicana"],
   [/\bUnited States\b/giu, "Estados Unidos"],
   [/\bNew Zealand\b/giu, "Nueva Zelanda"],
-  [/\bNew Mexico\b/giu, "Nuevo México"],
+  [/\bNew Mexico\b/giu, "Nuevo M\u00e9xico"],
   [/\bN\.?\s*Z\.?\b/giu, "Nueva Zelanda"],
-  [/\bPapua\b/giu, "Papúa"],
-  [/\bPeru\b/giu, "Perú"],
-  [/\bMexico\b/giu, "México"],
+  [/\bPapua\b/giu, "Pap\u00faa"],
+  [/\bPeru\b/giu, "Per\u00fa"],
+  [/\bMexico\b/giu, "M\u00e9xico"],
   [/\bPhilippines\b/giu, "Filipinas"],
-  [/\bTaiwan\b/giu, "Taiwán"],
-  [/\bTurkey\b/giu, "Turquía"],
-  [/\bTajikistan\b/giu, "Tayikistán"],
+  [/\bTaiwan\b/giu, "Taiw\u00e1n"],
+  [/\bTurkey\b/giu, "Turqu\u00eda"],
+  [/\bTajikistan\b/giu, "Tayikist\u00e1n"],
   [/\bFiji\b/giu, "Fiyi"],
-  [/\bHawaii\b/giu, "Hawái"],
+  [/\bHawaii\b/giu, "Haw\u00e1i"],
   [/\bIceland\b/giu, "Islandia"],
-  [/\bJapan\b/giu, "Japón"],
+  [/\bJapan\b/giu, "Jap\u00f3n"],
   [/\bGreece\b/giu, "Grecia"],
-  [/\bRomania\b/giu, "Rumanía"],
-  [/\bAfghanistan\b/giu, "Afganistán"],
-  [/\bXizang\b/giu, "Tíbet"]
+  [/\bRomania\b/giu, "Ruman\u00eda"],
+  [/\bAfghanistan\b/giu, "Afganist\u00e1n"],
+  [/\bXizang\b/giu, "T\u00edbet"]
 ];
 
 const REGION_DIRECTION_MAP: Record<string, string> = {
@@ -160,9 +160,9 @@ const SPANISH_DIRECTION_LABELS: Record<string, string> = {
 };
 
 const TITLE_QUALIFIER_MAP: Record<string, string> = {
-  blast: "explosión",
-  explosion: "explosión",
-  "quarry blast": "explosión"
+  blast: "explosi\u00f3n",
+  explosion: "explosi\u00f3n",
+  "quarry blast": "explosi\u00f3n"
 };
 
 const ITALIAN_PROVINCE_MAP: Record<string, string> = {
@@ -172,9 +172,9 @@ const ITALIAN_PROVINCE_MAP: Record<string, string> = {
 };
 
 const IGN_SUFFIX_MAP: Record<string, string> = {
-  CO: "Córdoba",
+  CO: "C\u00f3rdoba",
   FRA: "Francia",
-  MA: "Málaga",
+  MA: "M\u00e1laga",
   POR: "Portugal"
 };
 
@@ -188,7 +188,7 @@ const TRAILING_REGION_CODE_MAP: Record<string, string> = {
   BCS: "Baja California Sur",
   CA: "California",
   CAM: "Campeche",
-  CDMX: "Ciudad de México",
+  CDMX: "Ciudad de M\u00e9xico",
   CHIH: "Chihuahua",
   CHIS: "Chiapas",
   CO: "Colorado",
@@ -202,7 +202,7 @@ const TRAILING_REGION_CODE_MAP: Record<string, string> = {
   GA: "Georgia",
   GRO: "Guerrero",
   GTO: "Guanajuato",
-  HI: "Hawái",
+  HI: "Haw\u00e1i",
   HGO: "Hidalgo",
   IA: "Iowa",
   ID: "Idaho",
@@ -215,9 +215,9 @@ const TRAILING_REGION_CODE_MAP: Record<string, string> = {
   MA: "Massachusetts",
   MD: "Maryland",
   ME: "Maine",
-  MEX: "Estado de México",
+  MEX: "Estado de M\u00e9xico",
   MI: "Michigan",
-  MICH: "Michoacán",
+  MICH: "Michoac\u00e1n",
   MN: "Minnesota",
   MO: "Misuri",
   MOR: "Morelos",
@@ -228,24 +228,24 @@ const TRAILING_REGION_CODE_MAP: Record<string, string> = {
   NE: "Nebraska",
   NH: "Nuevo Hampshire",
   NJ: "Nueva Jersey",
-  NL: "Nuevo León",
-  NM: "Nuevo México",
+  NL: "Nuevo Le\u00f3n",
+  NM: "Nuevo M\u00e9xico",
   NV: "Nevada",
   NY: "Nueva York",
   OH: "Ohio",
   OK: "Oklahoma",
-  OR: "Oregón",
+  OR: "Oreg\u00f3n",
   OAX: "Oaxaca",
   PA: "Pensilvania",
   PR: "Puerto Rico",
   PUE: "Puebla",
-  QRO: "Querétaro",
+  QRO: "Quer\u00e9taro",
   QROO: "Quintana Roo",
   RI: "Rhode Island",
   SC: "Carolina del Sur",
   SD: "Dakota del Sur",
   SIN: "Sinaloa",
-  SLP: "San Luis Potosí",
+  SLP: "San Luis Potos\u00ed",
   SON: "Sonora",
   TAB: "Tabasco",
   TAMPS: "Tamaulipas",
@@ -260,7 +260,7 @@ const TRAILING_REGION_CODE_MAP: Record<string, string> = {
   WI: "Wisconsin",
   WV: "Virginia Occidental",
   WY: "Wyoming",
-  YUC: "Yucatán",
+  YUC: "Yucat\u00e1n",
   ZAC: "Zacatecas"
 };
 
@@ -330,7 +330,9 @@ function beautifyDescriptor(text: string): string {
   );
   const hasLower = /\p{Ll}/u.test(compact);
   const hasUpper = /\p{Lu}/u.test(compact);
-  if (!hasLower && hasUpper) return restoreKnownAbbreviations(expandRegionalCodes(titleCase(compact)));
+  if (!hasLower && hasUpper) {
+    return restoreKnownAbbreviations(expandRegionalCodes(titleCase(compact)));
+  }
   return restoreKnownAbbreviations(
     expandRegionalCodes(
       compact.replace(/\b[\p{Lu}]{2,}(?:\s+[\p{Lu}]{2,})*\b/gu, (match) => titleCase(match))
@@ -371,18 +373,12 @@ function applyDirectLocationReplacements(text: string): string {
   for (const [pattern, replacement] of DIRECT_LOCATION_REPLACEMENTS) {
     normalized = normalized.replace(pattern, replacement);
   }
-
-  normalized = replaceIndonesianArchipelagoNames(normalized);
-  normalized = normalized.replace(/\b([\p{L}\s'-]+?)\s+Peninsula\b/giu, (_match, region: string) => {
-    return `península de ${normalizeSpaces(region)}`;
-  });
-
-  return normalized;
+  return replaceIndonesianArchipelagoNames(normalized);
 }
 
 function normalizeGenericLocationText(text: string): string {
   const compact = normalizeSpaces(text);
-  if (!compact) return "Región sin nombre";
+  if (!compact) return "Regi\u00f3n sin nombre";
 
   const normalizedAbbreviations = expandRegionalCodes(
     compact
@@ -510,6 +506,11 @@ function normalizeGenericLocationText(text: string): string {
     }
   }
 
+  const peninsulaMatch = translatedBase.match(/^(.+?)\s+Peninsula$/iu);
+  if (peninsulaMatch) {
+    return beautifyDescriptor(`pen\u00ednsula de ${normalizeGenericLocationText(peninsulaMatch[1])}`);
+  }
+
   const prefectureMatch = translatedBase.match(/^(.+?)\s+Prefecture$/iu);
   if (prefectureMatch) {
     return beautifyDescriptor(`la prefectura de ${normalizeGenericLocationText(prefectureMatch[1])}`);
@@ -524,7 +525,7 @@ function normalizeGenericLocationText(text: string): string {
   if (regionSuffixMatch) {
     const place = normalizeGenericLocationText(regionSuffixMatch[1]);
     const country = regionSuffixMatch[2] ? `, ${normalizeGenericLocationText(regionSuffixMatch[2])}` : "";
-    return beautifyDescriptor(`región de ${place}${country}`);
+    return beautifyDescriptor(`regi\u00f3n de ${place}${country}`);
   }
 
   const regionalMatch = translatedBase.match(

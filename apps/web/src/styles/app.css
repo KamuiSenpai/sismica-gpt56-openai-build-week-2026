@@ -112,6 +112,36 @@ button {
   color: #b9e9ff;
 }
 
+.voice-engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.voice-engine-label {
+  font-size: 0.52rem;
+  font-weight: 900;
+  color: #64748b;
+  letter-spacing: 0.05em;
+}
+
+.voice-engine-select {
+  padding: 2px 4px;
+  border: 1px solid #64748b;
+  color: #b9e9ff;
+  background: rgba(7, 16, 24, 0.92);
+  font-family: inherit;
+  font-size: 0.56rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.voice-engine-select:focus-visible {
+  outline: 1px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .sound-toggle:focus-visible {
   outline: 1px solid var(--cyan);
   outline-offset: 2px;
