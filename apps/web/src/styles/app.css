@@ -86,6 +86,42 @@ button {
   font-weight: 800;
 }
 
+.sound-toggle {
+  padding: 2px 6px;
+  border: 1px solid #64748b;
+  color: #94a3b8;
+  background: rgba(7, 16, 24, 0.92);
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sound-toggle.is-on {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.voice-toggle.is-on {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.voice-repeat {
+  border-color: rgba(80, 200, 255, 0.45);
+  color: #b9e9ff;
+}
+
+.sound-toggle:focus-visible {
+  outline: 1px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.sound-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .topbar-clock {
   min-width: 92px;
   text-align: right;

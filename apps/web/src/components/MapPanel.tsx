@@ -47,6 +47,7 @@ import {
   normalizedIntensity,
   normalizedPlace
 } from "../lib/presentation";
+import { playSeismicWaveSound } from "../lib/seismicAudio";
 import { CountryFlag } from "./CountryFlag";
 import { MosaicSwap } from "./MosaicSwap";
 import { TopMagnitudeTable } from "./TopMagnitudeTable";
@@ -61,6 +62,7 @@ type MapPanelProps = {
   seismicPresence: SeismicPresenceSummary | null;
   topMagnitude: SeismicEvent[];
   selectedEventId: string | null;
+  soundEnabled: boolean;
   onSelect: (eventId: string) => void;
   tourPaused: boolean;
   onToggleTour: () => void;
@@ -195,12 +197,13 @@ function spawnSeismicRing(
   }, lifeMs);
 }
 
-function spawnWavefront(viewer: Viewer, event: SeismicEvent): void {
+function spawnWavefront(viewer: Viewer, event: SeismicEvent, soundEnabled: boolean): void {
   const depthM = Math.max(0, (event.depthKm ?? 0) * 1000);
   const magColor = Color.fromCssColorString(magnitudeCssColor(event.magnitude));
 
   spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VP_MPS, depthM, 2);
   spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VS_MPS, depthM, 3);
+  playSeismicWaveSound(event, soundEnabled);
 }
 
 function stationSymbol(station: SeismicStation, selected: boolean): string {
@@ -377,6 +380,7 @@ export function MapPanel({
   seismicPresence,
   topMagnitude,
   selectedEventId,
+  soundEnabled,
   onSelect,
   tourPaused,
   onToggleTour
@@ -406,9 +410,6 @@ export function MapPanel({
   const [stationsVisible, setStationsVisible] = useState(true);
   const [experimentalOriginsVisible, setExperimentalOriginsVisible] = useState(true);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
-  // Etiqueta minima de magnitud anclada al sismo seleccionado durante el
-  // recorrido. Se posiciona al terminar el vuelo (la camara queda estatica).
-  const [magTip, setMagTip] = useState<{ event: SeismicEvent; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -588,13 +589,13 @@ export function MapPanel({
       seenIdsRef.current.add(event.eventId);
       const isFresh = Date.now() - Date.parse(event.eventTimeUtc) < FRESH_WINDOW_MS;
       if (!firstLoad && isNew && isFresh) {
-        spawnWavefront(viewer, event);
+        spawnWavefront(viewer, event, soundEnabled);
       }
     }
 
     collection.resumeEvents();
     initializedRef.current = true;
-  }, [events]);
+  }, [events, soundEnabled]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -711,7 +712,6 @@ export function MapPanel({
 
   useEffect(() => {
     selectedIdRef.current = selectedEventId;
-    setMagTip(null); // se oculta mientras la camara viaja al nuevo sismo
     const viewer = viewerRef.current;
     if (!viewer) return;
 
@@ -743,27 +743,19 @@ export function MapPanel({
       orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
       duration: 3.2,
       maximumHeight,
-      easingFunction: EasingFunction.QUADRATIC_IN_OUT,
-      complete: () => {
-        if (viewer.isDestroyed() || selectedIdRef.current !== event.eventId) return;
-        const win = SceneTransforms.worldToWindowCoordinates(
-          viewer.scene,
-          Cartesian3.fromDegrees(event.longitude, event.latitude)
-        );
-        if (win) setMagTip({ event, x: win.x, y: win.y });
-      }
+      easingFunction: EasingFunction.QUADRATIC_IN_OUT
     });
 
-    spawnWavefront(viewer, event);
+    spawnWavefront(viewer, event, soundEnabled);
     selectionWaveTimerRef.current = window.setInterval(() => {
       if (viewer.isDestroyed()) return;
       const activeId = selectedIdRef.current;
       if (!activeId) return;
       const activeEvent = eventMapRef.current.get(activeId);
       if (!activeEvent) return;
-      spawnWavefront(viewer, activeEvent);
+      spawnWavefront(viewer, activeEvent, soundEnabled);
     }, SELECTION_WAVE_INTERVAL_MS);
-  }, [selectedEventId]);
+  }, [selectedEventId, soundEnabled]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -900,15 +892,6 @@ export function MapPanel({
           <strong>{hover.name}</strong>
           <span>{hover.type}</span>
           <span className="tt-source">{hover.country}</span>
-        </div>
-      ) : null}
-
-      {magTip ? (
-        <div
-          className="mag-tip"
-          style={{ left: magTip.x, top: magTip.y, color: magnitudeCssColor(magTip.event.magnitude) }}
-        >
-          {formatMagnitude(magTip.event.magnitude)}
         </div>
       ) : null}
 

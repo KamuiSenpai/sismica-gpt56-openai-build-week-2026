@@ -11,7 +11,8 @@
     "start": "node dist/index.js",
     "backfill:historical": "tsx src/scripts/backfill2026.ts",
     "backfill:2026": "tsx src/scripts/backfill2026.ts",
-    "seismic:publish": "tsx src/scripts/publishSeismicEnginePayload.ts"
+    "seismic:publish": "tsx src/scripts/publishSeismicEnginePayload.ts",
+    "titles:normalize-legacy": "tsx src/scripts/normalizeLegacyTitles.ts"
   },
   "dependencies": {
     "@sismica/shared": "0.1.0",

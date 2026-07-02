@@ -2,6 +2,7 @@ import { type SeismicEvent, type SourceCode, type StreamEvent } from "@sismica/s
 import { type PoolClient } from "pg";
 
 import { type SeismicRecord } from "../providers/types.js";
+import { normalizeSeismicEventText } from "./locationTextNormalizer.js";
 
 export type SeismicIngestionStats = {
   inserted: number;
@@ -20,6 +21,7 @@ type MatchRow = {
 type ExistingReference = {
   event_id: string;
   unchanged: boolean;
+  title: string;
 };
 
 type ExistingCanonical = {
@@ -390,7 +392,7 @@ async function findExistingReference(
 ): Promise<ExistingReference | null> {
   const result = await client.query<ExistingReference>(
     `
-      SELECT event_id, raw_payload = $3::jsonb AS unchanged
+      SELECT event_id, raw_payload = $3::jsonb AS unchanged, title
       FROM event_source_refs
       WHERE source = $1 AND source_event_id = $2
     `,
@@ -484,14 +486,15 @@ async function findMatch(client: PoolClient, event: SeismicEvent): Promise<Match
 type CanonicalPreference = {
   source: SourceCode;
   preferred_source_priority: number;
+  title: string;
 };
 
 async function loadCanonicalPreference(
   client: PoolClient,
   eventId: string
 ): Promise<CanonicalPreference | null> {
-  const result = await client.query<{ source: SourceCode; preferred_source_priority: number }>(
-    `SELECT source, preferred_source_priority FROM seismic_events WHERE event_id = $1`,
+  const result = await client.query<CanonicalPreference>(
+    `SELECT source, preferred_source_priority, title FROM seismic_events WHERE event_id = $1`,
     [eventId]
   );
   return result.rows[0] ?? null;
@@ -610,34 +613,54 @@ export async function ingestSeismicRecords(
   const notify = options?.notify ?? true;
 
   for (const record of records) {
-    const event = record.event;
+    const normalizedRecord = {
+      ...record,
+      event: normalizeSeismicEventText(record.event)
+    };
+    const event = normalizedRecord.event;
     const priority = sourcePriority(event.source, event.latitude, event.longitude);
     const existingReference = await findExistingReference(
       client,
       event.source,
       event.sourceEventId,
-      record.rawPayload
+      normalizedRecord.rawPayload
     );
 
     if (existingReference) {
       if (existingReference.unchanged) {
+        if (existingReference.title !== event.title) {
+          await upsertReference(client, existingReference.event_id, normalizedRecord);
+        }
         const current = await loadCanonicalPreference(client, existingReference.event_id);
         const needsRefresh =
           current &&
-          ((current.source === event.source && current.preferred_source_priority !== priority) ||
+          ((current.source === event.source &&
+            (current.preferred_source_priority !== priority || current.title !== event.title)) ||
             (current.source !== event.source && priority > current.preferred_source_priority));
         if (needsRefresh) {
-          await updateCanonical(client, existingReference.event_id, event, record.rawPayload, priority);
-          if (notify && current.source !== event.source) {
+          await updateCanonical(
+            client,
+            existingReference.event_id,
+            event,
+            normalizedRecord.rawPayload,
+            priority
+          );
+          if (notify) {
             await notifyEvent(client, streamChannel, "event.updated", existingReference.event_id);
           }
           stats.updated += 1;
         }
         continue;
       }
-      await upsertReference(client, existingReference.event_id, record);
+      await upsertReference(client, existingReference.event_id, normalizedRecord);
       if (await shouldReplaceCanonical(client, existingReference.event_id, event.source, priority)) {
-        await updateCanonical(client, existingReference.event_id, event, record.rawPayload, priority);
+        await updateCanonical(
+          client,
+          existingReference.event_id,
+          event,
+          normalizedRecord.rawPayload,
+          priority
+        );
         if (notify) {
           await notifyEvent(client, streamChannel, "event.updated", existingReference.event_id);
         }
@@ -648,9 +671,15 @@ export async function ingestSeismicRecords(
 
     const existingCanonical = await findExistingCanonical(client, event.eventId);
     if (existingCanonical) {
-      await upsertReference(client, existingCanonical.event_id, record);
+      await upsertReference(client, existingCanonical.event_id, normalizedRecord);
       if (await shouldReplaceCanonical(client, existingCanonical.event_id, event.source, priority)) {
-        await updateCanonical(client, existingCanonical.event_id, event, record.rawPayload, priority);
+        await updateCanonical(
+          client,
+          existingCanonical.event_id,
+          event,
+          normalizedRecord.rawPayload,
+          priority
+        );
         if (notify) {
           await notifyEvent(client, streamChannel, "event.updated", existingCanonical.event_id);
         }
@@ -661,7 +690,7 @@ export async function ingestSeismicRecords(
 
     const match = (await findExactMatch(client, event)) ?? (await findMatch(client, event));
     if (match) {
-      await upsertReference(client, match.event_id, record);
+      await upsertReference(client, match.event_id, normalizedRecord);
       await client.query(
         `
           INSERT INTO event_associations (
@@ -681,7 +710,7 @@ export async function ingestSeismicRecords(
         ]
       );
       if (await shouldReplaceCanonical(client, match.event_id, event.source, priority)) {
-        await updateCanonical(client, match.event_id, event, record.rawPayload, priority);
+        await updateCanonical(client, match.event_id, event, normalizedRecord.rawPayload, priority);
       }
       if (notify) {
         await notifyEvent(client, streamChannel, "event.updated", match.event_id);
@@ -690,8 +719,8 @@ export async function ingestSeismicRecords(
       continue;
     }
 
-    await insertCanonical(client, event, record.rawPayload, priority);
-    await upsertReference(client, event.eventId, record);
+    await insertCanonical(client, event, normalizedRecord.rawPayload, priority);
+    await upsertReference(client, event.eventId, normalizedRecord);
     if (notify) {
       await notifyEvent(client, streamChannel, "event.created", event.eventId);
     }

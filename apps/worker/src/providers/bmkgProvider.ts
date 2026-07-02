@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { fetchJson } from "./http.js";
 import { assertShape, bmkgResponseSchema } from "./schemas.js";
 import { type SeismicProvider } from "./types.js";
+import { normalizeSourceLocationText } from "../services/locationTextNormalizer.js";
 
 export type BmkgRecord = {
   Tanggal?: string;
@@ -64,7 +65,8 @@ export function normalizeBmkgRecord(record: BmkgRecord, ingestedAt: string): Sei
   const eventTimeUtc = eventTime.toISOString();
   const sourceEventId = buildBmkgSourceEventId(eventTimeUtc, coordinates.latitude, coordinates.longitude);
   const magnitude = finiteNumber(record.Magnitude);
-  const region = record.Wilayah?.replace(/\s+/g, " ").trim() || "Indonesia";
+  const rawRegion = record.Wilayah?.replace(/\s+/g, " ").trim() || "Indonesia";
+  const region = normalizeSourceLocationText("BMKG", rawRegion);
 
   return {
     eventId: buildEventId("BMKG", sourceEventId),

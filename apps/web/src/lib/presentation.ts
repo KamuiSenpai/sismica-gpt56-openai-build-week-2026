@@ -61,6 +61,10 @@ function titleCase(text: string): string {
     );
 }
 
+function capitalizeLeadingLetter(text: string): string {
+  return text.replace(/^(\p{L})/u, (match) => match.toLocaleUpperCase("es"));
+}
+
 // Limpia el descriptor: quita un sufijo de pais cripto (IGN "...POR") y pasa
 // los textos TODO-MAYUSCULAS (EMSC) a Tipo Titulo, sin alterar los demas.
 function cleanDescriptor(text: string): string {
@@ -77,7 +81,7 @@ export function getEventPlace(title: string): string {
   stripped = stripped.replace(/\s+([,-])/g, "$1");
   stripped = stripped.replace(/([,-])\s+([,-])/g, "$1");
   stripped = stripped.replace(/(^\s*[,.-]\s*|\s*[,.-]\s*$)/g, "");
-  return cleanDescriptor(stripped.trim()) || title;
+  return capitalizeLeadingLetter(cleanDescriptor(stripped.trim()) || title);
 }
 
 export const EVENT_STATUS_LEGEND: EventStatusBadge[] = [

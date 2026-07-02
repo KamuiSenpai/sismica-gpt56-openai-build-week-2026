@@ -40,6 +40,14 @@ import {
   normalizedPlace
 } from "./lib/presentation";
 import { resolveCountryCode, useCountryGeocoder } from "./lib/countryGeocoder";
+import { setSeismicAudioEnabled } from "./lib/seismicAudio";
+import {
+  isSeismicNarrationActive,
+  isSeismicVoiceSupported,
+  primeSeismicVoices,
+  setSeismicVoiceEnabled,
+  speakSeismicNarration
+} from "./lib/seismicSpeech";
 import { CountryFlag } from "./components/CountryFlag";
 import { Marquee } from "./components/Marquee";
 
@@ -98,6 +106,9 @@ export default function App() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [utcNow, setUtcNow] = useState(() => new Date());
   const [tourPaused, setTourPaused] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
   const minMagnitude = DEFAULT_MIN_MAGNITUDE;
   const hours = DEFAULT_HOURS;
 
@@ -105,6 +116,7 @@ export default function App() {
   const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
   const eventsRef = useRef(events);
   eventsRef.current = events;
+  const pendingVoiceIntroRef = useRef<{ eventId: string; intro: string } | null>(null);
   const statuses = useSourceStatusesQuery().data ?? [];
   const disasters = useDisastersQuery().data ?? [];
   const tsunamiProducts = useTsunamiQuery().data ?? [];
@@ -139,6 +151,12 @@ export default function App() {
       const isNewLive =
         !current.some((item) => item.eventId === incomingEvent.eventId) &&
         (incomingEvent.magnitude === null || incomingEvent.magnitude >= minMagnitude);
+      if (isNewLive && !tourPaused && voiceEnabled && isSeismicNarrationActive()) {
+        pendingVoiceIntroRef.current = {
+          eventId: incomingEvent.eventId,
+          intro: "Nuevo sismo detectado"
+        };
+      }
       queryClient.setQueryData(key, (existing: SeismicEvent[] | undefined) =>
         mergeIncomingEvent(existing, incomingEvent, minMagnitude)
       );
@@ -147,7 +165,7 @@ export default function App() {
         setSelectedEventId(incomingEvent.eventId);
       }
     },
-    [queryClient, minMagnitude, hours, tourPaused]
+    [queryClient, minMagnitude, hours, tourPaused, voiceEnabled]
   );
 
   const connectionState = useEventStream(handleIncomingEvent);
@@ -180,6 +198,72 @@ export default function App() {
   }, []);
 
   const toggleTour = useCallback(() => setTourPaused((paused) => !paused), []);
+  const toggleSound = useCallback(() => {
+    const nextEnabled = !soundEnabled;
+    setSoundEnabled(nextEnabled);
+    void setSeismicAudioEnabled(nextEnabled).catch(() => undefined);
+  }, [soundEnabled]);
+  const toggleVoice = useCallback(() => {
+    const nextEnabled = !voiceEnabled;
+    setVoiceEnabled(nextEnabled);
+    const ready = setSeismicVoiceEnabled(nextEnabled);
+    if (nextEnabled && ready && focusEvent) {
+      speakSeismicNarration(focusEvent, true, { force: true });
+    }
+  }, [focusEvent, voiceEnabled]);
+  const replayVoice = useCallback(() => {
+    if (!focusEvent) return;
+    speakSeismicNarration(focusEvent, voiceEnabled, { force: true });
+  }, [focusEvent, voiceEnabled]);
+
+  useEffect(() => {
+    if (!soundEnabled) {
+      void setSeismicAudioEnabled(false).catch(() => undefined);
+      return;
+    }
+
+    const unlockAudio = () => {
+      void setSeismicAudioEnabled(true).catch(() => undefined);
+    };
+
+    window.addEventListener("pointerdown", unlockAudio, true);
+    window.addEventListener("keydown", unlockAudio, true);
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    const primeVoices = () => {
+      setVoiceSupported(isSeismicVoiceSupported());
+      primeSeismicVoices();
+    };
+
+    primeVoices();
+    window.addEventListener("pointerdown", primeVoices, true);
+    window.addEventListener("keydown", primeVoices, true);
+    return () => {
+      window.removeEventListener("pointerdown", primeVoices, true);
+      window.removeEventListener("keydown", primeVoices, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!voiceEnabled || !focusEvent) return;
+    const pendingVoiceIntro =
+      pendingVoiceIntroRef.current?.eventId === focusEvent.eventId
+        ? pendingVoiceIntroRef.current.intro
+        : undefined;
+    if (pendingVoiceIntro) {
+      pendingVoiceIntroRef.current = null;
+    }
+    speakSeismicNarration(
+      focusEvent,
+      true,
+      pendingVoiceIntro ? { force: true, intro: pendingVoiceIntro } : {}
+    );
+  }, [focusEvent, voiceEnabled]);
 
   // Arranca el recorrido: selecciona el primer sismo en cuanto hay datos.
   useEffect(() => {
@@ -212,6 +296,40 @@ export default function App() {
           UTC · ultimos eventos M{minMagnitude.toFixed(1)}+ · datos oficiales normalizados
         </div>
         <div className="topbar-meta">
+          <button
+            type="button"
+            className={soundEnabled ? "sound-toggle is-on" : "sound-toggle"}
+            aria-pressed={soundEnabled}
+            onClick={toggleSound}
+            title={soundEnabled ? "Pulso sonoro de ondas activo" : "Activar pulso sonoro de ondas"}
+          >
+            SONIDO {soundEnabled ? "ON" : "OFF"}
+          </button>
+          <button
+            type="button"
+            className={voiceEnabled ? "sound-toggle voice-toggle is-on" : "sound-toggle voice-toggle"}
+            aria-pressed={voiceEnabled}
+            disabled={!voiceSupported}
+            onClick={toggleVoice}
+            title={
+              voiceSupported
+                ? voiceEnabled
+                  ? "Narracion TTS local activa"
+                  : "Activar narracion TTS local"
+                : "El navegador no expone speechSynthesis en este equipo"
+            }
+          >
+            VOZ {voiceEnabled ? "ON" : "OFF"}
+          </button>
+          <button
+            type="button"
+            className="sound-toggle voice-repeat"
+            disabled={!voiceSupported || !voiceEnabled || !focusEvent}
+            onClick={replayVoice}
+            title="Repetir la narracion del evento enfocado"
+          >
+            REPETIR
+          </button>
           <span className={`connection-state state-${connectionState}`}>{connectionState.toUpperCase()}</span>
           <span className="topbar-clock">{formatUtcClock(utcNow)} UTC</span>
         </div>
@@ -238,6 +356,7 @@ export default function App() {
           seismicPresence={seismicPresence}
           topMagnitude={topMagnitude}
           selectedEventId={selectedEventId}
+          soundEnabled={soundEnabled}
           onSelect={setSelectedEventId}
           tourPaused={tourPaused}
           onToggleTour={toggleTour}

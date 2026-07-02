@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test test/wavefront.test.ts",
+    "test": "tsx --test test/*.test.ts",
     "dev": "vite"
   },
   "dependencies": {
@@ -14,10 +14,12 @@
     "@tanstack/react-query": "^5.62.0",
     "cesium": "^1.123.0",
     "flag-icons": "^7.5.0",
+    "howler": "^2.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/howler": "^2.2.13",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

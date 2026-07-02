@@ -37,6 +37,12 @@ import { normalizeOvsicoriRecord, parseOvsicoriMarkers } from "../src/providers/
 import { normalizeSgcFeature } from "../src/providers/sgcProvider.js";
 import { normalizeSsnItem } from "../src/providers/ssnProvider.js";
 import { isAssociationCandidate, sourcePriority } from "../src/services/eventAssociationService.js";
+import {
+  normalizeBmkgLocationText,
+  normalizeSeismicEventText,
+  normalizeSourceLocationText,
+  normalizeSourceTitleText
+} from "../src/services/locationTextNormalizer.js";
 
 const INGESTED_AT = "2026-06-30T06:00:00.000Z";
 
@@ -570,7 +576,174 @@ test("normaliza evento oficial BMKG con intensidad y sin falso tsunami", () => {
   assert.equal(event.magnitude, 3.5);
   assert.equal(event.intensityText, "II-III Kab. Halmahera Timur");
   assert.equal(event.tsunami, false);
+  assert.equal(event.title, "M3.5 - 20 km al este de Halmahera");
   assert.equal(event.sourceEventId, buildBmkgSourceEventId("2026-06-30T04:46:45.000Z", 1.15, 128.2));
+});
+
+test("traduce en vivo el descriptor BMKG de tierra al espanol operativo", () => {
+  assert.equal(
+    normalizeBmkgLocationText("Pusat gempa berada di darat 30 km Selatan Genyem Jayapura"),
+    "30 km al sur de Genyem Jayapura"
+  );
+  assert.equal(
+    normalizeSourceLocationText("BMKG", "Pusat gempa berada di laut 48 km Barat Laut MALUKU TENGGARA BARAT"),
+    "48 km al noroeste de Maluku Tenggara Barat"
+  );
+});
+
+test("traduce descriptores geograficos legacy en ingles a espanol", () => {
+  assert.equal(normalizeSourceLocationText("EMSC", "SOUTHERN PERU"), "sur de Perú");
+  assert.equal(
+    normalizeSourceLocationText("EMSC", "NEAR N COAST OF PAPUA, INDONESIA"),
+    "cerca de la costa norte de Papúa, Indonesia"
+  );
+  assert.equal(
+    normalizeSourceLocationText("USGS", "58 km N of Charlotte Amalie, U.S. Virgin Islands"),
+    "58 km al norte de Charlotte Amalie, Islas Vírgenes de EE. UU."
+  );
+  assert.equal(
+    normalizeSourceLocationText("GEOFON", "Off Coast of Central Chile"),
+    "frente a la costa central de Chile"
+  );
+  assert.equal(
+    normalizeSourceLocationText("GEONET", "55 km north of Whakatane"),
+    "55 km al norte de Whakatane"
+  );
+  assert.equal(
+    normalizeSourceLocationText("CWA", "101.7 km SSE of Pingtung County Hall"),
+    "101.7 km al sur-sureste de la sede del condado de Pingtung"
+  );
+  assert.equal(
+    normalizeSourceLocationText("RENASS", "Event of magnitude 2.7, near Mamoudzou (Mayotte)"),
+    "cerca de Mamoudzou (Mayotte)"
+  );
+  assert.equal(normalizeSourceLocationText("EMSC", "Bosnia And Herzegovina"), "Bosnia y Herzegovina");
+  assert.equal(normalizeSourceLocationText("EMSC", "Mindanao, Philippines"), "Mindanao, Filipinas");
+  assert.equal(
+    normalizeSourceLocationText("EMSC", "KEPULAUAN BARAT DAYA, INDONESIA"),
+    "Islas del Suroeste, Indonesia"
+  );
+  assert.equal(
+    normalizeSourceLocationText("EMSC", "Offshore Valparaiso, Chile"),
+    "frente a la costa de Valparaiso, Chile"
+  );
+  assert.equal(
+    normalizeSourceLocationText("EMSC", "Offshore El Salvador"),
+    "frente a la costa de El Salvador"
+  );
+  assert.equal(
+    normalizeSourceLocationText("USGS", "South Sandwich Islands region"),
+    "región de Islas Sandwich del Sur"
+  );
+  assert.equal(normalizeSourceLocationText("USGS", "South of the Fiji Islands"), "al sur de Islas Fiyi");
+  assert.equal(
+    normalizeSourceLocationText("USGS", "59 km S of Boca de Yuma, Dominican Republic"),
+    "59 km al sur de Boca de Yuma, República Dominicana"
+  );
+  assert.equal(normalizeSourceLocationText("ISC", "Sea of Okhotsk"), "Mar de Ojotsk");
+  assert.equal(normalizeSourceLocationText("EMSC", "Celebes Sea"), "Mar de Célebes");
+  assert.equal(normalizeSourceLocationText("EMSC", "Banda Sea"), "Mar de Banda");
+  assert.equal(normalizeSourceLocationText("EMSC", "Savu Sea"), "Mar de Savu");
+  assert.equal(normalizeSourceLocationText("ISC", "Hawaiian Islands"), "Islas de Hawái");
+  assert.equal(
+    normalizeSourceLocationText("SGC", "Panama-Colombia Border region"),
+    "región de frontera entre Panamá y Colombia"
+  );
+  assert.equal(normalizeSourceLocationText("SGC", "Mona Passage"), "Canal de la Mona");
+  assert.equal(normalizeSourceLocationText("EMSC", "Kepulauan Talaud, Indonesia"), "Islas Talaud, Indonesia");
+  assert.equal(
+    normalizeSourceLocationText("EMSC", "Kepulauan Sangihe, Indonesia"),
+    "Islas Sangihe, Indonesia"
+  );
+  assert.equal(
+    normalizeSourceLocationText("JMA", "Off the Coast of Iwate Prefecture"),
+    "frente a la costa de la prefectura de Iwate"
+  );
+  assert.equal(
+    normalizeSourceLocationText("JMA", "Off the East Coast of North Island, New Zealand."),
+    "frente a la costa este de Isla Norte, Nueva Zelanda"
+  );
+  assert.equal(
+    normalizeSourceLocationText("JMA", "Off the East Coast of Osumi Peninsula"),
+    "frente a la costa este de península de Osumi"
+  );
+  assert.equal(
+    normalizeSourceLocationText("SCEDC", "221.9 km WNW from Port Orford, OR"),
+    "221.9 km al oeste-noroeste de Port Orford, Oregón"
+  );
+  assert.equal(
+    normalizeSourceLocationText("USGS", "7 km NE of Coso Junction, CA"),
+    "7 km al noreste de Coso Junction, California"
+  );
+});
+
+test("expande direcciones abreviadas en espanol para TTS y normaliza el titulo canonico", () => {
+  const event = normalizeSeismicEventText({
+    eventId: "USGS:test",
+    source: "USGS",
+    sourceEventId: "test",
+    title: "M 2.8 - 58 km N of Charlotte Amalie, U.S. Virgin Islands",
+    magnitude: 2.8,
+    magnitudeType: "mb",
+    latitude: 18.35,
+    longitude: -64.93,
+    depthKm: 16,
+    mmi: null,
+    cdi: null,
+    intensityText: null,
+    stationCount: null,
+    azimuthalGapDeg: null,
+    nearestStationDeg: null,
+    rmsSec: null,
+    significance: null,
+    feltReports: null,
+    alertLevel: null,
+    tsunami: false,
+    networkCode: "US",
+    providerEventCode: "test",
+    eventType: "earthquake",
+    detailUrl: null,
+    sources: ["USGS"],
+    sourceCount: 1,
+    eventTimeUtc: INGESTED_AT,
+    updatedAtUtc: null,
+    status: "reviewed",
+    sourceUrl: "https://earthquake.usgs.gov/",
+    ingestedAt: INGESTED_AT
+  });
+
+  assert.equal(event.title, "M2.8 - 58 km al norte de Charlotte Amalie, Islas Vírgenes de EE. UU.");
+  assert.equal(
+    normalizeSourceLocationText("IGP", "22 km al O de Chuquibambilla, Grau - Apurímac"),
+    "22 km al oeste de Chuquibambilla, Grau - Apurímac"
+  );
+});
+
+test("normaliza magnitudes negativas, explosiones y abreviaturas regionales legacy", () => {
+  assert.equal(
+    normalizeSourceTitleText("USGS", "M -0.8 - 65 km Ene of Pedro Bay, Alaska"),
+    "M-0.8 - 65 km al este-noreste de Pedro Bay, Alaska"
+  );
+  assert.equal(
+    normalizeSourceTitleText("USGS", "M 1.8 Explosion - 57 km S of Kingston, Nevada"),
+    "M1.8 - explosión: 57 km al sur de Kingston, Nevada"
+  );
+  assert.equal(
+    normalizeSourceLocationText("INGV", "4 km Ne Castelsantangelo sul Nera (Mc)"),
+    "4 km al noreste de Castelsantangelo sul Nera (Macerata)"
+  );
+  assert.equal(normalizeSourceLocationText("INGV", "3 km E Teora (Av)"), "3 km al este de Teora (Avellino)");
+  assert.equal(
+    normalizeSourceLocationText("INGV", "2 km W Serra San Quirico (An)"),
+    "2 km al oeste de Serra San Quirico (Ancona)"
+  );
+  assert.equal(
+    normalizeSourceLocationText("IGN", "Sw Oloron Ste Marie.Fra"),
+    "al suroeste de Oloron Ste Marie, Francia"
+  );
+  assert.equal(normalizeSourceLocationText("IGN", "Ne Obejo.Co"), "al noreste de Obejo, Córdoba");
+  assert.equal(normalizeSourceLocationText("IGN", "Se Campillos.Ma"), "al sureste de Campillos, Málaga");
+  assert.equal(normalizeSourceLocationText("IGN", "SE SESIMBRA.POR"), "al sureste de Sesimbra, Portugal");
 });
 
 test("interpreta potencial positivo de tsunami BMKG", () => {
