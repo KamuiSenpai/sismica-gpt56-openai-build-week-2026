@@ -13,6 +13,14 @@ import {
 } from "@sismica/shared";
 
 import type { DirectorSegmentKind, NarrationEditorial, NarrationMode, SegmentPacket } from "./editorial";
+import {
+  IOC_SEA_LEVEL_DATA_URL,
+  IOC_SEA_LEVEL_STATIONLIST_URL,
+  normalizeSeaLevelSeries,
+  normalizeSeaLevelStations,
+  type SeaLevelStationSeries,
+  type SeaLevelStation
+} from "./seaLevel";
 
 const API_BASE_URL =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL ??
@@ -144,6 +152,57 @@ export async function fetchStations(): Promise<SeismicStation[]> {
   } catch (error) {
     console.warn("Catalogo de estaciones no disponible.", error);
     return [];
+  }
+}
+
+export async function fetchSeaLevelStations(): Promise<SeaLevelStation[]> {
+  try {
+    const response = await fetch(IOC_SEA_LEVEL_STATIONLIST_URL);
+    if (!response.ok) throw new Error(`Sea level station request failed: ${response.status}`);
+    const payload = (await response.json()) as unknown;
+    return normalizeSeaLevelStations(payload);
+  } catch (error) {
+    console.warn("Red IOC/UNESCO de nivel del mar no disponible.", error);
+    return [];
+  }
+}
+
+function formatIocUtc(date: Date): string {
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
+
+export async function fetchSeaLevelStationSeries(input: {
+  stationCode: string;
+  sensor?: string | null;
+  unit?: string | null;
+  hours?: number;
+}): Promise<SeaLevelStationSeries | null> {
+  const windowHours = Math.max(1, Math.min(24, Math.round(input.hours ?? 6)));
+  try {
+    const now = new Date();
+    const start = new Date(now.getTime() - windowHours * 60 * 60 * 1000);
+    const params = new URLSearchParams({
+      code: input.stationCode,
+      timestart: formatIocUtc(start),
+      timestop: formatIocUtc(now),
+      format: "json"
+    });
+    if (input.sensor) {
+      params.append("includesensors[]", input.sensor);
+    }
+
+    const response = await fetch(`${IOC_SEA_LEVEL_DATA_URL}&${params.toString()}`);
+    if (!response.ok) throw new Error(`Sea level series request failed: ${response.status}`);
+    const payload = (await response.json()) as unknown;
+    return normalizeSeaLevelSeries(payload, {
+      stationCode: input.stationCode,
+      sensor: input.sensor ?? null,
+      unit: input.unit ?? null,
+      windowHours
+    });
+  } catch (error) {
+    console.warn(`Serie IOC/UNESCO no disponible para ${input.stationCode}.`, error);
+    return null;
   }
 }
 

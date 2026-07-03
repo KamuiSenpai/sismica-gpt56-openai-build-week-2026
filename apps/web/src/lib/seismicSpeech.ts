@@ -1,6 +1,7 @@
 import { type SeismicEvent } from "@sismica/shared";
 
 import { broadcastPlace } from "./broadcastPlace";
+import { normalizeSpanishText } from "./spanishText";
 
 const DEFAULT_SPEECH_LANG = "es-PE";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
@@ -18,17 +19,23 @@ function expandSpokenAbbreviations(text: string): string {
 }
 
 export function normalizeSpokenText(text: string): string {
-  return expandSpokenAbbreviations(text)
-    .replace(/\s*[\r\n]+\s*/gu, ", ")
-    .replace(/\u2026/gu, ", ")
-    .replace(/\s*[;:!?]+\s*/gu, ", ")
-    .replace(/\.(?=\s+\p{Lu})/gu, ",")
-    .replace(/\.(?=\s*$)/gu, "")
-    .replace(/\s+,/gu, ",")
-    .replace(/,\s*,+/gu, ", ")
-    .replace(/\s{2,}/gu, " ")
-    .replace(/,\s*$/gu, "")
-    .trim();
+  return (
+    normalizeSpanishText(expandSpokenAbbreviations(text))
+      .replace(/\s*[\r\n]+\s*/gu, ", ")
+      .replace(/…/gu, ", ")
+      .replace(/\s*[;:!?]+\s*/gu, ", ")
+      // Colapsa los puntos internos de siglas/abreviaturas para que no se deletreen con "punto":
+      // "S.O." -> "SO", "U.S.A" -> "USA" (EE.UU ya se expande antes).
+      .replace(/\b(\p{L})\.(?=\p{L})/gu, "$1")
+      // Todo punto que NO sea decimal (entre digitos) es puntuacion: fin de frase o abreviatura.
+      // Pasa a pausa y no se pronuncia como "punto"; el decimal de la magnitud (3.5) se conserva.
+      .replace(/(?<!\d)\.|\.(?!\d)/gu, ", ")
+      .replace(/\s+,/gu, ",")
+      .replace(/,\s*,+/gu, ", ")
+      .replace(/\s{2,}/gu, " ")
+      .replace(/,\s*$/gu, "")
+      .trim()
+  );
 }
 
 function formatSpokenKilometers(value: number | string): string {
@@ -101,7 +108,13 @@ function normalizeNarrationPlace(place: string): string {
   const normalizedUnits = place.replace(/(\d+(?:[.,]\d+)?)\s*km\b/giu, (_match, rawDistance: string) =>
     formatSpokenKilometers(rawDistance)
   );
-  const spokenDirections = normalizedUnits.replace(
+  // De-puntea abreviaturas de direccion ("al S.O. de" -> "al SO de") para que la expansion
+  // siguiente las convierta en palabra ("al suroeste de") y no se deletreen con "punto".
+  const dedottedDirections = normalizedUnits.replace(
+    /\bal\s+([NSEO](?:\s*\.?\s*[NSEO]){0,2})\s*\.?\s+de\b/giu,
+    (_match, rawDirection: string) => `al ${rawDirection.replace(/[.\s]/gu, "").toUpperCase()} de`
+  );
+  const spokenDirections = dedottedDirections.replace(
     /\bal\s+(NNO|NNE|ENE|ESE|SSE|SSO|OSO|ONO|NO|NE|SO|SE|N|S|E|O)\s+de\b/giu,
     (_match, rawDirection: string) => {
       const labelMap: Record<string, string> = {

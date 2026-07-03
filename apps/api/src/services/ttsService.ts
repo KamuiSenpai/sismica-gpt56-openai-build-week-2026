@@ -22,7 +22,7 @@ const resolvedPiperVoice = env.piperVoiceModel ? resolveAsset(env.piperVoiceMode
 const resolvedCacheDir = env.ttsCacheDir ? resolveAsset(env.ttsCacheDir) : undefined;
 
 // Motores de sintesis disponibles: Piper (binario local) y XTTS-v2 (microservicio Python).
-export const ttsEngineSchema = z.enum(["piper", "xtts"]);
+export const ttsEngineSchema = z.enum(["piper", "xtts", "chatterbox"]);
 export type TtsEngine = z.infer<typeof ttsEngineSchema>;
 
 export const ttsRequestSchema = z.object({
@@ -169,6 +169,29 @@ async function synthesizeXtts(text: string, voice?: string): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
+async function synthesizeChatterbox(text: string, voice?: string): Promise<Buffer> {
+  if (!env.chatterboxServiceUrl) {
+    throw new TtsUnavailableError("Chatterbox no esta configurado (CHATTERBOX_SERVICE_URL)");
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${env.chatterboxServiceUrl}/synthesize`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text, speaker: voice }),
+      signal: AbortSignal.timeout(XTTS_TIMEOUT_MS)
+    });
+  } catch (error) {
+    throw new TtsUnavailableError(
+      `No se pudo contactar el servicio Chatterbox: ${error instanceof Error ? error.message : "error"}`
+    );
+  }
+  if (!response.ok) {
+    throw new TtsUnavailableError(`Servicio Chatterbox respondio ${response.status}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
 export async function synthesize(engine: TtsEngine, request: TtsRequest): Promise<TtsResult> {
   if (!env.ttsEnabled) throw new TtsUnavailableError("TTS neural deshabilitado (TTS_ENABLED=false)");
 
@@ -187,7 +210,9 @@ export async function synthesize(engine: TtsEngine, request: TtsRequest): Promis
   const audio =
     engine === "piper"
       ? await synthesizePiper(request.text)
-      : await synthesizeXtts(request.text, request.voice);
+      : engine === "chatterbox"
+        ? await synthesizeChatterbox(request.text, request.voice)
+        : await synthesizeXtts(request.text, request.voice);
 
   audioCache.set(key, audio);
   await writeDiskCache(key, audio);
@@ -239,16 +264,52 @@ async function xttsHealth(): Promise<EngineHealth> {
   return value;
 }
 
+let chatterboxHealthCache: { at: number; value: EngineHealth } | null = null;
+
+async function chatterboxHealth(): Promise<EngineHealth> {
+  if (!env.chatterboxServiceUrl) return { ok: false, detail: "CHATTERBOX_SERVICE_URL sin configurar" };
+  if (chatterboxHealthCache && Date.now() - chatterboxHealthCache.at < XTTS_HEALTH_TTL_MS) {
+    return chatterboxHealthCache.value;
+  }
+  let value: EngineHealth;
+  try {
+    const response = await fetch(`${env.chatterboxServiceUrl}/health`, {
+      signal: AbortSignal.timeout(XTTS_HEALTH_TIMEOUT_MS)
+    });
+    if (!response.ok) {
+      value = { ok: false, detail: `health ${response.status}` };
+    } else {
+      const payload = (await response.json()) as {
+        speaker?: string | null;
+        defaultProfile?: string | null;
+        profiles?: string[] | null;
+      };
+      value = {
+        ok: true,
+        voice: payload.defaultProfile ?? payload.speaker ?? "chatterbox",
+        profiles: Array.isArray(payload.profiles)
+          ? payload.profiles.filter((item) => typeof item === "string")
+          : []
+      };
+    }
+  } catch {
+    value = { ok: false, detail: "servicio no accesible" };
+  }
+  chatterboxHealthCache = { at: Date.now(), value };
+  return value;
+}
+
 export async function getHealth(): Promise<TtsHealth> {
   if (!env.ttsEnabled) {
     return {
       enabled: false,
       engines: {
         piper: { ok: false, detail: "TTS_ENABLED=false" },
-        xtts: { ok: false, detail: "TTS_ENABLED=false" }
+        xtts: { ok: false, detail: "TTS_ENABLED=false" },
+        chatterbox: { ok: false, detail: "TTS_ENABLED=false" }
       }
     };
   }
-  const [piper, xtts] = [piperHealth(), await xttsHealth()];
-  return { enabled: true, engines: { piper, xtts } };
+  const [piper, xtts, chatterbox] = [piperHealth(), await xttsHealth(), await chatterboxHealth()];
+  return { enabled: true, engines: { piper, xtts, chatterbox } };
 }

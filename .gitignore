@@ -18,3 +18,8 @@ logs/
 models/
 .tts-cache/
 
+# Entornos Python locales
+.venv/
+venv/
+__pycache__/
+*.pyc

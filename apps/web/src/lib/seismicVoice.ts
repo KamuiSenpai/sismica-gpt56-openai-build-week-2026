@@ -38,7 +38,7 @@ import {
   speakSeismicText as speakBrowserText
 } from "./seismicSpeech";
 
-export type VoiceEngine = "piper" | "xtts" | "browser";
+export type VoiceEngine = "chatterbox" | "xtts" | "piper" | "browser";
 export type BroadcastVoiceHostId = "carolina" | "liam" | "valentina" | "martin" | "sofia" | "ninoska";
 export type BroadcastVoiceHost = {
   id: BroadcastVoiceHostId;
@@ -57,10 +57,11 @@ export type ResolvedNarrationPacket = {
   tectonicContext: string | null;
 };
 
-export const VOICE_ENGINES: readonly VoiceEngine[] = ["piper", "xtts", "browser"] as const;
+export const VOICE_ENGINES: readonly VoiceEngine[] = ["chatterbox", "xtts", "piper", "browser"] as const;
 export const VOICE_ENGINE_LABELS: Record<VoiceEngine, string> = {
-  piper: "Piper",
+  chatterbox: "Chatterbox",
   xtts: "XTTS-v2",
+  piper: "Piper",
   browser: "Navegador"
 };
 export const BROADCAST_VOICE_HOSTS: readonly BroadcastVoiceHost[] = [
@@ -76,23 +77,23 @@ export const BROADCAST_VOICE_HOSTS: readonly BroadcastVoiceHost[] = [
 
 // Orden de preferencia neural (autoseleccion y cascada de fallback): XTTS-v2 primero,
 // luego Piper y, si todos fallan, la voz del navegador.
-const NEURAL_PRIORITY: readonly NeuralEngine[] = ["xtts", "piper"] as const;
+const NEURAL_PRIORITY: readonly NeuralEngine[] = ["chatterbox", "xtts", "piper"] as const;
 // Incluye frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
 // pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos) (?:recopilando|reuniendo|recabando) informacion|(?:seguiremos|continuaremos|ampliaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion)\b/u;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos|seguiremos|continuaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion|(?:seguimos|continuamos|mantenemos|se mantiene)\s+monitore\w*(?:\s+(?:continuo|continua|permanente|en vivo|en tiempo real|sismico))?|(?:centro|servicio|instituto|observatorio|agencia|autoridad(?:es)?|equipo|sala)\s+(?:sismolog\w*|geologic\w*|de monitoreo)|(?:nuestro|nuestra|este|esta)\s+(?:centro|servicio|instituto|observatorio|equipo)|seguimiento\s+(?:continuo|permanente))\b/u;
 // Aperturas validas POR MODO (espejo del API). "Nuevo sismo..." solo es legitimo en breaking
 // (sismo que recien ingresa); en seguimiento/recorrido solo caben las de FOLLOWUP.
 const BREAKING_EDITORIAL_INTROS = new Set([
   "nuevo sismo detectado",
   "se registra un nuevo sismo",
   "actualizacion sismica reciente",
-  "nuevo evento sismico en monitoreo"
+  "evento sismico reciente"
 ]);
 const FOLLOWUP_EDITORIAL_INTROS = new Set([
   "sismo detectado",
   "evento sismico en seguimiento",
-  "reporte sismico en monitoreo"
+  "actualizacion sismica"
 ]);
 
 function allowedEditorialIntros(mode: NarrationMode): Set<string> {

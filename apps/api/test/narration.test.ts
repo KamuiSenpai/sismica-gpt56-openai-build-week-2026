@@ -4,7 +4,7 @@ import test from "node:test";
 // Estado determinista: DeepSeek deshabilitado -> debe caer siempre al fallback local.
 process.env.DEEPSEEK_ENABLED = "false";
 
-const { generateNarration, narrationRequestSchema, sanitizeNarrationEditorial } =
+const { generateNarration, narrationRequestSchema, sanitizeNarrationEditorial, EVENT_CLOSINGS } =
   await import("../src/services/narrationService.js");
 
 const seguimientoFallback = {
@@ -66,6 +66,35 @@ test("generateNarration devuelve pauta editorial local con DeepSeek deshabilitad
   assert.equal(/sin reportes?/iu.test([editorial.intro, editorial.closing].join(" ")), false);
 });
 
+test("generateNarration cierra con un remate curado que rota sin repetir", async () => {
+  const closings = EVENT_CLOSINGS as readonly string[];
+  const seen: string[] = [];
+  for (let i = 0; i < 5; i += 1) {
+    const editorial = await generateNarration({
+      eventId: `USGS:rot-${i}`,
+      source: "USGS",
+      title: "M3.4 - Mindanao, Philippines",
+      normalizedPlace: "Mindanao, Filipinas",
+      mode: "seguimiento",
+      latitude: 7.1,
+      longitude: 126.5,
+      magnitude: 3.4,
+      depthKm: 20,
+      recentLines: seen.slice()
+    });
+    assert.ok(
+      editorial.closing && closings.includes(editorial.closing),
+      `remate curado: ${editorial.closing}`
+    );
+    // No repite un remate que ya salio en las lineas recientes.
+    assert.equal(
+      seen.some((line) => line.includes(editorial.closing ?? "")),
+      false
+    );
+    seen.push(editorial.closing ?? "");
+  }
+});
+
 test("sanitizeNarrationEditorial bloquea aperturas 'nuevo' cuando el modo es seguimiento", () => {
   const raw = {
     intro: "Nuevo sismo detectado",
@@ -107,6 +136,18 @@ test("sanitizeNarrationEditorial descarta formulas de informacion no verificable
   assert.equal(result?.intro, "Sismo detectado");
   assert.equal(result?.closing, null);
   assert.equal(/informacion en desarrollo|no tenemos mas informacion/iu.test(result?.closing ?? ""), false);
+});
+
+test("sanitizeNarrationEditorial descarta claims institucionales de monitoreo", () => {
+  const raw = {
+    intro: "Sismo detectado",
+    closing: "Se mantiene monitoreo permanente desde el centro sismologico",
+    tectonicContext: null,
+    cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+  };
+  const result = sanitizeNarrationEditorial(raw, seguimientoFallback, "seguimiento");
+  assert.equal(result?.intro, "Sismo detectado");
+  assert.equal(result?.closing, null);
 });
 
 test("sanitizeNarrationEditorial conserva una apertura valida de seguimiento", () => {

@@ -74,6 +74,43 @@ VOICE_PROFILES_FILE = os.environ.get("XTTS_VOICE_PROFILES") or None
 DEFAULT_PROFILE = os.environ.get("XTTS_DEFAULT_PROFILE") or None
 
 
+def _float_env(name: str, default: float) -> float:
+    try:
+        raw = os.environ.get(name)
+        return float(raw) if raw not in (None, "") else default
+    except ValueError:
+        return default
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
+# Parametros de inferencia de XTTS (antes se usaban los defaults del modelo). Ajustan naturalidad
+# y estabilidad; configurables por env y sobreescribibles por peticion.
+# Default = preset "estable" (elegido por el usuario): tono parejo, sin artefactos.
+INFERENCE_DEFAULTS = {
+    "temperature": _float_env("XTTS_TEMPERATURE", 0.5),
+    "repetition_penalty": _float_env("XTTS_REPETITION_PENALTY", 5.0),
+    "top_p": _float_env("XTTS_TOP_P", 0.8),
+    "top_k": int(_float_env("XTTS_TOP_K", 50)),
+    "speed": _float_env("XTTS_SPEED", 1.0),
+}
+SPLIT_SENTENCES = _bool_env("XTTS_SPLIT_SENTENCES", True)
+
+# Presets para comparar A/B sin re-desplegar (se pasan por el campo "preset" de /synthesize).
+PRESETS: dict[str, dict[str, float]] = {
+    "estable": {"temperature": 0.5, "repetition_penalty": 5.0, "top_p": 0.8, "speed": 1.0},
+    "natural": {"temperature": 0.75, "repetition_penalty": 3.0, "top_p": 0.9, "speed": 1.0},
+    "locutor": {"temperature": 0.7, "repetition_penalty": 4.0, "top_p": 0.85, "speed": 1.05},
+}
+
+
 def _resolve_device() -> str:
     requested = os.environ.get("XTTS_DEVICE", "auto").lower()
     if requested in ("cuda", "cpu"):
@@ -229,6 +266,26 @@ class SynthesizeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     speaker: str | None = None
     language: str | None = None
+    # Ajustes de inferencia (opcionales): preset con nombre u overrides puntuales.
+    preset: str | None = None
+    temperature: float | None = None
+    repetition_penalty: float | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    speed: float | None = None
+    split_sentences: bool | None = None
+
+
+def _resolve_inference_params(request: SynthesizeRequest) -> tuple[dict, bool]:
+    params = dict(INFERENCE_DEFAULTS)
+    if request.preset and request.preset in PRESETS:
+        params.update(PRESETS[request.preset])
+    for key in ("temperature", "repetition_penalty", "top_p", "top_k", "speed"):
+        value = getattr(request, key)
+        if value is not None:
+            params[key] = value
+    split = SPLIT_SENTENCES if request.split_sentences is None else request.split_sentences
+    return params, split
 
 
 @app.get("/health")
@@ -272,11 +329,17 @@ def synthesize(request: SynthesizeRequest) -> Response:
         raise HTTPException(status_code=503, detail="Modelo XTTS no cargado")
 
     voice_kwargs, resolved_voice = _resolve_voice_request(request.speaker, request.language)
-    kwargs: dict = {"text": request.text, **voice_kwargs}
+    inference, split_sentences = _resolve_inference_params(request)
+    kwargs: dict = {"text": request.text, **voice_kwargs, **inference, "split_sentences": split_sentences}
 
     try:
         with synthesis_lock:
             waveform = state.tts.tts(**kwargs)
+    except TypeError:
+        # Un backend que no acepte algun parametro de inferencia no debe romper la sintesis:
+        # reintenta solo con voz + idioma (comportamiento previo).
+        with synthesis_lock:
+            waveform = state.tts.tts(text=request.text, **voice_kwargs)
     except Exception as error:  # noqa: BLE001 - devolvemos 500 con el detalle
         raise HTTPException(
             status_code=500,

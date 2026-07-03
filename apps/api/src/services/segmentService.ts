@@ -159,14 +159,15 @@ const UNSUPPORTED_LIVE_CLAIM_PATTERN = /\breplic(?:a|as)\b/iu;
 // Incluye frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
 // pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos) (?:recopilando|reuniendo|recabando) informacion|(?:seguiremos|continuaremos|ampliaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion)\b/u;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos|seguiremos|continuaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion|(?:seguimos|continuamos|mantenemos|se mantiene)\s+monitore\w*(?:\s+(?:continuo|continua|permanente|en vivo|en tiempo real|sismico))?|(?:centro|servicio|instituto|observatorio|agencia|autoridad(?:es)?|equipo|sala)\s+(?:sismolog\w*|geologic\w*|de monitoreo)|(?:nuestro|nuestra|este|esta)\s+(?:centro|servicio|instituto|observatorio|equipo)|seguimiento\s+(?:continuo|permanente))\b/u;
 const SEGMENT_SYSTEM_PROMPT =
   "Eres el redactor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"text":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
   "El texto debe ser breve, claro y listo para overlay y voz. Usa espanol neutro. Considera las lineas recientes solo para evitar repetir aperturas o remates. " +
   "Es un directo continuo 24/7 SIN cortes: nunca menciones pausas, cortes comerciales, publicidad ni digas 'volvemos' o 'regresamos'. No inventes " +
   "replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes. Nunca uses formulas del tipo " +
-  "'informacion en desarrollo', 'no tenemos mas informacion' ni variantes que sugieran que alguien esta reuniendo datos en tiempo real.";
+  "'informacion en desarrollo', 'no tenemos mas informacion' ni variantes que sugieran que alguien esta reuniendo datos en tiempo real. " +
+  "No hables en nombre de un centro sismologico, observatorio, instituto, servicio geologico, autoridades ni equipo de monitoreo.";
 const HANDOFF_SYSTEM_PROMPT =
   "Eres el productor editorial de un canal sismico 24/7 con un equipo de locutores que se conocen de " +
   "toda la vida y se aprecian. Redacta el relevo entre dos de ellos: calido, cercano y amistoso, pero " +
@@ -179,7 +180,8 @@ const HANDOFF_SYSTEM_PROMPT =
   "lineas recientes que se te entregan; que suene distinto y espontaneo cada vez. Un guino calido esta bien " +
   "(un buen turno, saludos a la audiencia, nos vemos al rato) sin exagerar ni volverse informal de mas. " +
   "Es un directo continuo SIN cortes: nunca menciones pausas, cortes comerciales ni digas 'volvemos tras la pausa'. " +
-  "No inventes sismos, replicas, danos, alertas, riesgos ni cifras, ni uses formulas del tipo 'informacion en desarrollo' o 'no tenemos mas informacion'.";
+  "No inventes sismos, replicas, danos, alertas, riesgos ni cifras, ni uses formulas del tipo 'informacion en desarrollo' o 'no tenemos mas informacion'. " +
+  "No hables como centro sismologico, observatorio, instituto ni equipo de monitoreo.";
 const RECOMMENDATION_SYSTEM_PROMPT =
   "Eres el redactor de recomendaciones sismicas para un canal de monitoreo en directo. " +
   "Debes reescribir solamente medidas de seguridad ya aprobadas, sin inventar consejos nuevos. " +
@@ -325,19 +327,19 @@ function stripSpeakerPrefix(text: string, speakerName: string): string {
 const HANDOFF_FALLBACK_VARIANTS: Array<(cur: string, next: string) => HandoffSegment> = [
   (cur, next) => ({
     currentHostLine: `${next}, te dejo la posta con toda confianza. Un gusto compartir cabina contigo, cuidalos bien.`,
-    nextHostLine: `Gracias, ${cur}, siempre un placer. Tomo la posta y seguimos juntos con el monitoreo en tiempo real.`
+    nextHostLine: `Gracias, ${cur}, siempre un placer. Tomo la posta y seguimos juntos al aire con la cobertura sismica.`
   }),
   (cur, next) => ({
     currentHostLine: `${next}, hasta aqui mi turno, quedas en las mejores manos. Nos vemos al rato, un abrazo.`,
-    nextHostLine: `Con carino, ${cur}. Recibo la posta y sigo acompanando al publico con el monitoreo sismico.`
+    nextHostLine: `Con carino, ${cur}. Recibo la posta y sigo acompanando al publico con la cobertura en vivo.`
   }),
   (cur, next) => ({
     currentHostLine: `${next}, te paso la posta y me despido de la audiencia. Que tengas un gran turno, colega.`,
-    nextHostLine: `Un gusto, ${cur}, descansa. Aqui sigo yo, atentos y en calma al monitoreo en vivo.`
+    nextHostLine: `Un gusto, ${cur}, descansa. Aqui sigo yo, atentos y en calma con la cobertura en vivo.`
   }),
   (cur, next) => ({
     currentHostLine: `${next}, cierro mi turno y te dejo la conduccion. Gracias por tanto, seguimos en contacto.`,
-    nextHostLine: `Gracias por el relevo, ${cur}. Tomo la posta y continuamos con la informacion sismica al instante.`
+    nextHostLine: `Gracias por el relevo, ${cur}. Tomo la posta y continuamos con la informacion sismica al aire.`
   })
 ];
 let handoffFallbackIndex = 0;

@@ -68,17 +68,12 @@ const BREAKING_INTROS = [
   "Nuevo sismo detectado",
   "Se registra un nuevo sismo",
   "Actualizacion sismica reciente",
-  "Nuevo evento sismico en monitoreo"
-] as const;
-const BREAKING_CLOSINGS = [
-  "Seguimos monitoreando la zona",
-  "Se mantiene seguimiento sobre el area",
-  "Monitoreo continuo sobre el sector"
+  "Evento sismico reciente"
 ] as const;
 const FOLLOWUP_INTROS = [
   "Sismo detectado",
   "Evento sismico en seguimiento",
-  "Reporte sismico en monitoreo"
+  "Actualizacion sismica"
 ] as const;
 // Las aperturas se validan POR MODO: "Nuevo sismo..." solo es legitimo en breaking (sismo que
 // recien ingresa). En seguimiento/recorrido solo caben las de FOLLOWUP, sin la palabra "nuevo".
@@ -88,6 +83,24 @@ const FOLLOWUP_INTRO_SET = new Set<string>(FOLLOWUP_INTROS.map(canonicalize));
 function allowedIntroSet(mode: NarrationMode): Set<string> {
   return mode === "breaking" ? BREAKING_INTRO_SET : FOLLOWUP_INTRO_SET;
 }
+
+// Remates curados del evento (aprobados). Rotan con antirrepeticion (via lineas recientes) para
+// que el cierre nunca canse; reemplazan al cierre libre de DeepSeek, que tendia a repetirse.
+export const EVENT_CLOSINGS = [
+  "Seguimos con el recorrido por el planeta.",
+  "Vamos al siguiente registro.",
+  "Continuamos el trazo por el mapa del mundo.",
+  "Y el recorrido continua.",
+  "Seguimos de zona en zona.",
+  "El mapa nos lleva al siguiente evento.",
+  "Se suma al pulso sismico de la jornada.",
+  "La dinamica de la Tierra no se detiene.",
+  "Actividad propia de una zona sismicamente viva.",
+  "Contigo, evento por evento.",
+  "El mundo entero, punto por punto.",
+  "Punto marcado, seguimos adelante.",
+  "Se mantiene la informacion a disposicion de la audiencia."
+] as const;
 
 const SUBDUCTION_KEYWORDS = [
   "alaska",
@@ -149,17 +162,19 @@ const OFFSHORE_PATTERN = /\b(costa|mar|estrecho|offshore|frente a la costa)\b/iu
 // Incluye tambien frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
 // pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos) (?:recopilando|reuniendo|recabando) informacion|(?:seguiremos|continuaremos|ampliaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion)\b/u;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos|seguiremos|continuaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion|(?:seguimos|continuamos|mantenemos|se mantiene)\s+monitore\w*(?:\s+(?:continuo|continua|permanente|en vivo|en tiempo real|sismico))?|(?:centro|servicio|instituto|observatorio|agencia|autoridad(?:es)?|equipo|sala)\s+(?:sismolog\w*|geologic\w*|de monitoreo)|(?:nuestro|nuestra|este|esta)\s+(?:centro|servicio|instituto|observatorio|equipo)|seguimiento\s+(?:continuo|permanente))\b/u;
 const SYSTEM_PROMPT =
   "Eres el editor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"intro":"...","closing":"...","tectonicContext":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
   `Si modo es "breaking", intro debe ser exactamente una de: ${BREAKING_INTROS.join("; ")}. ` +
   `Si modo es "seguimiento", intro debe ser exactamente una de: ${FOLLOWUP_INTROS.join("; ")}. ` +
   'Nunca uses una apertura con la palabra "nuevo" cuando el modo es "seguimiento". ' +
-  "No agregues lugar, pais, magnitud ni profundidad a intro. Usa las lineas recientes solo para evitar repeticiones de apertura, cierre y tono. " +
+  "No agregues lugar, pais, magnitud ni profundidad a intro. El campo closing debe ser siempre null: el remate final lo agrega el sistema. Usa las lineas recientes para evitar repeticiones de apertura, tono y contexto tectonico (tectonicContext). " +
   "Es un directo continuo 24/7 SIN cortes: nunca menciones pausas, cortes comerciales ni publicidad, ni digas que 'volvemos' o 'regresamos tras la pausa'. " +
   "Nunca uses formulas del tipo 'informacion en desarrollo', 'no tenemos mas informacion' ni variantes que sugieran que alguien esta reuniendo datos en tiempo real. " +
-  "tectonicContext debe ser null o una sola frase breve basada SOLO en la pista tectonica entregada. No inventes replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
+  "No hables en nombre de un centro sismologico, observatorio, instituto, servicio geologico, autoridades ni equipo de monitoreo. " +
+  "No uses frases como 'seguimos monitoreando', 'monitoreo permanente', 'desde el centro sismologico' o similares. " +
+  "tectonicContext debe ser null o una sola frase breve que describa la pista tectonica entregada. Si el contexto ya se uso en las lineas recientes, reformulalo o aporta una variacion descriptiva para enriquecer la narrativa. No inventes replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
 
 function normalizeEditorialText(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
@@ -351,11 +366,10 @@ function fallbackNarrationEditorial(request: NarrationRequest): NarrationEditori
     request.mode === "breaking"
       ? pickNonRepeated(BREAKING_INTROS, recentLines)
       : pickNonRepeated(FOLLOWUP_INTROS, recentLines);
-  const closing = request.mode === "breaking" ? pickNonRepeated(BREAKING_CLOSINGS, recentLines) : null;
   const tectonicContext = inferTectonicHint(request).contextLine;
   return {
     intro,
-    closing,
+    closing: null,
     tectonicContext,
     cue:
       request.mode === "breaking"
@@ -411,7 +425,7 @@ export function sanitizeNarrationEditorial(
   };
 }
 
-export async function generateNarration(request: NarrationRequest): Promise<NarrationEditorial> {
+async function resolveNarrationEditorial(request: NarrationRequest): Promise<NarrationEditorial> {
   const fallback = fallbackNarrationEditorial(request);
   const key = cacheKey(request);
 
@@ -445,4 +459,11 @@ export async function generateNarration(request: NarrationRequest): Promise<Narr
     }
     return fallback;
   }
+}
+
+export async function generateNarration(request: NarrationRequest): Promise<NarrationEditorial> {
+  const base = await resolveNarrationEditorial(request);
+  // El remate se elige fresco en cada narracion (fuera del cache): rota por los remates curados
+  // evitando los que aparecen en las lineas recientes -> siempre varia, nunca cansa.
+  return { ...base, closing: pickNonRepeated(EVENT_CLOSINGS, request.recentLines ?? []) };
 }

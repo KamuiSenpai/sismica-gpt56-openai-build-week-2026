@@ -116,6 +116,23 @@ test("sanitizeGeneratedSegmentPacket descarta formulas de informacion no verific
   assert.equal(packet.text.includes("En la ultima hora"), true);
 });
 
+test("sanitizeGeneratedSegmentPacket descarta claims de autoridad o monitoreo institucional", () => {
+  const packet = sanitizeGeneratedSegmentPacket(
+    {
+      text: "Se mantiene monitoreo permanente desde el centro sismologico.",
+      cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+    },
+    {
+      kind: "resumen",
+      totalLastHour: 6,
+      biggestMagnitude: 4.8,
+      biggestPlace: "Mar de Molucas"
+    }
+  );
+  assert.equal(packet.text.includes("En la ultima hora"), true);
+  assert.equal(/centro sismologico|monitoreo permanente/iu.test(packet.text), false);
+});
+
 test("los catalogos de aire no incluyen replicas como tema activo", () => {
   assert.equal(
     EDUCATIVO_TOPICS.some((entry: { topic: string }) => /replic/iu.test(entry.topic)),

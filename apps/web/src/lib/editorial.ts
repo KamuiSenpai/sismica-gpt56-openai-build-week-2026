@@ -38,7 +38,7 @@ export function fallbackNarrationEditorial(mode: NarrationMode): NarrationEditor
   if (mode === "breaking") {
     return {
       intro: "Nuevo sismo detectado",
-      closing: "Seguimos monitoreando la zona",
+      closing: null,
       tectonicContext: null,
       cue: { urgency: "alta", rhythm: "agil", tone: "directo" }
     };

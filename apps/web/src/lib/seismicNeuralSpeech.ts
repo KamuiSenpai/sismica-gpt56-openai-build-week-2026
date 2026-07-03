@@ -1,7 +1,7 @@
 // Capa de voz neural: pide el audio al API (/api/tts) y lo reproduce en el navegador.
 // El API enruta a Piper (binario local) o hace proxy a XTTS-v2 (servicio Python).
 
-export type NeuralEngine = "piper" | "xtts";
+export type NeuralEngine = "piper" | "xtts" | "chatterbox";
 export type NeuralSpeechOptions = { voice?: string; playbackRate?: number };
 export type NeuralSpeechRequest = { text: string; voice?: string };
 

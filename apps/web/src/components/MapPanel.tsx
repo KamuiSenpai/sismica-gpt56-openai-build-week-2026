@@ -20,6 +20,7 @@ import {
   EllipsoidGeodesic,
   Entity,
   GeoJsonDataSource,
+  HeightReference,
   HorizontalOrigin,
   Ion,
   JulianDate,
@@ -34,6 +35,7 @@ import {
 } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
+import { useSeaLevelStationSeriesQuery } from "../hooks/queries";
 import { resolveCountryCode } from "../lib/countryGeocoder";
 import {
   estimatedIntensity,
@@ -47,6 +49,15 @@ import {
   normalizedIntensity,
   normalizedPlace
 } from "../lib/presentation";
+import {
+  buildSeaLevelSnapshot,
+  detectSeaLevelRecentMoves,
+  type SeaLevelRecentMove,
+  type SeaLevelSnapshotEntry,
+  type SeaLevelStation,
+  type SeaLevelSeriesPoint,
+  type SeaLevelTrend
+} from "../lib/seaLevel";
 import { playSeismicWaveSound } from "../lib/seismicAudio";
 import { CountryFlag } from "./CountryFlag";
 import { MosaicSwap } from "./MosaicSwap";
@@ -58,6 +69,7 @@ type MapPanelProps = {
   disasters: DisasterContext[];
   events: SeismicEvent[];
   stations: SeismicStation[];
+  seaLevelStations: SeaLevelStation[];
   experimentalOrigins: ExperimentalOrigin[];
   seismicPresence: SeismicPresenceSummary | null;
   topMagnitude: SeismicEvent[];
@@ -74,9 +86,13 @@ const WAVE_TIME_ACCEL = 35;
 const WAVE_MAX_RADIUS_M = 1_500_000;
 const FRESH_WINDOW_MS = 10 * 60 * 1000;
 const SELECTION_WAVE_INTERVAL_MS = 3_500;
+const SEA_LEVEL_SNAPSHOT_STORAGE_KEY = "sismica:sea-level-snapshot:v1";
 
 const DISASTER_PREFIX = "context:";
 const STATION_PREFIX = "station:";
+const SEA_LEVEL_STATION_PREFIX = "sea-level:";
+const SEA_LEVEL_FIELD_PREFIX = "sea-level-field:";
+const SEA_LEVEL_PULSE_PREFIX = "sea-level-pulse:";
 const EXPERIMENTAL_ORIGIN_PREFIX = "origin:";
 const WAVE_PREFIX = "wave:";
 
@@ -95,6 +111,12 @@ const STATION_COLORS = {
   triggered: "#84cc16"
 } as const;
 
+const SEA_LEVEL_STATION_COLORS = {
+  online: "#34d399",
+  delayed: "#fbbf24",
+  offline: "#64748b"
+} as const;
+
 const EXPERIMENTAL_QUALITY_COLORS: Record<ExperimentalOrigin["quality"], string> = {
   acceptable: "#67e8f9",
   preliminary: "#facc15",
@@ -109,6 +131,26 @@ const EXPERIMENTAL_STATUS_STROKES: Record<ExperimentalOrigin["status"], string> 
 };
 
 const EXPERIMENTAL_ORIGIN_SYMBOL_CACHE = new Map<string, string>();
+const SEA_LEVEL_SYMBOL_CACHE = new Map<string, string>();
+
+function readStoredSeaLevelSnapshot(): Record<string, SeaLevelSnapshotEntry> {
+  try {
+    const raw = localStorage.getItem(SEA_LEVEL_SNAPSHOT_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, SeaLevelSnapshotEntry>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredSeaLevelSnapshot(snapshot: Record<string, SeaLevelSnapshotEntry>): void {
+  try {
+    localStorage.setItem(SEA_LEVEL_SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // localStorage no disponible; el monitoreo continua solo en memoria.
+  }
+}
 
 function magnitudeSize(magnitude: number | null): number {
   if (magnitude === null) return 8;
@@ -213,6 +255,53 @@ function spawnWavefront(
   }
 }
 
+function spawnSeaLevelPulse(
+  viewer: Viewer,
+  longitude: number,
+  latitude: number,
+  trend: SeaLevelTrend,
+  amplitude: number
+): void {
+  if (trend !== "rising" && trend !== "falling") return;
+
+  const color = Color.fromCssColorString(trend === "rising" ? "#22c55e" : "#fb7185");
+  const start = performance.now();
+  const maxRadius = 45_000 + Math.min(95_000, Math.abs(amplitude) * 180_000);
+  const lifeMs = 4_400;
+  let radius = 0;
+
+  const progress = () => Math.min(1, (performance.now() - start) / lifeMs);
+  const semiMajorAxis = () => {
+    radius = 1 + maxRadius * progress();
+    return radius;
+  };
+  const semiMinorAxis = () => Math.max(1, radius - 0.001);
+  const fade = () => 1 - progress();
+
+  const ring = viewer.entities.add({
+    id: `${SEA_LEVEL_PULSE_PREFIX}${start}-${Math.random().toString(36).slice(2)}`,
+    position: Cartesian3.fromDegrees(longitude, latitude),
+    ellipse: {
+      height: 0,
+      semiMajorAxis: new CallbackProperty(semiMajorAxis, false),
+      semiMinorAxis: new CallbackProperty(semiMinorAxis, false),
+      fill: true,
+      material: new ColorMaterialProperty(new CallbackProperty(() => color.withAlpha(fade() * 0.08), false)),
+      outline: true,
+      outlineColor: new CallbackProperty(() => color.withAlpha(fade() * 0.92), false),
+      outlineWidth: 2.2
+    }
+  });
+
+  window.setTimeout(() => {
+    if (!viewer.isDestroyed()) viewer.entities.remove(ring);
+  }, lifeMs + 180);
+}
+
+function seaLevelFieldRadius(deltaValue: number): number {
+  return 32_000 + Math.min(120_000, Math.abs(deltaValue) * 320_000);
+}
+
 function stationSymbol(station: SeismicStation, selected: boolean): string {
   const fill = STATION_COLORS[station.status];
   const stroke = selected
@@ -242,6 +331,219 @@ function experimentalOriginSymbol(origin: ExperimentalOrigin): string {
 function experimentalOriginScale(origin: ExperimentalOrigin): number {
   const magnitudeBoost = origin.magnitude === null ? 0 : Math.max(0, Math.min(2.2, origin.magnitude / 4));
   return 0.62 + magnitudeBoost * 0.18;
+}
+
+function seaLevelStationSymbol(station: SeaLevelStation, selected: boolean): string {
+  const key = `${station.status}:${selected ? "selected" : "idle"}`;
+  const cached = SEA_LEVEL_SYMBOL_CACHE.get(key);
+  if (cached) return cached;
+
+  const fill = SEA_LEVEL_STATION_COLORS[station.status];
+  const stroke = selected ? "#ffffff" : "#082032";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="7.5" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2.8 : 2}"/><path d="M5 16c1.25 0 1.25-.9 2.5-.9s1.25.9 2.5.9 1.25-.9 2.5-.9 1.25.9 2.5.9 1.25-.9 2.5-.9 1.25.9 2.5.9" fill="none" stroke="${stroke}" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+  const symbol = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  SEA_LEVEL_SYMBOL_CACHE.set(key, symbol);
+  return symbol;
+}
+
+function formatSeaLevelValue(station: SeaLevelStation): string {
+  if (station.lastValue === null) return "Sin lectura publicada";
+  const value = new Intl.NumberFormat("es-PE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3
+  }).format(station.lastValue);
+  return station.unit ? `${value} ${station.unit}` : value;
+}
+
+function formatSeaLevelNumeric(value: number | null, unit: string | null): string {
+  if (value === null) return "N/D";
+  const formatted = new Intl.NumberFormat("es-PE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3
+  }).format(value);
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function formatSeaLevelSignedDelta(value: number | null, unit: string | null): string {
+  if (value === null) return "N/D";
+  const formatted = new Intl.NumberFormat("es-PE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+    signDisplay: "always"
+  }).format(value);
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function seaLevelTrendLabel(trend: SeaLevelTrend): string {
+  switch (trend) {
+    case "rising":
+      return "Subiendo";
+    case "falling":
+      return "Bajando";
+    case "stable":
+      return "Estable";
+    default:
+      return "Sin tendencia";
+  }
+}
+
+function seaLevelTrendColor(trend: SeaLevelTrend): string {
+  switch (trend) {
+    case "rising":
+      return "#22c55e";
+    case "falling":
+      return "#fb7185";
+    case "stable":
+      return "#7dd3fc";
+    default:
+      return "#94a3b8";
+  }
+}
+
+function buildSeaLevelSparklinePath(points: SeaLevelSeriesPoint[], width: number, height: number): string {
+  if (points.length === 0) return "";
+  const minValue = Math.min(...points.map((point) => point.value));
+  const maxValue = Math.max(...points.map((point) => point.value));
+  const valueSpan = Math.max(0.001, maxValue - minValue);
+  const denominator = Math.max(1, points.length - 1);
+
+  return points
+    .map((point, index) => {
+      const x = (index / denominator) * width;
+      const y = height - ((point.value - minValue) / valueSpan) * height;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function SeaLevelSparkline({ points, trend }: { points: SeaLevelSeriesPoint[]; trend: SeaLevelTrend }) {
+  if (points.length < 2) return null;
+  const width = 252;
+  const height = 70;
+  const path = buildSeaLevelSparklinePath(points, width, height);
+
+  return (
+    <div className="sea-level-sparkline">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Tendencia reciente del nivel del mar">
+        <path d={`M0 ${height / 2} L${width} ${height / 2}`} className="sea-level-sparkline-baseline" />
+        <path d={path} className="sea-level-sparkline-line" style={{ stroke: seaLevelTrendColor(trend) }} />
+      </svg>
+      <span>Ultimas horas en la estacion seleccionada</span>
+    </div>
+  );
+}
+
+function SeaLevelStationDetail({ station, onClose }: { station: SeaLevelStation; onClose: () => void }) {
+  const seriesQuery = useSeaLevelStationSeriesQuery(station.stationCode, station.sensor, station.unit, 6);
+  const series = seriesQuery.data ?? null;
+  const trend = series?.trend ?? "unknown";
+  const trendColor = seaLevelTrendColor(trend);
+
+  return (
+    <section className="station-detail station-detail-sea-level" aria-label="Detalle de estacion IOC UNESCO">
+      <button
+        type="button"
+        className="station-detail-close"
+        onClick={onClose}
+        aria-label="Cerrar detalle de estacion de nivel del mar"
+        title="Cerrar"
+      >
+        x
+      </button>
+      <span className="station-detail-kicker">UNESCO / IOC</span>
+      <strong>{station.name}</strong>
+      <span>{station.countryName ?? "Pais no publicado"}</span>
+      <dl>
+        <div>
+          <dt>Estado</dt>
+          <dd style={{ color: SEA_LEVEL_STATION_COLORS[station.status] }}>{station.status.toUpperCase()}</dd>
+        </div>
+        <div>
+          <dt>Sensor</dt>
+          <dd>{station.sensor ?? "N/D"}</dd>
+        </div>
+        <div>
+          <dt>Lectura</dt>
+          <dd>
+            {series ? formatSeaLevelNumeric(series.latestValue, series.unit) : formatSeaLevelValue(station)}
+          </dd>
+        </div>
+        <div>
+          <dt>Tendencia</dt>
+          <dd style={{ color: trendColor }}>{seaLevelTrendLabel(trend)}</dd>
+        </div>
+        <div>
+          <dt>Cambio 6 h</dt>
+          <dd>{series ? formatSeaLevelSignedDelta(series.changeValue, series.unit) : "Cargando"}</dd>
+        </div>
+        <div>
+          <dt>Rango 6 h</dt>
+          <dd>{series ? formatSeaLevelNumeric(series.rangeValue, series.unit) : "Cargando"}</dd>
+        </div>
+        <div>
+          <dt>Ultima obs.</dt>
+          <dd>
+            {(series?.latestObservationAtUtc ?? station.lastObservationAtUtc)
+              ? `${formatUtcDateTime(series?.latestObservationAtUtc ?? station.lastObservationAtUtc ?? "")} UTC`
+              : "N/D"}
+          </dd>
+        </div>
+        <div>
+          <dt>Conexion</dt>
+          <dd>{station.connection ?? "N/D"}</dd>
+        </div>
+      </dl>
+      {seriesQuery.isLoading ? <span className="sea-level-note">Cargando serie reciente...</span> : null}
+      {series && series.points.length >= 2 ? (
+        <SeaLevelSparkline points={series.points} trend={trend} />
+      ) : null}
+      {!seriesQuery.isLoading && (!series || series.points.length < 2) ? (
+        <span className="sea-level-note">
+          No hay suficientes datos recientes para graficar esta estacion.
+        </span>
+      ) : null}
+      <span className="sea-level-note">
+        Lectura relativa local. Sirve para monitoreo puntual de la estacion, no para interpolar toda la marea
+        del oceano.
+      </span>
+      <a href={station.sourceUrl} target="_blank" rel="noreferrer">
+        Ficha oficial IOC/UNESCO
+      </a>
+    </section>
+  );
+}
+
+function SeaLevelActivityPanel({ moves }: { moves: SeaLevelRecentMove[] }) {
+  return (
+    <div className="map-legend legend-sea-level-activity">
+      <span className="legend-title">Cambios Recientes IOC/UNESCO</span>
+      <span className="sea-level-activity-note">
+        {moves.length > 0
+          ? "Campo experimental visible sobre estaciones con cambio reciente."
+          : "Esperando una segunda lectura IOC/UNESCO comparable para dibujar el campo experimental."}
+      </span>
+      {moves.length > 0 ? (
+        moves.slice(0, 5).map((move) => (
+          <span className="sea-level-activity-row" key={`${move.stationCode}-${move.observedAtUtc ?? "na"}`}>
+            <i
+              className="legend-point"
+              style={{
+                background: seaLevelTrendColor(move.trend),
+                borderColor: seaLevelTrendColor(move.trend)
+              }}
+            />
+            <em title={`${move.name}${move.countryName ? `, ${move.countryName}` : ""}`}>
+              {move.name}
+              {move.countryName ? `, ${move.countryName}` : ""}
+            </em>
+            <strong>{formatSeaLevelSignedDelta(move.deltaValue, move.unit)}</strong>
+          </span>
+        ))
+      ) : (
+        <span className="sea-level-activity-empty">Sin cambios visibles todavia.</span>
+      )}
+    </div>
+  );
 }
 
 function formatPresenceCount(count: number): string {
@@ -383,6 +685,7 @@ export function MapPanel({
   disasters,
   events,
   stations,
+  seaLevelStations,
   experimentalOrigins,
   seismicPresence,
   topMagnitude,
@@ -396,6 +699,8 @@ export function MapPanel({
   const viewerRef = useRef<Viewer | null>(null);
   const eventMapRef = useRef<Map<string, SeismicEvent>>(new Map());
   const stationMapRef = useRef<Map<string, SeismicStation>>(new Map());
+  const seaLevelStationMapRef = useRef<Map<string, SeaLevelStation>>(new Map());
+  const seaLevelSnapshotRef = useRef<Record<string, SeaLevelSnapshotEntry>>({});
   const experimentalOriginMapRef = useRef<Map<string, ExperimentalOrigin>>(new Map());
   const disasterMapRef = useRef<Map<string, DisasterContext>>(new Map());
   const seenIdsRef = useRef<Set<string>>(new Set());
@@ -410,13 +715,21 @@ export function MapPanel({
     | { kind: "event"; event: SeismicEvent; x: number; y: number }
     | { kind: "disaster"; context: DisasterContext; x: number; y: number }
     | { kind: "station"; station: SeismicStation; x: number; y: number }
+    | { kind: "sea-level"; station: SeaLevelStation; x: number; y: number }
     | { kind: "origin"; origin: ExperimentalOrigin; x: number; y: number }
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
   const [stationsVisible, setStationsVisible] = useState(true);
+  const [seaLevelStationsVisible, setSeaLevelStationsVisible] = useState(true);
   const [experimentalOriginsVisible, setExperimentalOriginsVisible] = useState(true);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  const [selectedSeaLevelStationId, setSelectedSeaLevelStationId] = useState<string | null>(null);
+  const [seaLevelRecentMoves, setSeaLevelRecentMoves] = useState<SeaLevelRecentMove[]>([]);
+
+  useEffect(() => {
+    seaLevelSnapshotRef.current = readStoredSeaLevelSnapshot();
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -463,9 +776,15 @@ export function MapPanel({
       const picked = viewer.scene.pick(movement.position);
       if (!defined(picked) || !(picked.id instanceof Entity) || typeof picked.id.id !== "string") return;
       if (eventMapRef.current.has(picked.id.id)) {
+        setSelectedStationId(null);
+        setSelectedSeaLevelStationId(null);
         onSelectRef.current(picked.id.id);
       } else if (stationMapRef.current.has(picked.id.id)) {
+        setSelectedSeaLevelStationId(null);
         setSelectedStationId(picked.id.id);
+      } else if (seaLevelStationMapRef.current.has(picked.id.id)) {
+        setSelectedStationId(null);
+        setSelectedSeaLevelStationId(picked.id.id);
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
@@ -476,6 +795,7 @@ export function MapPanel({
       const event = typeof id === "string" ? eventMapRef.current.get(id) : undefined;
       const context = typeof id === "string" ? disasterMapRef.current.get(id) : undefined;
       const station = typeof id === "string" ? stationMapRef.current.get(id) : undefined;
+      const seaLevelStation = typeof id === "string" ? seaLevelStationMapRef.current.get(id) : undefined;
       const origin = typeof id === "string" ? experimentalOriginMapRef.current.get(id) : undefined;
 
       const rect = canvas.getBoundingClientRect();
@@ -499,6 +819,14 @@ export function MapPanel({
         setHover({
           kind: "station",
           station,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "pointer";
+      } else if (seaLevelStation) {
+        setHover({
+          kind: "sea-level",
+          station: seaLevelStation,
           x: rect.left + movement.endPosition.x,
           y: rect.top + movement.endPosition.y
         });
@@ -564,8 +892,11 @@ export function MapPanel({
       if (
         typeof entity.id === "string" &&
         (entity.id.startsWith(WAVE_PREFIX) ||
+          entity.id.startsWith(SEA_LEVEL_FIELD_PREFIX) ||
+          entity.id.startsWith(SEA_LEVEL_PULSE_PREFIX) ||
           entity.id.startsWith(DISASTER_PREFIX) ||
           entity.id.startsWith(STATION_PREFIX) ||
+          entity.id.startsWith(SEA_LEVEL_STATION_PREFIX) ||
           entity.id.startsWith(EXPERIMENTAL_ORIGIN_PREFIX))
       ) {
         continue;
@@ -641,6 +972,129 @@ export function MapPanel({
       }
     }
   }, [stations, stationsVisible, selectedStationId]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const previousSnapshot = seaLevelSnapshotRef.current;
+    const moves = detectSeaLevelRecentMoves(seaLevelStations, previousSnapshot);
+    setSeaLevelRecentMoves(moves.slice(0, 8));
+
+    if (Object.keys(previousSnapshot).length > 0) {
+      for (const move of moves.slice(0, 4)) {
+        spawnSeaLevelPulse(viewer, move.longitude, move.latitude, move.trend, move.deltaValue);
+      }
+    }
+
+    const nextSnapshot = buildSeaLevelSnapshot(seaLevelStations);
+    seaLevelSnapshotRef.current = nextSnapshot;
+    writeStoredSeaLevelSnapshot(nextSnapshot);
+
+    const nextMap = new Map(
+      seaLevelStations.map((station) => [`${SEA_LEVEL_STATION_PREFIX}${station.stationCode}`, station])
+    );
+    seaLevelStationMapRef.current = nextMap;
+
+    for (const entity of [...viewer.entities.values]) {
+      if (
+        typeof entity.id === "string" &&
+        entity.id.startsWith(SEA_LEVEL_STATION_PREFIX) &&
+        !nextMap.has(entity.id)
+      ) {
+        viewer.entities.remove(entity);
+      }
+    }
+
+    for (const [id, station] of nextMap) {
+      let entity = viewer.entities.getById(id);
+      if (!entity) {
+        entity = viewer.entities.add({
+          id,
+          position: Cartesian3.fromDegrees(station.longitude, station.latitude),
+          billboard: {}
+        });
+      } else {
+        entity.position = new ConstantPositionProperty(
+          Cartesian3.fromDegrees(station.longitude, station.latitude)
+        );
+      }
+
+      if (entity.billboard) {
+        const selected = id === selectedSeaLevelStationId;
+        entity.billboard.image = new ConstantProperty(seaLevelStationSymbol(station, selected));
+        entity.billboard.scale = new ConstantProperty(selected ? 0.88 : 0.62);
+        entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
+        entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.CENTER);
+        entity.billboard.heightReference = new ConstantProperty(HeightReference.CLAMP_TO_GROUND);
+        entity.billboard.disableDepthTestDistance = new ConstantProperty(0);
+        entity.billboard.show = new ConstantProperty(seaLevelStationsVisible);
+      }
+    }
+  }, [seaLevelStations, seaLevelStationsVisible, selectedSeaLevelStationId]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const moveMap = new Map(
+      seaLevelRecentMoves.slice(0, 10).map((move) => [`${SEA_LEVEL_FIELD_PREFIX}${move.stationCode}`, move])
+    );
+
+    for (const entity of [...viewer.entities.values]) {
+      if (
+        typeof entity.id === "string" &&
+        entity.id.startsWith(SEA_LEVEL_FIELD_PREFIX) &&
+        !moveMap.has(entity.id)
+      ) {
+        viewer.entities.remove(entity);
+      }
+    }
+
+    for (const [id, move] of moveMap) {
+      let entity = viewer.entities.getById(id);
+      if (!entity) {
+        entity = viewer.entities.add({
+          id,
+          position: Cartesian3.fromDegrees(move.longitude, move.latitude),
+          ellipse: {}
+        });
+      } else {
+        entity.position = new ConstantPositionProperty(Cartesian3.fromDegrees(move.longitude, move.latitude));
+      }
+
+      if (entity.ellipse) {
+        const baseRadius = seaLevelFieldRadius(move.deltaValue);
+        const phase = Math.random() * Math.PI * 2;
+        entity.ellipse.height = new ConstantProperty(0);
+        entity.ellipse.semiMajorAxis = new CallbackProperty(
+          () => baseRadius + Math.sin(Date.now() / 850 + phase) * baseRadius * 0.08,
+          false
+        );
+        entity.ellipse.semiMinorAxis = new CallbackProperty(
+          () => baseRadius * 0.82 + Math.sin(Date.now() / 850 + phase) * baseRadius * 0.06,
+          false
+        );
+        entity.ellipse.fill = new ConstantProperty(true);
+        entity.ellipse.outline = new ConstantProperty(true);
+        entity.ellipse.material = new ColorMaterialProperty(
+          new CallbackProperty(
+            () =>
+              Color.fromCssColorString(seaLevelTrendColor(move.trend)).withAlpha(
+                0.08 + Math.sin(Date.now() / 900 + phase) * 0.015
+              ),
+            false
+          )
+        );
+        entity.ellipse.outlineColor = new CallbackProperty(
+          () => Color.fromCssColorString(seaLevelTrendColor(move.trend)).withAlpha(0.46),
+          false
+        );
+        entity.ellipse.outlineWidth = new ConstantProperty(2);
+        entity.ellipse.show = new ConstantProperty(seaLevelStationsVisible);
+      }
+    }
+  }, [seaLevelRecentMoves, seaLevelStationsVisible]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -840,6 +1294,9 @@ export function MapPanel({
     events[0] ??
     null;
   const selectedStation = selectedStationId ? (stationMapRef.current.get(selectedStationId) ?? null) : null;
+  const selectedSeaLevelStation = selectedSeaLevelStationId
+    ? (seaLevelStationMapRef.current.get(selectedSeaLevelStationId) ?? null)
+    : null;
 
   return (
     <div className="map-shell">
@@ -878,6 +1335,17 @@ export function MapPanel({
         </div>
       ) : null}
 
+      {hover?.kind === "sea-level" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>{hover.station.name}</strong>
+          <span>{hover.station.countryName ?? "Pais no publicado"}</span>
+          <span>
+            {hover.station.status.toUpperCase()} | lectura: {formatSeaLevelValue(hover.station)}
+          </span>
+          <span className="tt-source">UNESCO/IOC | sensor {hover.station.sensor ?? "N/D"}</span>
+        </div>
+      ) : null}
+
       {hover?.kind === "origin" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>Epicentro experimental</strong>
@@ -902,7 +1370,7 @@ export function MapPanel({
         </div>
       ) : null}
 
-      {tourEvent && !selectedStation ? (
+      {tourEvent && !selectedStation && !selectedSeaLevelStation ? (
         <div className="tour-card">
           <button
             type="button"
@@ -997,6 +1465,15 @@ export function MapPanel({
         </section>
       ) : null}
 
+      {selectedSeaLevelStation ? (
+        <SeaLevelStationDetail
+          station={selectedSeaLevelStation}
+          onClose={() => setSelectedSeaLevelStationId(null)}
+        />
+      ) : null}
+
+      <SeaLevelActivityPanel moves={seaLevelRecentMoves} />
+
       <div className="map-legend">
         <span className="legend-title">Limites de placa</span>
         <span className="legend-row">
@@ -1041,6 +1518,22 @@ export function MapPanel({
         <span className="legend-row">
           <i style={{ background: "linear-gradient(to right, #7aff93, #ff0000)", opacity: 0.8 }} />
           ShakeMap (USGS)
+        </span>
+      </div>
+
+      <div className="map-legend legend-sea-level">
+        <span className="legend-title">Nivel Del Mar IOC/UNESCO</span>
+        <span className="legend-row">
+          <i className="legend-point" style={{ background: SEA_LEVEL_STATION_COLORS.online }} />
+          Estacion activa
+        </span>
+        <span className="legend-row">
+          <i className="legend-point" style={{ background: SEA_LEVEL_STATION_COLORS.delayed }} />
+          Estacion con retraso
+        </span>
+        <span className="legend-row">
+          <i className="legend-point" style={{ background: SEA_LEVEL_STATION_COLORS.offline }} />
+          Sin datos recientes
         </span>
       </div>
 

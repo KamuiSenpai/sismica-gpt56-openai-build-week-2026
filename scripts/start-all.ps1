@@ -27,6 +27,34 @@ function Test-Port {
   }
 }
 
+function Test-ProcessCommand {
+  param([string]$Pattern)
+  if (-not $Pattern) { return $false }
+  $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match "node|powershell" -and $_.CommandLine -match $Pattern }
+  return $processes.Count -gt 0
+}
+
+function Ensure-ServiceWindow {
+  param(
+    [string]$Title,
+    [string]$WorkDir,
+    [string]$Command,
+    [Nullable[int]]$Port = $null,
+    [string]$CommandMatch = "",
+    [string]$Description
+  )
+  if ($Port -and (Test-Port -Port $Port)) {
+    Write-Host ("  -> {0} ya responde en :{1}; no se abre otra ventana" -f $Description, $Port) -ForegroundColor DarkYellow
+    return
+  }
+  if ($CommandMatch -and (Test-ProcessCommand -Pattern $CommandMatch)) {
+    Write-Host ("  -> {0} ya tiene un proceso activo; no se abre otra ventana" -f $Description) -ForegroundColor DarkYellow
+    return
+  }
+  Start-ServiceWindow -Title $Title -WorkDir $WorkDir -Command $Command
+}
+
 function Start-ServiceWindow {
   param([string]$Title, [string]$WorkDir, [string]$Command)
   $inner = "`$Host.UI.RawUI.WindowTitle = '$Title'; Set-Location '$WorkDir'; $Command"
@@ -44,24 +72,33 @@ npm run build -w packages/shared
 Write-Host "`n[1/5] Iniciando PostgreSQL..." -ForegroundColor Yellow
 npm run db:start
 
+Write-Host "[1.5/5] Aplicando migraciones..." -ForegroundColor Yellow
+npm run db:migrate
+
 $xttsDir = Join-Path $root "services\tts-xtts"
 
 # 2..5) Servicios de larga duracion, cada uno en su ventana.
 Write-Host "`n[2/5] API (:3000)" -ForegroundColor Yellow
-Start-ServiceWindow -Title "SISMICA API" -WorkDir $root -Command "npm run dev:api"
+Ensure-ServiceWindow -Title "SISMICA API" -WorkDir $root -Command "npm run dev:api" -Port 3000 -Description "API"
+
+Write-Host "  Esperando a la API (:3000)..." -ForegroundColor DarkYellow
+for ($i = 0; $i -lt 30; $i++) {
+  if (Test-Port -Port 3000) { break }
+  Start-Sleep -Seconds 1
+}
 
 Write-Host "[3/5] Worker (ingesta de sismos)" -ForegroundColor Yellow
-Start-ServiceWindow -Title "SISMICA WORKER" -WorkDir $root -Command "npm run dev:worker"
+Ensure-ServiceWindow -Title "SISMICA WORKER" -WorkDir $root -Command "npm run dev:worker" -CommandMatch "apps/worker|run dev:worker" -Description "Worker"
 
 Write-Host "[4/5] XTTS-v2 (:8090)" -ForegroundColor Yellow
 if (Test-Path (Join-Path $xttsDir ".venv\Scripts\python.exe")) {
-  Start-ServiceWindow -Title "SISMICA XTTS" -WorkDir $xttsDir -Command "& '.\.venv\Scripts\python.exe' app.py"
+  Ensure-ServiceWindow -Title "SISMICA XTTS" -WorkDir $xttsDir -Command "& '.\.venv\Scripts\python.exe' app.py" -Port 8090 -Description "XTTS"
 } else {
   Write-Host "  (omitido: falta services\tts-xtts\.venv; la voz caera a Piper/navegador)" -ForegroundColor DarkYellow
 }
 
 Write-Host "[5/5] Web (:5173)" -ForegroundColor Yellow
-Start-ServiceWindow -Title "SISMICA WEB" -WorkDir $root -Command "npm run dev:web"
+Ensure-ServiceWindow -Title "SISMICA WEB" -WorkDir $root -Command "npm run dev:web" -Port 5173 -Description "Web"
 
 # Espera a que la web responda y abre el navegador.
 Write-Host "`nEsperando a la web (:5173)..." -ForegroundColor Yellow

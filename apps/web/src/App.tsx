@@ -20,6 +20,7 @@ import {
   mergeIncomingEvent,
   useDisastersQuery,
   useEventsQuery,
+  useSeaLevelStationsQuery,
   useSeismicPresenceQuery,
   useSourceStatusesQuery,
   useStationsQuery,
@@ -61,6 +62,7 @@ import {
 import { CountryFlag } from "./components/CountryFlag";
 import { Marquee } from "./components/Marquee";
 import { useBroadcastDirector, type BroadcastSegment, type DirectorMode } from "./lib/broadcastDirector";
+import { normalizeSpanishText } from "./lib/spanishText";
 
 const DIRECTOR_MODES: DirectorMode[] = ["off", "rules", "ai"];
 const DIRECTOR_MODE_LABELS: Record<DirectorMode, string> = {
@@ -161,6 +163,7 @@ export default function App() {
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(() => getVoiceEngine());
   const [engineAvailability, setEngineAvailability] = useState<Record<VoiceEngine, boolean>>(() => ({
+    chatterbox: false,
     piper: false,
     xtts: false,
     browser: isEngineAvailable("browser")
@@ -185,6 +188,7 @@ export default function App() {
   const tsunamiProducts = useTsunamiQuery().data ?? [];
   const stationsQuery = useStationsQuery();
   const stations = stationsQuery.data ?? [];
+  const seaLevelStations = useSeaLevelStationsQuery().data ?? [];
   const seismicPresence = useSeismicPresenceQuery().data ?? null;
   const topMagnitude = useTopMagnitudeQuery().data ?? [];
   const error = eventsQuery.isError
@@ -331,7 +335,7 @@ export default function App() {
     (enabled: boolean) => {
       if (!enabled) return;
       if (directorMode !== "off" && overlaySegment) {
-        speakText(overlaySegment.text, {
+        speakText(normalizeSpanishText(overlaySegment.text), {
           cue: overlaySegment.cue,
           kind: overlaySegment.kind
         });
@@ -423,6 +427,7 @@ export default function App() {
     void refreshTtsHealth().then(() => {
       if (cancelled) return;
       setEngineAvailability({
+        chatterbox: isEngineAvailable("chatterbox"),
         piper: isEngineAvailable("piper"),
         xtts: isEngineAvailable("xtts"),
         browser: isEngineAvailable("browser")
@@ -593,14 +598,16 @@ export default function App() {
         {directorMode !== "off" && overlaySegment ? (
           <div
             className={`director-overlay director-${overlaySegment.kind}`}
-            style={directorOverlayStyle(overlaySegment.text)}
+            style={directorOverlayStyle(normalizeSpanishText(overlaySegment.text))}
           >
             <header className="director-overlay-header">
-              <strong>{SEGMENT_TITLES[overlaySegment.kind]}</strong>
-              <span className="director-overlay-kind">{SEGMENT_LABELS[overlaySegment.kind]}</span>
+              <strong>{normalizeSpanishText(SEGMENT_TITLES[overlaySegment.kind])}</strong>
+              <span className="director-overlay-kind">
+                {normalizeSpanishText(SEGMENT_LABELS[overlaySegment.kind])}
+              </span>
             </header>
             <div className="director-overlay-body">
-              <span className="director-overlay-text">{overlaySegment.text}</span>
+              <span className="director-overlay-text">{normalizeSpanishText(overlaySegment.text)}</span>
             </div>
           </div>
         ) : null}
@@ -608,6 +615,7 @@ export default function App() {
           disasters={disasters}
           events={events}
           stations={stations}
+          seaLevelStations={seaLevelStations}
           experimentalOrigins={[]}
           seismicPresence={seismicPresence}
           topMagnitude={topMagnitude}

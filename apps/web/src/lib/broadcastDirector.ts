@@ -24,6 +24,7 @@ import {
   speakText,
   type BroadcastDialogueTurn
 } from "./seismicVoice";
+import { normalizeSpanishText } from "./spanishText";
 
 export type DirectorMode = "off" | "rules" | "ai";
 export type BroadcastSegmentKind = DirectorSegmentKind | "en-vivo" | "relevo";
@@ -135,19 +136,19 @@ const FALLBACK_HANDOFF_VARIANTS: Array<
 > = [
   (currentHost, nextHost) => ({
     currentHostLine: `${nextHost}, te dejo la posta con toda confianza. Un gusto compartir cabina contigo, cuidalos bien.`,
-    nextHostLine: `Gracias, ${currentHost}, siempre un placer. Tomo la posta y seguimos juntos con el monitoreo en tiempo real.`
+    nextHostLine: `Gracias, ${currentHost}, siempre un placer. Tomo la posta y seguimos juntos al aire con la cobertura sismica.`
   }),
   (currentHost, nextHost) => ({
     currentHostLine: `${nextHost}, hasta aqui mi turno, quedas en las mejores manos. Nos vemos al rato, un abrazo.`,
-    nextHostLine: `Con carino, ${currentHost}. Recibo la posta y sigo acompanando al publico con el monitoreo sismico.`
+    nextHostLine: `Con carino, ${currentHost}. Recibo la posta y sigo acompanando al publico con la cobertura en vivo.`
   }),
   (currentHost, nextHost) => ({
     currentHostLine: `${nextHost}, te paso la posta y me despido de la audiencia. Que tengas un gran turno, colega.`,
-    nextHostLine: `Un gusto, ${currentHost}, descansa. Aqui sigo yo, atentos y en calma al monitoreo en vivo.`
+    nextHostLine: `Un gusto, ${currentHost}, descansa. Aqui sigo yo, atentos y en calma con la cobertura en vivo.`
   }),
   (currentHost, nextHost) => ({
     currentHostLine: `${nextHost}, cierro mi turno y te dejo la conduccion. Gracias por tanto, seguimos en contacto.`,
-    nextHostLine: `Gracias por el relevo, ${currentHost}. Tomo la posta y continuamos con la informacion sismica al instante.`
+    nextHostLine: `Gracias por el relevo, ${currentHost}. Tomo la posta y continuamos con la informacion sismica al aire.`
   })
 ];
 let fallbackHandoffIndex = 0;
@@ -166,7 +167,7 @@ function fallbackHandoff(
 
 export function dialogueDisplayText(turns: BroadcastDialogueTurn[]): string {
   return turns
-    .map((turn) => turn.text.trim())
+    .map((turn) => normalizeSpanishText(turn.text.trim()))
     .filter(Boolean)
     .join(" ");
 }
@@ -370,11 +371,12 @@ export function useBroadcastDirector(params: {
     };
 
     const air = (segment: BroadcastSegment) => {
+      const text = normalizeSpanishText(segment.text);
       const cue = segmentCue(segment.kind, segment.cue);
-      const delivery = cueToVoiceDelivery(cue, { text: segment.text, kind: segment.kind });
-      const payload = { ...segment, cue };
+      const delivery = cueToVoiceDelivery(cue, { text, kind: segment.kind });
+      const payload = { ...segment, text, cue };
       onSegmentRef.current(payload);
-      rememberEditorialLine(segment.text);
+      rememberEditorialLine(text);
       airingUntilRef.current = Date.now() + delivery.minDurationMs;
       if (voiceEnabledRef.current) {
         prefetchText(payload.text);

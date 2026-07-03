@@ -35,6 +35,7 @@ const envSchema = z.object({
   PIPER_VOICE_MODEL: z.string().min(1).optional(),
   PIPER_USE_CUDA: booleanEnv(false),
   XTTS_SERVICE_URL: z.string().url().optional(),
+  CHATTERBOX_SERVICE_URL: z.string().url().optional(),
   TTS_CACHE_DIR: z.string().min(1).optional(),
   TTS_MAX_TEXT_LENGTH: numberEnv(600),
   // --- Narracion por IA (DeepSeek) ---
@@ -66,6 +67,7 @@ export const env = {
   piperVoiceModel: parsed.data.PIPER_VOICE_MODEL,
   piperUseCuda: parsed.data.PIPER_USE_CUDA,
   xttsServiceUrl: parsed.data.XTTS_SERVICE_URL,
+  chatterboxServiceUrl: parsed.data.CHATTERBOX_SERVICE_URL,
   ttsCacheDir: parsed.data.TTS_CACHE_DIR,
   ttsMaxTextLength: parsed.data.TTS_MAX_TEXT_LENGTH,
   deepseekEnabled: parsed.data.DEEPSEEK_ENABLED,

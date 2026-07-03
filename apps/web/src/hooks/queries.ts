@@ -7,6 +7,8 @@ import {
   fetchActiveTsunamiProducts,
   fetchEvents,
   fetchExperimentalOrigins,
+  fetchSeaLevelStationSeries,
+  fetchSeaLevelStations,
   fetchSeismicPresence,
   fetchStations,
   fetchSourceStatuses,
@@ -57,6 +59,36 @@ export function useStationsQuery() {
     queryKey: ["stations"],
     queryFn: fetchStations,
     refetchInterval: 5 * REFRESH_MS
+  });
+}
+
+export function useSeaLevelStationsQuery() {
+  return useQuery({
+    queryKey: ["sea-level-stations"],
+    queryFn: fetchSeaLevelStations,
+    refetchInterval: REFRESH_MS
+  });
+}
+
+export function useSeaLevelStationSeriesQuery(
+  stationCode: string | null,
+  sensor?: string | null,
+  unit?: string | null,
+  hours = 6
+) {
+  return useQuery({
+    queryKey: ["sea-level-series", stationCode, sensor ?? null, hours],
+    queryFn: () =>
+      stationCode
+        ? fetchSeaLevelStationSeries({
+            stationCode,
+            sensor: sensor ?? null,
+            unit: unit ?? null,
+            hours
+          })
+        : Promise.resolve(null),
+    enabled: Boolean(stationCode),
+    refetchInterval: REFRESH_MS
   });
 }
 

@@ -6,6 +6,7 @@ import { type SeismicEvent } from "@sismica/shared";
 import { broadcastPlace } from "../src/lib/broadcastPlace";
 import { getEventPlace } from "../src/lib/presentation";
 import { buildSeismicNarration, normalizeSpokenText } from "../src/lib/seismicSpeech";
+import { normalizeSpanishText } from "../src/lib/spanishText";
 
 function makeEvent(overrides: Partial<SeismicEvent> = {}): SeismicEvent {
   return {
@@ -209,6 +210,34 @@ test("normalizeSpokenText replaces sentence-ending periods with natural pauses",
   );
   assert.equal(
     spoken,
-    "La magnitud mide la energia del sismo, La intensidad describe sus efectos en un lugar especifico"
+    "La magnitud mide la energía del sismo, La intensidad describe sus efectos en un lugar específico"
   );
+});
+
+test("normalizeSpokenText no pronuncia puntos de fin de frase ni de abreviatura de lugar", () => {
+  // Abreviatura de direccion en el lugar: no debe deletrearse "ese punto o punto".
+  const lugar = normalizeSpokenText("Sismo en 15 km al S.O. de Ovalle. Seguimos.");
+  assert.equal(/S\.O\.|\bpunto\b/iu.test(lugar), false);
+  assert.equal(lugar.includes("SO"), true);
+  assert.equal(/\.\s*$/u.test(lugar), false);
+
+  // Fin de frase seguido de minuscula (caso que se colaba antes).
+  assert.equal(normalizeSpokenText("frase uno. frase dos."), "frase uno, frase dos");
+
+  // El decimal de la magnitud se conserva (no es puntuacion).
+  assert.equal(normalizeSpokenText("de magnitud 3.5, a 9 kilometros."), "de magnitud 3.5, a 9 kilometros");
+});
+
+test("buildSeismicNarration expande direcciones abreviadas con punto a palabra completa", () => {
+  const narration = buildSeismicNarration(makeEvent({ magnitude: null, depthKm: null }), {
+    place: "15 km al S.O. de Ovalle, Chile"
+  });
+  assert.equal(/S\.O\.|\bpunto\b/iu.test(narration), false);
+  assert.equal(/suroeste/iu.test(narration), true);
+});
+
+test("normalizeSpanishText restores common accents for overlay and voice copy", () => {
+  assert.equal(normalizeSpanishText("Contexto sismico"), "Contexto sísmico");
+  assert.equal(normalizeSpanishText("BOLETIN"), "BOLETÍN");
+  assert.equal(normalizeSpanishText("Informacion tectonica"), "Información tectónica");
 });

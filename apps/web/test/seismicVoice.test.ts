@@ -243,6 +243,26 @@ test("resolveEventNarration descarta formulas de informacion no verificable", as
   assert.equal(narration.text.includes("subduccion del Pacifico"), true);
 });
 
+test("resolveEventNarration descarta claims institucionales de monitoreo", async (t) => {
+  clearEditorialHistory();
+  t.after(
+    mockEditorial({
+      intro: "Sismo detectado",
+      closing: "Se mantiene monitoreo permanente desde el centro sismologico",
+      tectonicContext: null,
+      cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+    })
+  );
+
+  const narration = await resolveEventNarration(makeEvent());
+
+  assert.equal(/centro sismologico|monitoreo permanente|se mantiene monitoreo/iu.test(narration.text), false);
+  assert.equal(
+    narration.text,
+    "Sismo detectado en Mar de Molucas, de magnitud 3.5, a una profundidad de 75 kilometros."
+  );
+});
+
 test("resolveEventNarration preserves one useful tectonic context sentence", async (t) => {
   clearEditorialHistory();
   t.after(
