@@ -41,6 +41,7 @@ import {
 } from "./lib/presentation";
 import { resolveCountryCode, useCountryGeocoder } from "./lib/countryGeocoder";
 import { setSeismicAudioEnabled } from "./lib/seismicAudio";
+import { resumeAmbient, setAmbientEnabled, updateAmbientDrivers, type AmbientMode } from "./lib/ambientBed";
 import {
   getVoiceEngine,
   isEngineAvailable,
@@ -155,6 +156,7 @@ export default function App() {
   const [utcNow, setUtcNow] = useState(() => new Date());
   const [tourPaused, setTourPaused] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [musicEnabled, setMusicEnabled] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(() => getVoiceEngine());
@@ -209,6 +211,16 @@ export default function App() {
         product.status.toLowerCase() === "actual" &&
         (!product.expiresAtUtc || Date.parse(product.expiresAtUtc) >= utcNow.getTime())
     ) ?? null;
+
+  // Modo del lecho ambiental: sigue al segmento del director; en recorrido queda en monitoreo
+  // y la magnitud/densidad marcan la intensidad.
+  const ambientMode: AmbientMode = useMemo(() => {
+    const kind = overlaySegment?.kind;
+    if (kind === "en-vivo") return "vivo";
+    if (kind === "relevo") return "relevo";
+    if (kind === "boletin" || kind === "resumen") return "boletin";
+    return "monitoreo";
+  }, [overlaySegment]);
 
   const handleIncomingEvent = useCallback(
     (incomingEvent: SeismicEvent) => {
@@ -314,6 +326,7 @@ export default function App() {
     setSoundEnabled(nextEnabled);
     void setSeismicAudioEnabled(nextEnabled).catch(() => undefined);
   }, [soundEnabled]);
+  const toggleMusic = useCallback(() => setMusicEnabled((on) => !on), []);
   const speakVisibleContent = useCallback(
     (enabled: boolean) => {
       if (!enabled) return;
@@ -363,6 +376,32 @@ export default function App() {
       window.removeEventListener("keydown", unlockAudio, true);
     };
   }, [soundEnabled]);
+
+  // Lecho ambiental generativo: arranca/para con el toggle y agacha (ducking) bajo la voz.
+  useEffect(() => {
+    if (!musicEnabled) {
+      setAmbientEnabled(false);
+      return;
+    }
+    setAmbientEnabled(true, { voiceActivityProbe: isSeismicNarrationActive });
+    const resume = () => resumeAmbient();
+    window.addEventListener("pointerdown", resume, true);
+    window.addEventListener("keydown", resume, true);
+    return () => {
+      window.removeEventListener("pointerdown", resume, true);
+      window.removeEventListener("keydown", resume, true);
+    };
+  }, [musicEnabled]);
+
+  // La intensidad del lecho sigue la actividad sismica y el modo editorial en curso.
+  useEffect(() => {
+    const biggest = events.reduce((max, event) => Math.max(max, event.magnitude ?? 0), 0);
+    updateAmbientDrivers({
+      biggestMagnitude: biggest || null,
+      recentCount: events.length,
+      mode: ambientMode
+    });
+  }, [events, ambientMode]);
 
   useEffect(() => {
     const primeVoices = () => {
@@ -465,6 +504,19 @@ export default function App() {
             title={soundEnabled ? "Pulso sonoro de ondas activo" : "Activar pulso sonoro de ondas"}
           >
             SONIDO {soundEnabled ? "ON" : "OFF"}
+          </button>
+          <button
+            type="button"
+            className={musicEnabled ? "sound-toggle music-toggle is-on" : "sound-toggle music-toggle"}
+            aria-pressed={musicEnabled}
+            onClick={toggleMusic}
+            title={
+              musicEnabled
+                ? "Lecho ambiental generativo activo (baja bajo la voz)"
+                : "Activar lecho ambiental generativo"
+            }
+          >
+            MUSICA {musicEnabled ? "ON" : "OFF"}
           </button>
           <button
             type="button"

@@ -40,7 +40,8 @@ export type SegmentRequest = z.infer<typeof segmentRequestSchema>;
 
 export const handoffRequestSchema = z.object({
   currentHost: z.string().trim().min(1).max(80),
-  nextHost: z.string().trim().min(1).max(80)
+  nextHost: z.string().trim().min(1).max(80),
+  recentLines: z.array(z.string().trim().min(1).max(320)).max(20).optional()
 });
 export type HandoffRequest = z.infer<typeof handoffRequestSchema>;
 export type HandoffSegment = {
@@ -155,20 +156,28 @@ const cacheDir = env.ttsCacheDir
 let cacheDirReady: Promise<void> | null = null;
 
 const UNSUPPORTED_LIVE_CLAIM_PATTERN = /\breplic(?:a|as)\b/iu;
+// Incluye frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
+// pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?)\b/u;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos)\b/u;
 const SEGMENT_SYSTEM_PROMPT =
   "Eres el redactor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"text":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
-  "El texto debe ser breve, claro y listo para overlay y voz. Usa espanol neutro. Considera las lineas recientes solo para evitar repetir aperturas o remates. No inventes " +
+  "El texto debe ser breve, claro y listo para overlay y voz. Usa espanol neutro. Considera las lineas recientes solo para evitar repetir aperturas o remates. " +
+  "Es un directo continuo 24/7 SIN cortes: nunca menciones pausas, cortes comerciales, publicidad ni digas 'volvemos' o 'regresamos'. No inventes " +
   "replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
 const HANDOFF_SYSTEM_PROMPT =
-  "Eres el productor editorial de un canal sismico 24/7. Redacta un relevo breve y natural " +
-  "entre dos locutores. Devuelve SOLO JSON valido con este formato exacto: " +
+  "Eres el productor editorial de un canal sismico 24/7 con un equipo de locutores que se conocen de " +
+  "toda la vida y se aprecian. Redacta el relevo entre dos de ellos: calido, cercano y amistoso, pero " +
+  "siempre con respeto y profesionalismo. Devuelve SOLO JSON valido con este formato exacto: " +
   '{"currentHostLine":"...","nextHostLine":"..."} ' +
-  "Usa espanol neutro, tono profesional de broadcast y una sola frase por campo. " +
-  "currentHostLine es dicha por el locutor saliente y debe ceder la posta al locutor entrante, mencionandolo por nombre. " +
-  "nextHostLine es dicha por el locutor entrante y debe tomar la posta, mencionando por nombre al locutor saliente. " +
+  "Usa espanol neutro y una sola frase por campo. currentHostLine la dice el locutor saliente: se despide " +
+  "con calidez y cede la posta al entrante, mencionandolo por su nombre. nextHostLine la dice el entrante: " +
+  "saluda con afecto y toma la posta, mencionando por su nombre al saliente. " +
+  "Varia el saludo, el gesto y el cierre en CADA relevo: NO reutilices las aperturas ni las frases de las " +
+  "lineas recientes que se te entregan; que suene distinto y espontaneo cada vez. Un guino calido esta bien " +
+  "(un buen turno, saludos a la audiencia, nos vemos al rato) sin exagerar ni volverse informal de mas. " +
+  "Es un directo continuo SIN cortes: nunca menciones pausas, cortes comerciales ni digas 'volvemos tras la pausa'. " +
   "No inventes sismos, replicas, danos, alertas, riesgos ni cifras.";
 const RECOMMENDATION_SYSTEM_PROMPT =
   "Eres el redactor de recomendaciones sismicas para un canal de monitoreo en directo. " +
@@ -310,18 +319,41 @@ function stripSpeakerPrefix(text: string, speakerName: string): string {
   return text.replace(new RegExp(`^${escapeRegExp(speakerName)}\\s*[:,-]\\s*`, "iu"), "").trim();
 }
 
+// Variantes calidas y respetuosas para cuando DeepSeek no esta disponible. Rotan para que el
+// relevo no suene identico cada vez.
+const HANDOFF_FALLBACK_VARIANTS: Array<(cur: string, next: string) => HandoffSegment> = [
+  (cur, next) => ({
+    currentHostLine: `${next}, te dejo la posta con toda confianza. Un gusto compartir cabina contigo, cuidalos bien.`,
+    nextHostLine: `Gracias, ${cur}, siempre un placer. Tomo la posta y seguimos juntos con el monitoreo en tiempo real.`
+  }),
+  (cur, next) => ({
+    currentHostLine: `${next}, hasta aqui mi turno, quedas en las mejores manos. Nos vemos al rato, un abrazo.`,
+    nextHostLine: `Con carino, ${cur}. Recibo la posta y sigo acompanando al publico con el monitoreo sismico.`
+  }),
+  (cur, next) => ({
+    currentHostLine: `${next}, te paso la posta y me despido de la audiencia. Que tengas un gran turno, colega.`,
+    nextHostLine: `Un gusto, ${cur}, descansa. Aqui sigo yo, atentos y en calma al monitoreo en vivo.`
+  }),
+  (cur, next) => ({
+    currentHostLine: `${next}, cierro mi turno y te dejo la conduccion. Gracias por tanto, seguimos en contacto.`,
+    nextHostLine: `Gracias por el relevo, ${cur}. Tomo la posta y continuamos con la informacion sismica al instante.`
+  })
+];
+let handoffFallbackIndex = 0;
+
 function fallbackHandoffSegment(request: HandoffRequest): HandoffSegment {
-  return {
-    currentHostLine: `${request.nextHost}, te cedo la posta del monitoreo. Seguimos atentos a cualquier actualizacion sismica.`,
-    nextHostLine: `Con gusto, ${request.currentHost}. Tomo la posta y seguimos con el monitoreo sismico en tiempo real.`
-  };
+  const variant = HANDOFF_FALLBACK_VARIANTS[handoffFallbackIndex % HANDOFF_FALLBACK_VARIANTS.length];
+  handoffFallbackIndex += 1;
+  return variant(request.currentHost, request.nextHost);
 }
 
 function buildHandoffUserMessage(request: HandoffRequest): string {
+  const recent = (request.recentLines ?? []).slice(-12);
   return (
     `Locutor saliente: ${request.currentHost}. ` +
     `Locutor entrante: ${request.nextHost}. ` +
-    "El primero entrega la posta y el segundo la toma con naturalidad."
+    "Se conocen bien y se tienen carino; el saliente entrega la posta y el entrante la toma con calidez y respeto. " +
+    `Que suene fresco y distinto: evita repetir estas lineas recientes: ${JSON.stringify(recent)}.`
   );
 }
 
@@ -333,8 +365,6 @@ function handoffSeed(now = new Date()): string {
 
 function parseHandoffSegment(raw: string, request: HandoffRequest): HandoffSegment {
   const fallback = fallbackHandoffSegment(request);
-  const yieldPattern = /\b(cedo|paso|entrego|dejo)\b/iu;
-  const takePattern = /\b(gracias|tomo|recibo|continuo|seguimos)\b/iu;
   try {
     const parsed = JSON.parse(stripMarkdownFence(raw)) as {
       currentHostLine?: unknown;
@@ -355,15 +385,15 @@ function parseHandoffSegment(raw: string, request: HandoffRequest): HandoffSegme
     ) {
       return fallback;
     }
+    // Unico requisito de forma: que cada locutor nombre al otro (asi el relevo se siente entre
+    // conocidos). Se deja libre el vocabulario para que el tono calido pueda variar sin caer al
+    // fallback (que era la causa de que sonara repetitivo).
     const currentLower = currentHostLine.toLowerCase();
     const nextLower = nextHostLine.toLowerCase();
     if (
       !currentLower.includes(request.nextHost.toLowerCase()) ||
       !nextLower.includes(request.currentHost.toLowerCase())
     ) {
-      return fallback;
-    }
-    if (!yieldPattern.test(currentHostLine) || !takePattern.test(nextHostLine)) {
       return fallback;
     }
     return { currentHostLine, nextHostLine };
@@ -548,7 +578,16 @@ export async function generateHandoffSegment(request: HandoffRequest): Promise<H
   const fallback = fallbackHandoffSegment(request);
   if (!env.deepseekEnabled || !env.deepseekApiKey) return fallback;
 
-  const key = cacheKey("relevo", `${request.currentHost}|${request.nextHost}|${handoffSeed()}`);
+  // El fingerprint de las lineas recientes entra en la clave: al cambiar el contexto, se
+  // regenera en vez de servir un relevo cacheado -> mantiene el relevo dinamico y sin repetir.
+  const recentFingerprint = createHash("sha1")
+    .update((request.recentLines ?? []).join(""))
+    .digest("hex")
+    .slice(0, 12);
+  const key = cacheKey(
+    "relevo",
+    `${request.currentHost}|${request.nextHost}|${handoffSeed()}|${recentFingerprint}`
+  );
   const hit = handoffCache.get(key);
   if (hit) return hit;
 

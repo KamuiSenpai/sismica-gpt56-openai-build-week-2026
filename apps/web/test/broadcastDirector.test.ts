@@ -70,19 +70,19 @@ test("pickNextTourEvent returns null when every candidate was aired recently", (
 test("dialogueDisplayText contains exactly the lines spoken during a handoff", () => {
   const turns = [
     {
-      hostId: "claribel" as const,
-      speakerName: "Claribel",
-      text: "Andrew, te cedo la posta del monitoreo."
+      hostId: "carolina" as const,
+      speakerName: "Carolina",
+      text: "Liam, te cedo la posta del monitoreo."
     },
     {
-      hostId: "andrew" as const,
-      speakerName: "Andrew",
-      text: "Con gusto, Claribel. Seguimos monitoreando."
+      hostId: "liam" as const,
+      speakerName: "Liam",
+      text: "Con gusto, Carolina. Seguimos monitoreando."
     }
   ];
 
   assert.equal(
     dialogueDisplayText(turns),
-    "Andrew, te cedo la posta del monitoreo. Con gusto, Claribel. Seguimos monitoreando."
+    "Liam, te cedo la posta del monitoreo. Con gusto, Carolina. Seguimos monitoreando."
   );
 });

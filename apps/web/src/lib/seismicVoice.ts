@@ -39,7 +39,7 @@ import {
 } from "./seismicSpeech";
 
 export type VoiceEngine = "piper" | "xtts" | "browser";
-export type BroadcastVoiceHostId = "claribel" | "andrew";
+export type BroadcastVoiceHostId = "carolina" | "liam" | "valentina" | "martin" | "sofia" | "ninoska";
 export type BroadcastVoiceHost = {
   id: BroadcastVoiceHostId;
   name: string;
@@ -64,24 +64,40 @@ export const VOICE_ENGINE_LABELS: Record<VoiceEngine, string> = {
   browser: "Navegador"
 };
 export const BROADCAST_VOICE_HOSTS: readonly BroadcastVoiceHost[] = [
-  { id: "claribel", name: "Claribel", xttsSpeaker: "Claribel Dervla", xttsProfile: "mx_claribel" },
-  { id: "andrew", name: "Andrew", xttsSpeaker: "Andrew Chipper", xttsProfile: "mx_andrew" }
+  // xttsSpeaker es solo respaldo (voz incorporada de XTTS) si el perfil clonado no esta cargado.
+  // El orden define la rotacion del relevo (cada uno cede la posta al siguiente).
+  { id: "carolina", name: "Carolina", xttsSpeaker: "Claribel Dervla", xttsProfile: "mx_carolina" },
+  { id: "liam", name: "Liam", xttsSpeaker: "Andrew Chipper", xttsProfile: "mx_liam" },
+  { id: "valentina", name: "Valentina", xttsSpeaker: "Daisy Studious", xttsProfile: "mx_valentina" },
+  { id: "martin", name: "Martin", xttsSpeaker: "Damien Black", xttsProfile: "mx_martin" },
+  { id: "sofia", name: "Sofia", xttsSpeaker: "Gracie Wise", xttsProfile: "mx_sofia" },
+  { id: "ninoska", name: "Ninoska", xttsSpeaker: "Alison Dietlinde", xttsProfile: "mx_ninoska" }
 ] as const;
 
 // Orden de preferencia neural (autoseleccion y cascada de fallback): XTTS-v2 primero,
 // luego Piper y, si todos fallan, la voz del navegador.
 const NEURAL_PRIORITY: readonly NeuralEngine[] = ["xtts", "piper"] as const;
+// Incluye frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
+// pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?)\b/u;
-const SAFE_EDITORIAL_INTROS = new Set([
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos)\b/u;
+// Aperturas validas POR MODO (espejo del API). "Nuevo sismo..." solo es legitimo en breaking
+// (sismo que recien ingresa); en seguimiento/recorrido solo caben las de FOLLOWUP.
+const BREAKING_EDITORIAL_INTROS = new Set([
   "nuevo sismo detectado",
   "se registra un nuevo sismo",
   "actualizacion sismica reciente",
-  "nuevo evento sismico en monitoreo",
+  "nuevo evento sismico en monitoreo"
+]);
+const FOLLOWUP_EDITORIAL_INTROS = new Set([
   "sismo detectado",
   "evento sismico en seguimiento",
   "reporte sismico en monitoreo"
 ]);
+
+function allowedEditorialIntros(mode: NarrationMode): Set<string> {
+  return mode === "breaking" ? BREAKING_EDITORIAL_INTROS : FOLLOWUP_EDITORIAL_INTROS;
+}
 const LOCATION_NOISE_TERMS = new Set([
   "a",
   "al",
@@ -180,7 +196,7 @@ function pickEditorialIntro(
   if (
     !normalized ||
     containsUnsupportedEditorialText(normalized) ||
-    !SAFE_EDITORIAL_INTROS.has(canonicalizeEditorialText(normalized))
+    !allowedEditorialIntros(mode).has(canonicalizeEditorialText(normalized))
   ) {
     return fallbackNarrationEditorial(mode).intro;
   }

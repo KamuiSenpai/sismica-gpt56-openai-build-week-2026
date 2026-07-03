@@ -80,7 +80,14 @@ const FOLLOWUP_INTROS = [
   "Evento sismico en seguimiento",
   "Reporte sismico en monitoreo"
 ] as const;
-const EDITORIAL_INTROS = new Set<string>([...BREAKING_INTROS, ...FOLLOWUP_INTROS].map(canonicalize));
+// Las aperturas se validan POR MODO: "Nuevo sismo..." solo es legitimo en breaking (sismo que
+// recien ingresa). En seguimiento/recorrido solo caben las de FOLLOWUP, sin la palabra "nuevo".
+const BREAKING_INTRO_SET = new Set<string>(BREAKING_INTROS.map(canonicalize));
+const FOLLOWUP_INTRO_SET = new Set<string>(FOLLOWUP_INTROS.map(canonicalize));
+
+function allowedIntroSet(mode: NarrationMode): Set<string> {
+  return mode === "breaking" ? BREAKING_INTRO_SET : FOLLOWUP_INTRO_SET;
+}
 
 const SUBDUCTION_KEYWORDS = [
   "alaska",
@@ -139,13 +146,18 @@ const CONTINENTAL_KEYWORDS = [
   "kazajistan"
 ] as const;
 const OFFSHORE_PATTERN = /\b(costa|mar|estrecho|offshore|frente a la costa)\b/iu;
+// Incluye tambien frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
+// pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?)\b/u;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos)\b/u;
 const SYSTEM_PROMPT =
   "Eres el editor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"intro":"...","closing":"...","tectonicContext":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
-  `intro debe ser exactamente una de estas aperturas: ${[...BREAKING_INTROS, ...FOLLOWUP_INTROS].join("; ")}. ` +
+  `Si modo es "breaking", intro debe ser exactamente una de: ${BREAKING_INTROS.join("; ")}. ` +
+  `Si modo es "seguimiento", intro debe ser exactamente una de: ${FOLLOWUP_INTROS.join("; ")}. ` +
+  'Nunca uses una apertura con la palabra "nuevo" cuando el modo es "seguimiento". ' +
   "No agregues lugar, pais, magnitud ni profundidad a intro. Usa las lineas recientes solo para evitar repeticiones de apertura, cierre y tono. " +
+  "Es un directo continuo 24/7 SIN cortes: nunca menciones pausas, cortes comerciales ni publicidad, ni digas que 'volvemos' o 'regresamos tras la pausa'. " +
   "tectonicContext debe ser null o una sola frase breve basada SOLO en la pista tectonica entregada. No inventes replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
 
 function normalizeEditorialText(value: string | null | undefined): string | null {
@@ -192,12 +204,16 @@ function cacheKey(request: NarrationRequest): string {
   return createHash("sha1").update(buildNarrationRevision(request)).digest("hex");
 }
 
-async function readDiskCache(key: string, fallback: NarrationEditorial): Promise<NarrationEditorial | null> {
+async function readDiskCache(
+  key: string,
+  fallback: NarrationEditorial,
+  mode: NarrationMode
+): Promise<NarrationEditorial | null> {
   if (!cacheDir) return null;
   const filePath = join(cacheDir, `${key}.json`);
   if (!existsSync(filePath)) return null;
   try {
-    return sanitizeNarrationEditorial(JSON.parse(await readFile(filePath, "utf8")), fallback);
+    return sanitizeNarrationEditorial(JSON.parse(await readFile(filePath, "utf8")), fallback, mode);
   } catch {
     return null;
   }
@@ -363,7 +379,11 @@ function buildUserMessage(request: NarrationRequest, hint: TectonicHint): string
   return `Contexto del aviso: ${JSON.stringify(data)}`;
 }
 
-function sanitizeNarrationEditorial(raw: unknown, fallback: NarrationEditorial): NarrationEditorial | null {
+export function sanitizeNarrationEditorial(
+  raw: unknown,
+  fallback: NarrationEditorial,
+  mode: NarrationMode
+): NarrationEditorial | null {
   const parsed = narrationEditorialSchema.safeParse(raw);
   if (!parsed.success) return null;
 
@@ -378,7 +398,9 @@ function sanitizeNarrationEditorial(raw: unknown, fallback: NarrationEditorial):
   ) {
     return fallback;
   }
-  const safeIntro = EDITORIAL_INTROS.has(canonicalize(intro)) ? intro : fallback.intro;
+  // Intro valido SOLO si pertenece a las aperturas del modo: bloquea "Nuevo sismo..." en
+  // seguimiento aunque la IA lo devuelva (fallback.intro ya es correcto por modo).
+  const safeIntro = allowedIntroSet(mode).has(canonicalize(intro)) ? intro : fallback.intro;
 
   return {
     intro: safeIntro,
@@ -395,7 +417,7 @@ export async function generateNarration(request: NarrationRequest): Promise<Narr
   const memoryHit = memoryCache.get(key);
   if (memoryHit) return memoryHit;
 
-  const diskHit = await readDiskCache(key, fallback);
+  const diskHit = await readDiskCache(key, fallback, request.mode);
   if (diskHit) {
     memoryCache.set(key, diskHit);
     return diskHit;
@@ -411,7 +433,8 @@ export async function generateNarration(request: NarrationRequest): Promise<Narr
       ],
       { maxTokens: Math.max(env.deepseekMaxTokens, 260), temperature: 0.68 }
     );
-    const parsed = sanitizeNarrationEditorial(JSON.parse(stripMarkdownFence(raw)), fallback) ?? fallback;
+    const parsed =
+      sanitizeNarrationEditorial(JSON.parse(stripMarkdownFence(raw)), fallback, request.mode) ?? fallback;
     memoryCache.set(key, parsed);
     await writeDiskCache(key, parsed);
     return parsed;

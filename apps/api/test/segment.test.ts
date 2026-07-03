@@ -66,11 +66,11 @@ test("generateSegment construye boletin local cuando DeepSeek esta deshabilitado
   assert.deepEqual(packet.cue, { urgency: "media", rhythm: "fluido", tone: "directo" });
 });
 
-test("handoffRequestSchema acepta relevo entre Claribel y Andrew", () => {
+test("handoffRequestSchema acepta relevo entre Carolina y Liam", () => {
   assert.equal(
     handoffRequestSchema.safeParse({
-      currentHost: "Claribel",
-      nextHost: "Andrew"
+      currentHost: "Carolina",
+      nextHost: "Liam"
     }).success,
     true
   );
@@ -91,11 +91,11 @@ test("directorStateSchema acepta el estado real del director IA", () => {
 
 test("generateHandoffSegment usa pauta local si DeepSeek esta deshabilitado", async () => {
   const handoff = await generateHandoffSegment({
-    currentHost: "Claribel",
-    nextHost: "Andrew"
+    currentHost: "Carolina",
+    nextHost: "Liam"
   });
-  assert.equal(handoff.currentHostLine.includes("Andrew"), true);
-  assert.equal(handoff.nextHostLine.includes("Claribel"), true);
+  assert.equal(handoff.currentHostLine.includes("Liam"), true);
+  assert.equal(handoff.nextHostLine.includes("Carolina"), true);
 });
 
 test("los catalogos de aire no incluyen replicas como tema activo", () => {

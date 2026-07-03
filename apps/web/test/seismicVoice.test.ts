@@ -163,6 +163,67 @@ test("resolveEventNarration replaces malformed AI intros before they reach the o
   );
 });
 
+test("resolveEventNarration rechaza aperturas 'nuevo' en seguimiento (sismo no reciente)", async (t) => {
+  clearEditorialHistory();
+  t.after(
+    mockEditorial({
+      intro: "Nuevo sismo detectado",
+      closing: null,
+      tectonicContext: null,
+      cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+    })
+  );
+
+  // Sin options.intro -> modo seguimiento (evento del recorrido, no recien ingresado).
+  const narration = await resolveEventNarration(makeEvent());
+
+  assert.equal(/nuevo/iu.test(narration.text), false);
+  assert.equal(
+    narration.text,
+    "Sismo detectado en Mar de Molucas, de magnitud 3.5, a una profundidad de 75 kilometros."
+  );
+});
+
+test("resolveEventNarration conserva 'Nuevo sismo detectado' cuando el intro es solicitado (en vivo)", async (t) => {
+  clearEditorialHistory();
+  t.after(
+    mockEditorial({
+      intro: "Sismo detectado",
+      closing: null,
+      tectonicContext: null,
+      cue: { urgency: "alta", rhythm: "agil", tone: "directo" }
+    })
+  );
+
+  // Con options.intro -> el sismo recien ingresado conserva su apertura "nuevo".
+  const narration = await resolveEventNarration(makeEvent(), { intro: "Nuevo sismo detectado" });
+
+  assert.equal(
+    narration.text,
+    "Nuevo sismo detectado en Mar de Molucas, de magnitud 3.5, a una profundidad de 75 kilometros."
+  );
+});
+
+test("resolveEventNarration descarta cierres de 'pausa/comercial' (directo 24/7 sin cortes)", async (t) => {
+  clearEditorialHistory();
+  t.after(
+    mockEditorial({
+      intro: "Sismo detectado",
+      closing: "Volvemos con mas informacion tras pausa",
+      tectonicContext: "Evento asociado a la subduccion del Pacifico",
+      cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+    })
+  );
+
+  const narration = await resolveEventNarration(
+    makeEvent({ title: "M3.5 - Halmahera, Indonesia", magnitude: 3.5, depthKm: 9 })
+  );
+
+  // Se elimina el cierre de "pausa" pero se conserva el contexto tectonico.
+  assert.equal(/pausa|volvemos/iu.test(narration.text), false);
+  assert.equal(narration.text.includes("subduccion del Pacifico"), true);
+});
+
 test("resolveEventNarration preserves one useful tectonic context sentence", async (t) => {
   clearEditorialHistory();
   t.after(

@@ -11,6 +11,7 @@
   --cyan: #50c8ff;
   --amber: #ffd34e;
   --green: #65e889;
+  --violet: #b892ff;
   --red: #ff5e68;
   --orange: #ff9f43;
 }
@@ -105,6 +106,11 @@ button {
 .voice-toggle.is-on {
   border-color: var(--green);
   color: var(--green);
+}
+
+.music-toggle.is-on {
+  border-color: var(--violet);
+  color: var(--violet);
 }
 
 .voice-repeat {

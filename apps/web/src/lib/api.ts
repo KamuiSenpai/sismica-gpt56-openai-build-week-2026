@@ -259,13 +259,14 @@ export async function fetchSegmentText(input: SegmentInput): Promise<SegmentPack
 
 export async function fetchHandoffSegment(
   currentHost: string,
-  nextHost: string
+  nextHost: string,
+  recentLines: string[] = []
 ): Promise<HandoffSegmentPayload | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/segment/handoff`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ currentHost, nextHost })
+      body: JSON.stringify({ currentHost, nextHost, recentLines })
     });
     if (!response.ok) return null;
     return (await response.json()) as HandoffSegmentPayload;

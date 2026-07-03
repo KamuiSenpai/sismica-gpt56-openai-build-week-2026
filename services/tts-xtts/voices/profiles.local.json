@@ -1,13 +1,33 @@
 {
   "profiles": {
-    "mx_claribel": {
-      "label": "Presentadora (ElevenLabs)",
-      "speaker_wav": ".runtime-logs/xtts-voices/eleven_female_ref.wav",
+    "mx_carolina": {
+      "label": "Presentadora (Carolina)",
+      "speaker_wav": ".runtime-logs/xtts-voices/mx_carolina_ref.wav",
       "language": "es"
     },
-    "mx_andrew": {
-      "label": "Presentador (ElevenLabs)",
-      "speaker_wav": ".runtime-logs/xtts-voices/eleven_male_ref.wav",
+    "mx_liam": {
+      "label": "Presentador (Liam)",
+      "speaker_wav": ".runtime-logs/xtts-voices/mx_liam_ref.wav",
+      "language": "es"
+    },
+    "mx_valentina": {
+      "label": "Presentadora (Valentina)",
+      "speaker_wav": ".runtime-logs/xtts-voices/mx_valentina_ref.wav",
+      "language": "es"
+    },
+    "mx_sofia": {
+      "label": "Presentadora (Sofia)",
+      "speaker_wav": ".runtime-logs/xtts-voices/mx_sofia_ref.wav",
+      "language": "es"
+    },
+    "mx_ninoska": {
+      "label": "Presentadora (Ninoska)",
+      "speaker_wav": ".runtime-logs/xtts-voices/mx_ninoska_ref.wav",
+      "language": "es"
+    },
+    "mx_martin": {
+      "label": "Presentador (Martin)",
+      "speaker_wav": ".runtime-logs/xtts-voices/mx_martin_ref.wav",
       "language": "es"
     }
   }

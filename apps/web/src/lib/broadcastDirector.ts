@@ -33,7 +33,7 @@ export type BroadcastSegment = {
   cue?: EditorialCue;
 };
 
-const HANDOFF_DUE_MIN = 30;
+const HANDOFF_DUE_MIN = 10;
 const RECAP_DUE_MIN = 60;
 const EDUCATION_DUE_MIN = 8;
 const EDUCATION_REPEAT_WINDOW_MS = 60 * 60_000;
@@ -129,6 +129,29 @@ function normalizeAiKind(
   return kind;
 }
 
+// Variantes calidas y respetuosas para cuando el API no responde. Rotan para no sonar identico.
+const FALLBACK_HANDOFF_VARIANTS: Array<
+  (currentHost: string, nextHost: string) => { currentHostLine: string; nextHostLine: string }
+> = [
+  (currentHost, nextHost) => ({
+    currentHostLine: `${nextHost}, te dejo la posta con toda confianza. Un gusto compartir cabina contigo, cuidalos bien.`,
+    nextHostLine: `Gracias, ${currentHost}, siempre un placer. Tomo la posta y seguimos juntos con el monitoreo en tiempo real.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `${nextHost}, hasta aqui mi turno, quedas en las mejores manos. Nos vemos al rato, un abrazo.`,
+    nextHostLine: `Con carino, ${currentHost}. Recibo la posta y sigo acompanando al publico con el monitoreo sismico.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `${nextHost}, te paso la posta y me despido de la audiencia. Que tengas un gran turno, colega.`,
+    nextHostLine: `Un gusto, ${currentHost}, descansa. Aqui sigo yo, atentos y en calma al monitoreo en vivo.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `${nextHost}, cierro mi turno y te dejo la conduccion. Gracias por tanto, seguimos en contacto.`,
+    nextHostLine: `Gracias por el relevo, ${currentHost}. Tomo la posta y continuamos con la informacion sismica al instante.`
+  })
+];
+let fallbackHandoffIndex = 0;
+
 function fallbackHandoff(
   currentHost: string,
   nextHost: string
@@ -136,10 +159,9 @@ function fallbackHandoff(
   currentHostLine: string;
   nextHostLine: string;
 } {
-  return {
-    currentHostLine: `${nextHost}, te cedo la posta del monitoreo. Seguimos atentos a cualquier actualizacion sismica.`,
-    nextHostLine: `Con gusto, ${currentHost}. Tomo la posta y seguimos con el monitoreo sismico en tiempo real.`
-  };
+  const variant = FALLBACK_HANDOFF_VARIANTS[fallbackHandoffIndex % FALLBACK_HANDOFF_VARIANTS.length];
+  fallbackHandoffIndex += 1;
+  return variant(currentHost, nextHost);
 }
 
 export function dialogueDisplayText(turns: BroadcastDialogueTurn[]): string {
@@ -384,7 +406,7 @@ export function useBroadcastDirector(params: {
       const currentHost = getActiveBroadcastHost();
       const nextHost = getNextBroadcastHost(currentHost.id);
       const script =
-        (await fetchHandoffSegment(currentHost.name, nextHost.name)) ??
+        (await fetchHandoffSegment(currentHost.name, nextHost.name, getRecentEditorialLines())) ??
         fallbackHandoff(currentHost.name, nextHost.name);
       const turns: BroadcastDialogueTurn[] = [
         {
