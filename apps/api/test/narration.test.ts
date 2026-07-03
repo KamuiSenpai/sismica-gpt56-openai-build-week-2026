@@ -96,6 +96,19 @@ test("sanitizeNarrationEditorial descarta cierres de 'pausa/comercial' (directo 
   assert.equal(/pausa|volvemos/iu.test(result?.closing ?? ""), false);
 });
 
+test("sanitizeNarrationEditorial descarta formulas de informacion no verificable", () => {
+  const raw = {
+    intro: "Sismo detectado",
+    closing: "Informacion en desarrollo, no tenemos mas informacion por ahora",
+    tectonicContext: null,
+    cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+  };
+  const result = sanitizeNarrationEditorial(raw, seguimientoFallback, "seguimiento");
+  assert.equal(result?.intro, "Sismo detectado");
+  assert.equal(result?.closing, null);
+  assert.equal(/informacion en desarrollo|no tenemos mas informacion/iu.test(result?.closing ?? ""), false);
+});
+
 test("sanitizeNarrationEditorial conserva una apertura valida de seguimiento", () => {
   const raw = {
     intro: "Evento sismico en seguimiento",

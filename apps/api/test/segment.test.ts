@@ -9,6 +9,7 @@ const {
   generateHandoffSegment,
   generateSegment,
   handoffRequestSchema,
+  sanitizeGeneratedSegmentPacket,
   segmentRequestSchema
 } = await import("../src/services/segmentService.js");
 const { directorStateSchema } = await import("../src/services/directorService.js");
@@ -96,6 +97,23 @@ test("generateHandoffSegment usa pauta local si DeepSeek esta deshabilitado", as
   });
   assert.equal(handoff.currentHostLine.includes("Liam"), true);
   assert.equal(handoff.nextHostLine.includes("Carolina"), true);
+});
+
+test("sanitizeGeneratedSegmentPacket descarta formulas de informacion no verificable", () => {
+  const packet = sanitizeGeneratedSegmentPacket(
+    {
+      text: "Informacion en desarrollo. No tenemos mas informacion por ahora.",
+      cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+    },
+    {
+      kind: "resumen",
+      totalLastHour: 6,
+      biggestMagnitude: 4.8,
+      biggestPlace: "Mar de Molucas"
+    }
+  );
+  assert.equal(/informacion en desarrollo|no tenemos mas informacion/iu.test(packet.text), false);
+  assert.equal(packet.text.includes("En la ultima hora"), true);
 });
 
 test("los catalogos de aire no incluyen replicas como tema activo", () => {

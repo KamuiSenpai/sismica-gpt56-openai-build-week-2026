@@ -197,13 +197,20 @@ function spawnSeismicRing(
   }, lifeMs);
 }
 
-function spawnWavefront(viewer: Viewer, event: SeismicEvent, soundEnabled: boolean): void {
+function spawnWavefront(
+  viewer: Viewer,
+  event: SeismicEvent,
+  soundEnabled: boolean,
+  options: { playSound?: boolean } = {}
+): void {
   const depthM = Math.max(0, (event.depthKm ?? 0) * 1000);
   const magColor = Color.fromCssColorString(magnitudeCssColor(event.magnitude));
 
   spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VP_MPS, depthM, 2);
   spawnSeismicRing(viewer, event.longitude, event.latitude, magColor, VS_MPS, depthM, 3);
-  playSeismicWaveSound(event, soundEnabled);
+  if (options.playSound ?? true) {
+    playSeismicWaveSound(event, soundEnabled);
+  }
 }
 
 function stationSymbol(station: SeismicStation, selected: boolean): string {
@@ -753,7 +760,7 @@ export function MapPanel({
       if (!activeId) return;
       const activeEvent = eventMapRef.current.get(activeId);
       if (!activeEvent) return;
-      spawnWavefront(viewer, activeEvent, soundEnabled);
+      spawnWavefront(viewer, activeEvent, soundEnabled, { playSound: false });
     }, SELECTION_WAVE_INTERVAL_MS);
   }, [selectedEventId, soundEnabled]);
 

@@ -156,7 +156,7 @@ export default function App() {
   const [utcNow, setUtcNow] = useState(() => new Date());
   const [tourPaused, setTourPaused] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(() => getVoiceEngine());

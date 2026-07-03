@@ -6,6 +6,7 @@ import {
   clamp01,
   computeAmbientIntensity,
   computeAmbientTargets,
+  slewTempo,
   type AmbientDrivers,
   type AmbientMode
 } from "../src/lib/ambientBed";
@@ -66,34 +67,49 @@ test("los targets de audio quedan dentro de rangos seguros", () => {
     for (const magnitude of [null, 3, 5, 7.5]) {
       const targets = computeAmbientTargets(drivers({ mode, biggestMagnitude: magnitude, recentCount: 12 }));
       assert.ok(targets.intensity >= 0 && targets.intensity <= 1);
-      assert.ok(targets.masterGain >= 0.05 - 1e-9 && targets.masterGain <= 0.09 + 1e-9);
-      assert.ok(targets.filterHz >= 180 - 1e-6 && targets.filterHz <= 950 + 1e-6);
-      assert.ok(targets.pulseGain >= 0 && targets.pulseGain <= 0.06 + 1e-9);
-      assert.ok(targets.tensionGain >= 0 && targets.tensionGain <= 0.05 + 1e-9);
-      assert.ok(targets.detuneCents >= 0 && targets.detuneCents <= 16 + 1e-9);
+      assert.ok(targets.padGain >= 0.05 - 1e-9 && targets.padGain <= 0.09 + 1e-9);
+      assert.ok(targets.filterHz >= 700 - 1e-6 && targets.filterHz <= 2200 + 1e-6);
+      assert.ok(targets.rhythmGain >= 0.45 - 1e-9 && targets.rhythmGain <= 0.85 + 1e-9);
+      assert.ok(targets.tempoBpm >= 72 - 1e-9 && targets.tempoBpm <= 96 + 1e-9);
+      assert.ok(targets.detuneCents >= 0 && targets.detuneCents <= 14 + 1e-9);
     }
   }
 });
 
-test("en monitoreo tranquilo el lecho es casi mudo y sin tension", () => {
+test("en monitoreo tranquilo el ritmo se oye pero el pad esta calmo", () => {
   const targets = computeAmbientTargets(drivers());
-  assert.equal(targets.masterGain, 0.05); // volumen base
-  assert.equal(targets.filterHz, 180); // filtro cerrado
-  assert.equal(targets.tensionGain, 0);
+  assert.equal(targets.padGain, 0.05); // pad base
+  assert.equal(targets.filterHz, 700); // ya con medios presentes (audible)
+  assert.equal(targets.rhythmGain, 0.45); // el ritmo SIEMPRE suena, no arranca en cero
+  assert.equal(targets.tempoBpm, 72); // pulso tranquilo
   assert.equal(targets.detuneCents, 0);
 });
 
-test("en vivo con sismo fuerte sube volumen, brillo, pulso y tension", () => {
+test("en vivo con sismo fuerte sube pad, brillo, ritmo y tempo", () => {
   const calma = computeAmbientTargets(drivers({ mode: "monitoreo", biggestMagnitude: 3 }));
   const breaking = computeAmbientTargets(drivers({ mode: "vivo", biggestMagnitude: 6.8, recentCount: 20 }));
-  assert.ok(breaking.masterGain > calma.masterGain);
+  assert.ok(breaking.padGain > calma.padGain);
   assert.ok(breaking.filterHz > calma.filterHz);
-  assert.ok(breaking.pulseGain > calma.pulseGain);
-  assert.ok(breaking.tensionGain > calma.tensionGain);
+  assert.ok(breaking.rhythmGain > calma.rhythmGain);
+  assert.ok(breaking.tempoBpm > calma.tempoBpm);
   assert.ok(breaking.detuneCents > calma.detuneCents);
 });
 
-test("el boletin aporta pulso de redaccion aunque la actividad sea moderada", () => {
+test("el boletin sube la energia del ritmo frente al monitoreo tranquilo", () => {
+  const monitoreo = computeAmbientTargets(
+    drivers({ mode: "monitoreo", biggestMagnitude: 4, recentCount: 8 })
+  );
   const boletin = computeAmbientTargets(drivers({ mode: "boletin", biggestMagnitude: 4, recentCount: 8 }));
-  assert.ok(boletin.pulseGain > 0);
+  assert.ok(boletin.rhythmGain > monitoreo.rhythmGain);
+  assert.ok(boletin.rhythmGain >= 0.45);
+});
+
+test("slewTempo suaviza subidas bruscas de BPM", () => {
+  assert.equal(slewTempo(72, 96, 250), 74);
+  assert.equal(slewTempo(72, 96, 3_000), 96);
+});
+
+test("slewTempo suaviza bajadas y respeta tiempos no positivos", () => {
+  assert.equal(slewTempo(90, 72, 250), 88);
+  assert.equal(slewTempo(84, 72, 0), 84);
 });

@@ -149,7 +149,7 @@ const OFFSHORE_PATTERN = /\b(costa|mar|estrecho|offshore|frente a la costa)\b/iu
 // Incluye tambien frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
 // pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos)\b/u;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos) (?:recopilando|reuniendo|recabando) informacion|(?:seguiremos|continuaremos|ampliaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion)\b/u;
 const SYSTEM_PROMPT =
   "Eres el editor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"intro":"...","closing":"...","tectonicContext":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
@@ -158,6 +158,7 @@ const SYSTEM_PROMPT =
   'Nunca uses una apertura con la palabra "nuevo" cuando el modo es "seguimiento". ' +
   "No agregues lugar, pais, magnitud ni profundidad a intro. Usa las lineas recientes solo para evitar repeticiones de apertura, cierre y tono. " +
   "Es un directo continuo 24/7 SIN cortes: nunca menciones pausas, cortes comerciales ni publicidad, ni digas que 'volvemos' o 'regresamos tras la pausa'. " +
+  "Nunca uses formulas del tipo 'informacion en desarrollo', 'no tenemos mas informacion' ni variantes que sugieran que alguien esta reuniendo datos en tiempo real. " +
   "tectonicContext debe ser null o una sola frase breve basada SOLO en la pista tectonica entregada. No inventes replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
 
 function normalizeEditorialText(value: string | null | undefined): string | null {

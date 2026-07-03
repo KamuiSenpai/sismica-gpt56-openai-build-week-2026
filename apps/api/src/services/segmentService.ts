@@ -159,13 +159,14 @@ const UNSUPPORTED_LIVE_CLAIM_PATTERN = /\breplic(?:a|as)\b/iu;
 // Incluye frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
 // pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
-  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos)\b/u;
+  /\b(replic(?:a|as)|tsunami|dan(?:o|os)|victimas|heridos|alerta|evacua(?:cion|r)|riesgo|sin reportes?|pausa|comercial(?:es)?|publicidad|publicitari\w*|volvemos|volveremos|regresamos|regresaremos|informacion en desarrollo|(?:no (?:tenemos|hay)|sin) (?:mas|mayor) informacion|(?:seguimos|continuamos) (?:recopilando|reuniendo|recabando) informacion|(?:seguiremos|continuaremos|ampliaremos) (?:recopilando|reuniendo|recabando|ampliando) (?:la )?informacion)\b/u;
 const SEGMENT_SYSTEM_PROMPT =
   "Eres el redactor de un canal sismico en directo 24/7. Debes devolver SOLO JSON valido con " +
   'este formato exacto: {"text":"...","cue":{"urgency":"baja|media|alta","rhythm":"sereno|fluido|agil","tone":"sobrio|directo|calido"}}. ' +
   "El texto debe ser breve, claro y listo para overlay y voz. Usa espanol neutro. Considera las lineas recientes solo para evitar repetir aperturas o remates. " +
   "Es un directo continuo 24/7 SIN cortes: nunca menciones pausas, cortes comerciales, publicidad ni digas 'volvemos' o 'regresamos'. No inventes " +
-  "replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes.";
+  "replicas, danos, alertas, riesgo, tsunami, evacuaciones ni frases del tipo sin reportes. Nunca uses formulas del tipo " +
+  "'informacion en desarrollo', 'no tenemos mas informacion' ni variantes que sugieran que alguien esta reuniendo datos en tiempo real.";
 const HANDOFF_SYSTEM_PROMPT =
   "Eres el productor editorial de un canal sismico 24/7 con un equipo de locutores que se conocen de " +
   "toda la vida y se aprecian. Redacta el relevo entre dos de ellos: calido, cercano y amistoso, pero " +
@@ -178,7 +179,7 @@ const HANDOFF_SYSTEM_PROMPT =
   "lineas recientes que se te entregan; que suene distinto y espontaneo cada vez. Un guino calido esta bien " +
   "(un buen turno, saludos a la audiencia, nos vemos al rato) sin exagerar ni volverse informal de mas. " +
   "Es un directo continuo SIN cortes: nunca menciones pausas, cortes comerciales ni digas 'volvemos tras la pausa'. " +
-  "No inventes sismos, replicas, danos, alertas, riesgos ni cifras.";
+  "No inventes sismos, replicas, danos, alertas, riesgos ni cifras, ni uses formulas del tipo 'informacion en desarrollo' o 'no tenemos mas informacion'.";
 const RECOMMENDATION_SYSTEM_PROMPT =
   "Eres el redactor de recomendaciones sismicas para un canal de monitoreo en directo. " +
   "Debes reescribir solamente medidas de seguridad ya aprobadas, sin inventar consejos nuevos. " +
@@ -512,7 +513,7 @@ function parseRecommendationVariants(raw: string, fallbackVariants: string[]): s
   return normalizeVariants(cleaned.split(/\r?\n+/u), fallbackVariants);
 }
 
-function sanitizeGeneratedSegmentPacket(raw: unknown, request: SegmentRequest): SegmentPacket {
+export function sanitizeGeneratedSegmentPacket(raw: unknown, request: SegmentRequest): SegmentPacket {
   const fallback = fallbackPacket(request);
   const schema = z.object({
     text: z.string().trim().min(1).max(280),

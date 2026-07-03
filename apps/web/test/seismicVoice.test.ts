@@ -224,6 +224,25 @@ test("resolveEventNarration descarta cierres de 'pausa/comercial' (directo 24/7 
   assert.equal(narration.text.includes("subduccion del Pacifico"), true);
 });
 
+test("resolveEventNarration descarta formulas de informacion no verificable", async (t) => {
+  clearEditorialHistory();
+  t.after(
+    mockEditorial({
+      intro: "Sismo detectado",
+      closing: "Informacion en desarrollo. No tenemos mas informacion por ahora",
+      tectonicContext: "Evento asociado al margen de subduccion del Pacifico",
+      cue: { urgency: "media", rhythm: "fluido", tone: "sobrio" }
+    })
+  );
+
+  const narration = await resolveEventNarration(
+    makeEvent({ title: "M3.5 - Halmahera, Indonesia", magnitude: 3.5, depthKm: 9 })
+  );
+
+  assert.equal(/informacion en desarrollo|no tenemos mas informacion/iu.test(narration.text), false);
+  assert.equal(narration.text.includes("subduccion del Pacifico"), true);
+});
+
 test("resolveEventNarration preserves one useful tectonic context sentence", async (t) => {
   clearEditorialHistory();
   t.after(

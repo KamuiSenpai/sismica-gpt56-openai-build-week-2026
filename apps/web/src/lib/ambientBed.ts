@@ -1,8 +1,8 @@
-// Lecho ambiental generativo (Web Audio): un drone sub-grave + un pad en re menor/frigio que
-// evoluciona segun la actividad sismica. Esta 100% sintetizado -> sin archivos ni licencias, y
-// el loop no tiene costuras. Corre solo en el navegador; en un entorno sin AudioContext (tests,
-// SSR) se degrada a no-op. La logica de mapeo (estado sismico -> parametros de audio) es PURA y
-// esta cubierta por ambientBed.test.ts; el grafo de audio vive detras de un guard de window.
+// Lecho musical generativo (Web Audio): un pad calido en re menor + bajo + un ritmo suave
+// (bombo, hats y un arpegio tenue) que le da PULSO a la retransmision. Esta 100% sintetizado
+// -> sin archivos ni licencias, y el loop no tiene costuras. Corre solo en el navegador; en un
+// entorno sin AudioContext (tests, SSR) se degrada a no-op. La logica de mapeo (estado sismico
+// -> parametros) es PURA y esta cubierta por ambientBed.test.ts; el grafo vive tras un guard.
 
 export type AmbientMode = "monitoreo" | "vivo" | "boletin" | "relevo";
 
@@ -11,38 +11,43 @@ export type AmbientDrivers = {
   biggestMagnitude: number | null;
   // Cantidad de sismos recientes en pantalla (densidad de actividad).
   recentCount: number;
-  // Modo editorial en curso: eleva un piso de tension aunque la actividad sea baja.
+  // Modo editorial en curso: eleva un piso de energia aunque la actividad sea baja.
   mode: AmbientMode;
 };
 
 export type AmbientTargets = {
   intensity: number; // 0..1: sintesis de magnitud, densidad y modo
-  masterGain: number; // volumen lineal del lecho (sin ducking)
-  filterHz: number; // corte del pasa-bajos del pad (mas brillo = mas tension)
-  pulseGain: number; // pulso grave tipo "redaccion" (boletin / en vivo)
-  tensionGain: number; // nota de tension (segunda menor frigia) que entra con la intensidad
-  detuneCents: number; // batido/disonancia del pad
+  padGain: number; // nivel del pad armonico
+  filterHz: number; // brillo del pad (mas alto = mas presente/tenso)
+  rhythmGain: number; // nivel del ritmo (bombo/hats/arpegio) -> SIEMPRE audible
+  tempoBpm: number; // pulso del ritmo
+  detuneCents: number; // batido/tension del pad
 };
 
-// Parametros musicales y de mezcla. El lecho se mantiene MUY por debajo de la voz.
+// Parametros musicales y de mezcla. El lecho es AUDIBLE pero se agacha bajo la voz (ducking).
 const BED = {
-  baseGain: 0.05, // ~ -26 dB en calma
-  maxGain: 0.09, // ~ -21 dB en maxima tension
-  duckFactor: 0.3, // atenuacion cuando habla el locutor (~ -10 dB bajo el lecho)
-  minFilterHz: 180,
-  maxFilterHz: 950,
-  maxPulseGain: 0.06,
-  maxTensionGain: 0.05,
-  maxDetuneCents: 16,
+  masterGain: 0.55, // volumen general del lecho antes del ducking
+  duckFactor: 0.4, // baja a ~40% (~ -8 dB) cuando habla el locutor
+  padBaseGain: 0.05,
+  padMaxGain: 0.09,
+  bassGain: 0.09,
+  minFilterHz: 700, // en calma ya hay medios presentes (audible en parlantes chicos)
+  maxFilterHz: 2200,
+  rhythmBaseGain: 0.45, // el ritmo se oye siempre, no solo en breaking
+  rhythmMaxGain: 0.85,
+  baseTempo: 72, // BPM en calma
+  maxTempo: 96, // BPM en maxima actividad
+  maxDetuneCents: 14,
   // Rampas (segundos): lentas para lo musical, rapida para agachar bajo la voz.
   paramRampSec: 2.5,
   duckDownSec: 0.18,
   duckUpSec: 0.9,
-  fadeInSec: 3,
-  fadeOutSec: 0.8
+  fadeInSec: 2.5,
+  fadeOutSec: 0.7,
+  tempoSlewBpmPerSec: 8
 } as const;
 
-// El modo eleva un piso de intensidad (breaking, boletin) sin borrar la actividad real.
+// El modo eleva un piso de energia (breaking, boletin) sin borrar la actividad real.
 export const AMBIENT_MODE_FLOOR: Record<AmbientMode, number> = {
   monitoreo: 0,
   boletin: 0.25,
@@ -66,34 +71,38 @@ export function computeAmbientIntensity(drivers: AmbientDrivers): number {
 
 export function computeAmbientTargets(drivers: AmbientDrivers): AmbientTargets {
   const intensity = computeAmbientIntensity(drivers);
-  const masterGain = BED.baseGain + (BED.maxGain - BED.baseGain) * intensity;
-  const filterHz = BED.minFilterHz + (BED.maxFilterHz - BED.minFilterHz) * intensity;
+  return {
+    intensity,
+    padGain: BED.padBaseGain + (BED.padMaxGain - BED.padBaseGain) * intensity,
+    filterHz: BED.minFilterHz + (BED.maxFilterHz - BED.minFilterHz) * intensity,
+    rhythmGain: BED.rhythmBaseGain + (BED.rhythmMaxGain - BED.rhythmBaseGain) * intensity,
+    tempoBpm: BED.baseTempo + (BED.maxTempo - BED.baseTempo) * intensity,
+    detuneCents: BED.maxDetuneCents * intensity * (drivers.mode === "vivo" ? 1 : 0.5)
+  };
+}
 
-  // El pulso "redaccion" solo asoma en boletin/en vivo; en monitoreo queda casi mudo.
-  const pulseBias = drivers.mode === "vivo" ? 0.9 : drivers.mode === "boletin" ? 0.6 : 0.12;
-  const pulseGain =
-    BED.maxPulseGain * clamp01(intensity * pulseBias + (drivers.mode === "boletin" ? 0.15 : 0));
-
-  // La segunda menor (Eb sobre re) da el aire ominoso; entra sobre todo en vivo.
-  const tensionBias = drivers.mode === "vivo" ? 1 : 0.35;
-  const tensionGain = BED.maxTensionGain * intensity * tensionBias;
-
-  const detuneCents = BED.maxDetuneCents * intensity * (drivers.mode === "vivo" ? 1 : 0.5);
-
-  return { intensity, masterGain, filterHz, pulseGain, tensionGain, detuneCents };
+export function slewTempo(current: number, target: number, elapsedMs: number): number {
+  if (!Number.isFinite(current) || !Number.isFinite(target)) return BED.baseTempo;
+  if (elapsedMs <= 0) return current;
+  const maxStep = (BED.tempoSlewBpmPerSec * elapsedMs) / 1000;
+  const delta = target - current;
+  if (Math.abs(delta) <= maxStep) return target;
+  return current + Math.sign(delta) * maxStep;
 }
 
 // --- Grafo de audio (solo navegador) ------------------------------------------------------
 
-// Re menor / frigio, en octavas graves. El drone ancla la profundidad tectonica; el pad da el
-// color menor; la nota de tension (Eb) es la segunda menor frigia.
+// Re menor en registro audible. Bajo (D2/A2), pad (D3/F3/A3) y arpegio (D4/F4/A4).
 const NOTE = {
-  D1: 36.708,
   D2: 73.416,
   F2: 87.307,
   A2: 110.0,
   D3: 146.832,
-  Eb3: 155.563
+  F3: 174.614,
+  A3: 220.0,
+  D4: 293.665,
+  F4: 349.228,
+  A4: 440.0
 } as const;
 
 type BrowserWindow = Window &
@@ -103,28 +112,27 @@ type BrowserWindow = Window &
 
 type AmbientGraph = {
   ctx: AudioContext;
-  bedGain: GainNode; // volumen musical (rampas lentas)
-  duckGain: GainNode; // atenuacion bajo la voz (rampas rapidas)
-  lowpass: BiquadFilterNode;
+  bedGain: GainNode; // volumen general (fade in/out)
+  duckGain: GainNode; // atenuacion bajo la voz
   padGain: GainNode;
-  droneGain: GainNode;
-  tensionGain: GainNode;
-  pulseGain: GainNode;
-  pulseAmp: GainNode;
-  pulseLfoGain: GainNode;
-  pad: OscillatorNode[];
-  drone: OscillatorNode[];
-  tension: OscillatorNode;
-  pulse: OscillatorNode;
-  pulseLfo: OscillatorNode;
-  oscillators: OscillatorNode[];
+  padLowpass: BiquadFilterNode;
+  bassGain: GainNode;
+  rhythmBus: GainNode;
+  noiseBuffer: AudioBuffer;
+  pad: OscillatorNode[]; // osciladores continuos (pad + bajo)
 };
 
 let graph: AmbientGraph | null = null;
 let enabled = false;
 let ducked = false;
 let voiceProbe: (() => boolean) | null = null;
-let tickTimer: number | null = null;
+let duckTimer: number | null = null;
+let schedulerTimer: number | null = null;
+let currentTempo: number = BED.baseTempo;
+let targetTempo: number = BED.baseTempo;
+let nextStepTime = 0;
+let step16 = 0;
+let lastSchedulerTickMs: number | null = null;
 let drivers: AmbientDrivers = { biggestMagnitude: null, recentCount: 0, mode: "monitoreo" };
 
 function getAudioContext(): AudioContext | null {
@@ -141,34 +149,37 @@ function ramp(param: AudioParam, value: number, seconds: number, now: number): v
   param.linearRampToValueAtTime(value, now + seconds);
 }
 
-function makeOscillator(
+function makeNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+function makeSustained(
   ctx: AudioContext,
   type: OscillatorType,
   frequency: number,
   destination: AudioNode,
-  gain = 1
+  gain: number
 ): OscillatorNode {
   const osc = ctx.createOscillator();
   osc.type = type;
   osc.frequency.value = frequency;
-  if (gain === 1) {
-    osc.connect(destination);
-  } else {
-    const oscGain = ctx.createGain();
-    oscGain.gain.value = gain;
-    osc.connect(oscGain);
-    oscGain.connect(destination);
-  }
+  const g = ctx.createGain();
+  g.gain.value = gain;
+  osc.connect(g);
+  g.connect(destination);
   return osc;
 }
 
 function buildGraph(ctx: AudioContext): AmbientGraph {
   const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.value = -18;
+  compressor.threshold.value = -14;
   compressor.knee.value = 12;
   compressor.ratio.value = 4;
   compressor.attack.value = 0.02;
-  compressor.release.value = 0.4;
+  compressor.release.value = 0.35;
   compressor.connect(ctx.destination);
 
   const duckGain = ctx.createGain();
@@ -179,76 +190,127 @@ function buildGraph(ctx: AudioContext): AmbientGraph {
   bedGain.gain.value = 0; // arranca en silencio y sube con el fade-in
   bedGain.connect(duckGain);
 
-  // El drone sub y el pulso van directos al bus (no los filtra el pasa-bajos del pad).
-  const droneGain = ctx.createGain();
-  droneGain.gain.value = 0.5;
-  droneGain.connect(bedGain);
+  const bassGain = ctx.createGain();
+  bassGain.gain.value = BED.bassGain;
+  bassGain.connect(bedGain);
 
-  const lowpass = ctx.createBiquadFilter();
-  lowpass.type = "lowpass";
-  lowpass.frequency.value = BED.minFilterHz;
-  lowpass.Q.value = 0.6;
-  lowpass.connect(bedGain);
+  const padLowpass = ctx.createBiquadFilter();
+  padLowpass.type = "lowpass";
+  padLowpass.frequency.value = BED.minFilterHz;
+  padLowpass.Q.value = 0.7;
+  padLowpass.connect(bedGain);
 
   const padGain = ctx.createGain();
-  padGain.gain.value = 0.14;
-  padGain.connect(lowpass);
+  padGain.gain.value = BED.padBaseGain;
+  padGain.connect(padLowpass);
 
-  const tensionGain = ctx.createGain();
-  tensionGain.gain.value = 0;
-  tensionGain.connect(lowpass);
+  const rhythmBus = ctx.createGain();
+  rhythmBus.gain.value = BED.rhythmBaseGain;
+  rhythmBus.connect(bedGain);
 
-  // Pulso grave "latido de redaccion": la profundidad la mueve applyTargets en pulseGain, y un
-  // LFO lento la modula en pulseAmp (nodo aparte, para no pelear con la rampa de pulseGain.gain).
-  const pulseGain = ctx.createGain();
-  pulseGain.gain.value = 0;
-  pulseGain.connect(bedGain);
-  const pulseAmp = ctx.createGain();
-  pulseAmp.gain.value = 0.5; // centro de la oscilacion
-  pulseAmp.connect(pulseGain);
-  const pulse = makeOscillator(ctx, "sine", NOTE.D2, pulseAmp);
-  const pulseLfo = ctx.createOscillator();
-  pulseLfo.type = "sine";
-  pulseLfo.frequency.value = 0.7;
-  const pulseLfoGain = ctx.createGain();
-  pulseLfoGain.gain.value = 0.5; // suma ±0.5 -> pulseAmp oscila 0..1
-  pulseLfo.connect(pulseLfoGain);
-  pulseLfoGain.connect(pulseAmp.gain);
-
-  const drone = [
-    makeOscillator(ctx, "sine", NOTE.D1, droneGain),
-    makeOscillator(ctx, "sine", NOTE.D2, droneGain, 0.6)
-  ];
-  drone[1].detune.value = -6; // batido calido entre las dos capas del drone
-
+  // Bajo sostenido (raiz) + pad (triada de re menor) continuos.
   const pad = [
-    makeOscillator(ctx, "triangle", NOTE.D2, padGain, 0.7),
-    makeOscillator(ctx, "triangle", NOTE.F2, padGain, 0.6),
-    makeOscillator(ctx, "sine", NOTE.A2, padGain, 0.6),
-    makeOscillator(ctx, "sine", NOTE.D3, padGain, 0.35)
+    makeSustained(ctx, "sine", NOTE.D2, bassGain, 0.9),
+    makeSustained(ctx, "triangle", NOTE.D3, padGain, 0.5),
+    makeSustained(ctx, "triangle", NOTE.F3, padGain, 0.42),
+    makeSustained(ctx, "sine", NOTE.A3, padGain, 0.42),
+    makeSustained(ctx, "sine", NOTE.D4, padGain, 0.22)
   ];
 
-  const tension = makeOscillator(ctx, "triangle", NOTE.Eb3, tensionGain, 0.8);
-
-  const oscillators = [...drone, ...pad, tension, pulse, pulseLfo];
   return {
     ctx,
     bedGain,
     duckGain,
-    lowpass,
     padGain,
-    droneGain,
-    tensionGain,
-    pulseGain,
-    pulseAmp,
-    pulseLfoGain,
-    pad,
-    drone,
-    tension,
-    pulse,
-    pulseLfo,
-    oscillators
+    padLowpass,
+    bassGain,
+    rhythmBus,
+    noiseBuffer: makeNoiseBuffer(ctx),
+    pad
   };
+}
+
+// --- Voces percusivas/pluck (efimeras: se crean por golpe y se auto-detienen) --------------
+
+function triggerKick(g: AmbientGraph, time: number, gain: number): void {
+  const osc = g.ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(140, time);
+  osc.frequency.exponentialRampToValueAtTime(48, time + 0.12);
+  const env = g.ctx.createGain();
+  env.gain.setValueAtTime(0.0001, time);
+  env.gain.exponentialRampToValueAtTime(gain, time + 0.006);
+  env.gain.exponentialRampToValueAtTime(0.0001, time + 0.26);
+  osc.connect(env);
+  env.connect(g.rhythmBus);
+  osc.start(time);
+  osc.stop(time + 0.3);
+}
+
+function triggerHat(g: AmbientGraph, time: number, gain: number): void {
+  const src = g.ctx.createBufferSource();
+  src.buffer = g.noiseBuffer;
+  const hp = g.ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 7000;
+  const env = g.ctx.createGain();
+  env.gain.setValueAtTime(gain, time);
+  env.gain.exponentialRampToValueAtTime(0.0001, time + 0.05);
+  src.connect(hp);
+  hp.connect(env);
+  env.connect(g.rhythmBus);
+  src.start(time);
+  src.stop(time + 0.06);
+}
+
+function triggerPluck(g: AmbientGraph, time: number, freq: number, gain: number, cutoff: number): void {
+  const osc = g.ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = freq;
+  const lp = g.ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = cutoff;
+  const env = g.ctx.createGain();
+  env.gain.setValueAtTime(0.0001, time);
+  env.gain.exponentialRampToValueAtTime(gain, time + 0.012);
+  env.gain.exponentialRampToValueAtTime(0.0001, time + 0.38);
+  osc.connect(lp);
+  lp.connect(env);
+  env.connect(g.rhythmBus);
+  osc.start(time);
+  osc.stop(time + 0.42);
+}
+
+const ARP_BY_STEP: Record<number, number> = { 0: NOTE.D4, 4: NOTE.A3, 8: NOTE.F4, 12: NOTE.A3 };
+
+// Patron de 16 pasos (semicorcheas): bombo en 1 y 3, hats en las contras, bajo pulsado y un
+// arpegio tenue. Suave y constante: da ritmo sin volverse una pista de baile.
+function scheduleStep(g: AmbientGraph, step: number, time: number): void {
+  if (step === 0 || step === 8) triggerKick(g, time, 0.9);
+  if (step % 2 === 0) triggerHat(g, time, step % 4 === 0 ? 0.11 : 0.06);
+  if (step === 0) triggerPluck(g, time, NOTE.D2, 0.55, 1400);
+  if (step === 8) triggerPluck(g, time, NOTE.A2, 0.5, 1400);
+  const arp = ARP_BY_STEP[step];
+  if (arp) triggerPluck(g, time, arp, 0.22, 2600);
+}
+
+function scheduler(): void {
+  if (!graph) return;
+  const ctx = graph.ctx;
+  const nowMs = performance.now();
+  const elapsedMs = lastSchedulerTickMs === null ? 25 : Math.max(0, nowMs - lastSchedulerTickMs);
+  lastSchedulerTickMs = nowMs;
+  currentTempo = slewTempo(currentTempo, targetTempo, elapsedMs);
+  // El reloj de audio solo avanza si el contexto corre; si esta suspendido, pina el proximo paso.
+  if (ctx.state !== "running") {
+    nextStepTime = ctx.currentTime;
+    return;
+  }
+  while (nextStepTime < ctx.currentTime + 0.12) {
+    scheduleStep(graph, step16, nextStepTime);
+    nextStepTime += 60 / currentTempo / 4; // duracion de una semicorchea
+    step16 = (step16 + 1) % 16;
+  }
 }
 
 function applyTargets(): void {
@@ -256,12 +318,11 @@ function applyTargets(): void {
   const now = graph.ctx.currentTime;
   const targets = computeAmbientTargets(drivers);
 
-  ramp(graph.bedGain.gain, targets.masterGain, BED.paramRampSec, now);
-  ramp(graph.lowpass.frequency, targets.filterHz, BED.paramRampSec, now);
-  ramp(graph.pulseGain.gain, targets.pulseGain, BED.paramRampSec, now);
-  ramp(graph.tensionGain.gain, targets.tensionGain, BED.paramRampSec, now);
+  ramp(graph.padGain.gain, targets.padGain, BED.paramRampSec, now);
+  ramp(graph.padLowpass.frequency, targets.filterHz, BED.paramRampSec, now);
+  ramp(graph.rhythmBus.gain, targets.rhythmGain, BED.paramRampSec, now);
+  targetTempo = targets.tempoBpm;
 
-  // Detune alterno entre las voces del pad -> batido/tension sin desafinar el conjunto.
   graph.pad.forEach((osc, index) => {
     const sign = index % 2 === 0 ? 1 : -1;
     ramp(osc.detune, targets.detuneCents * sign, BED.paramRampSec, now);
@@ -277,14 +338,14 @@ function setDuckedInternal(next: boolean): void {
   applyTargets();
 }
 
-function tick(): void {
+function duckTick(): void {
   if (!graph) return;
   if (voiceProbe) setDuckedInternal(voiceProbe());
 }
 
 function teardown(previous: AmbientGraph): void {
   const stopAt = previous.ctx.currentTime + 0.05;
-  for (const osc of previous.oscillators) {
+  for (const osc of previous.pad) {
     try {
       osc.stop(stopAt);
     } catch {
@@ -292,17 +353,14 @@ function teardown(previous: AmbientGraph): void {
     }
   }
   window.setTimeout(() => {
-    for (const osc of previous.oscillators) osc.disconnect();
+    for (const osc of previous.pad) osc.disconnect();
     previous.padGain.disconnect();
-    previous.droneGain.disconnect();
-    previous.tensionGain.disconnect();
-    previous.pulseGain.disconnect();
-    previous.pulseAmp.disconnect();
-    previous.pulseLfoGain.disconnect();
-    previous.lowpass.disconnect();
+    previous.padLowpass.disconnect();
+    previous.bassGain.disconnect();
+    previous.rhythmBus.disconnect();
     previous.bedGain.disconnect();
     previous.duckGain.disconnect();
-  }, 200);
+  }, 250);
 }
 
 // --- API imperativa (la consume App.tsx) --------------------------------------------------
@@ -311,6 +369,7 @@ export function startAmbient(options: { voiceActivityProbe?: () => boolean } = {
   voiceProbe = options.voiceActivityProbe ?? null;
   if (graph) {
     enabled = true;
+    lastSchedulerTickMs = performance.now();
     void graph.ctx.resume().catch(() => undefined);
     return true;
   }
@@ -320,32 +379,41 @@ export function startAmbient(options: { voiceActivityProbe?: () => boolean } = {
 
   const built = buildGraph(ctx);
   const startAt = ctx.currentTime + 0.02;
-  for (const osc of built.oscillators) osc.start(startAt);
+  for (const osc of built.pad) osc.start(startAt);
   graph = built;
   enabled = true;
   ducked = false;
+  currentTempo = BED.baseTempo;
+  targetTempo = BED.baseTempo;
+  step16 = 0;
+  nextStepTime = ctx.currentTime;
+  lastSchedulerTickMs = performance.now();
 
-  // Fade-in del lecho hasta el volumen objetivo (nada de arranques secos).
-  ramp(built.bedGain.gain, computeAmbientTargets(drivers).masterGain, BED.fadeInSec, ctx.currentTime);
+  ramp(built.bedGain.gain, BED.masterGain, BED.fadeInSec, ctx.currentTime);
   applyTargets();
   void ctx.resume().catch(() => undefined);
 
-  if (tickTimer === null) {
-    tickTimer = window.setInterval(tick, 250);
-  }
+  if (schedulerTimer === null) schedulerTimer = window.setInterval(scheduler, 25);
+  if (duckTimer === null) duckTimer = window.setInterval(duckTick, 250);
   return true;
 }
 
 export function stopAmbient(): void {
   enabled = false;
-  if (tickTimer !== null) {
-    window.clearInterval(tickTimer);
-    tickTimer = null;
+  if (schedulerTimer !== null) {
+    window.clearInterval(schedulerTimer);
+    schedulerTimer = null;
   }
+  if (duckTimer !== null) {
+    window.clearInterval(duckTimer);
+    duckTimer = null;
+  }
+  currentTempo = BED.baseTempo;
+  targetTempo = BED.baseTempo;
+  lastSchedulerTickMs = null;
   const previous = graph;
   graph = null;
   if (!previous) return;
-  // Fade-out para evitar el corte abrupto, luego desmonta el grafo.
   ramp(previous.bedGain.gain, 0, BED.fadeOutSec, previous.ctx.currentTime);
   window.setTimeout(() => teardown(previous), BED.fadeOutSec * 1000);
 }
@@ -367,6 +435,7 @@ export function setAmbientDucked(next: boolean): void {
 
 export function resumeAmbient(): void {
   if (graph && graph.ctx.state === "suspended") {
+    lastSchedulerTickMs = performance.now();
     void graph.ctx.resume().catch(() => undefined);
   }
 }
