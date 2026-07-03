@@ -192,6 +192,31 @@ async function synthesizeChatterbox(text: string, voice?: string): Promise<Buffe
   return Buffer.from(await response.arrayBuffer());
 }
 
+const UNLOAD_TIMEOUT_MS = 15_000;
+
+function neuralServiceUrl(engine: TtsEngine): string | undefined {
+  if (engine === "xtts") return env.xttsServiceUrl;
+  if (engine === "chatterbox") return env.chatterboxServiceUrl;
+  return undefined;
+}
+
+// Exclusion mutua de VRAM: solo un motor neural (XTTS o Chatterbox) en GPU a la vez. Antes de
+// sintetizar con uno, descarga el/los otro(s) para liberar memoria. Best-effort e idempotente:
+// si el otro ya esta descargado, su /unload es un no-op rapido.
+async function unloadOtherNeuralEngines(active: TtsEngine): Promise<void> {
+  const others = (["xtts", "chatterbox"] as const).filter((engine) => engine !== active);
+  await Promise.allSettled(
+    others.map((engine) => {
+      const url = neuralServiceUrl(engine);
+      if (!url) return Promise.resolve();
+      return fetch(`${url}/unload`, {
+        method: "POST",
+        signal: AbortSignal.timeout(UNLOAD_TIMEOUT_MS)
+      }).catch(() => undefined);
+    })
+  );
+}
+
 export async function synthesize(engine: TtsEngine, request: TtsRequest): Promise<TtsResult> {
   if (!env.ttsEnabled) throw new TtsUnavailableError("TTS neural deshabilitado (TTS_ENABLED=false)");
 
@@ -205,6 +230,11 @@ export async function synthesize(engine: TtsEngine, request: TtsRequest): Promis
   if (diskHit) {
     audioCache.set(key, diskHit);
     return { audio: diskHit, contentType: "audio/wav", cached: true };
+  }
+
+  // Libera la VRAM del otro motor neural antes de cargar/usar este.
+  if (engine === "xtts" || engine === "chatterbox") {
+    await unloadOtherNeuralEngines(engine);
   }
 
   const audio =

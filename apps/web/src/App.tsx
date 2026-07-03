@@ -86,18 +86,46 @@ const SEGMENT_TITLES: Record<BroadcastSegment["kind"], string> = {
   educativo: "Contexto sismico",
   relevo: "Cambio de locutor"
 };
+type OverlayPhase = "enter" | "hold" | "exit";
+type OverlayCard = {
+  key: number;
+  phase: OverlayPhase;
+  text: string;
+  segment: BroadcastSegment;
+};
+type DirectorVisualPreset = {
+  priority: "high" | "medium" | "low";
+  entryMs: number;
+  exitMs: number;
+  scanMs: number;
+  glow: number;
+  compactBias: number;
+};
+const DIRECTOR_VISUAL_PRESETS: Record<BroadcastSegment["kind"], DirectorVisualPreset> = {
+  "en-vivo": { priority: "high", entryMs: 280, exitMs: 190, scanMs: 2100, glow: 0.28, compactBias: 8 },
+  recorrido: { priority: "medium", entryMs: 320, exitMs: 210, scanMs: 2900, glow: 0.2, compactBias: 4 },
+  boletin: { priority: "medium", entryMs: 340, exitMs: 220, scanMs: 3300, glow: 0.18, compactBias: 0 },
+  resumen: { priority: "medium", entryMs: 360, exitMs: 230, scanMs: 3600, glow: 0.16, compactBias: 2 },
+  educativo: { priority: "low", entryMs: 380, exitMs: 240, scanMs: 4100, glow: 0.12, compactBias: -2 },
+  relevo: { priority: "low", entryMs: 340, exitMs: 230, scanMs: 3200, glow: 0.14, compactBias: 0 }
+};
 
 function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | null): SeismicEvent | null {
   return selectedEventId ? (events.find((event) => event.eventId === selectedEventId) ?? null) : null;
 }
 
-function directorOverlayStyle(text: string): CSSProperties {
+function directorOverlayStyle(segment: BroadcastSegment, text: string): CSSProperties {
+  const preset = DIRECTOR_VISUAL_PRESETS[segment.kind];
   const normalized = text.replace(/\s+/g, " ").trim();
   const length = normalized.length;
   const targetLines = length <= 72 ? 1 : length <= 132 ? 2 : 3;
-  const idealChars = clampNumber(Math.ceil((length + 18) / targetLines), 36, 68);
+  const idealChars = clampNumber(Math.ceil((length + 18 - preset.compactBias) / targetLines), 36, 70);
   return {
-    ["--director-overlay-ideal-ch" as string]: `${idealChars}ch`
+    ["--director-overlay-ideal-ch" as string]: `${idealChars}ch`,
+    ["--director-overlay-entry-ms" as string]: `${preset.entryMs}ms`,
+    ["--director-overlay-exit-ms" as string]: `${preset.exitMs}ms`,
+    ["--director-overlay-scan-ms" as string]: `${preset.scanMs}ms`,
+    ["--director-overlay-glow" as string]: `${preset.glow}`
   };
 }
 
@@ -170,6 +198,11 @@ export default function App() {
   }));
   const [directorMode, setDirectorMode] = useState<DirectorMode>("off");
   const [overlaySegment, setOverlaySegment] = useState<BroadcastSegment | null>(null);
+  const [overlayCard, setOverlayCard] = useState<OverlayCard | null>(null);
+  const overlayTimersRef = useRef<{ settle: number | null; exit: number | null }>({
+    settle: null,
+    exit: null
+  });
   const minMagnitude = DEFAULT_MIN_MAGNITUDE;
   const hours = DEFAULT_HOURS;
 
@@ -265,6 +298,52 @@ export default function App() {
     onFocusEvent: setSelectedEventId,
     onSegment: setOverlaySegment
   });
+
+  useEffect(() => {
+    return () => {
+      const timers = overlayTimersRef.current;
+      if (timers.settle !== null) window.clearTimeout(timers.settle);
+      if (timers.exit !== null) window.clearTimeout(timers.exit);
+    };
+  }, []);
+
+  useEffect(() => {
+    const timers = overlayTimersRef.current;
+    if (timers.settle !== null) {
+      window.clearTimeout(timers.settle);
+      timers.settle = null;
+    }
+    if (timers.exit !== null) {
+      window.clearTimeout(timers.exit);
+      timers.exit = null;
+    }
+
+    if (!overlaySegment) {
+      setOverlayCard((current) => {
+        if (!current) return null;
+        const exitMs = DIRECTOR_VISUAL_PRESETS[current.segment.kind].exitMs;
+        timers.exit = window.setTimeout(() => setOverlayCard(null), exitMs);
+        return { ...current, phase: "exit" };
+      });
+      return;
+    }
+
+    const text = normalizeSpanishText(overlaySegment.text);
+    const preset = DIRECTOR_VISUAL_PRESETS[overlaySegment.kind];
+    setOverlayCard((current) => ({
+      key: (current?.key ?? 0) + 1,
+      phase: "enter",
+      text,
+      segment: overlaySegment
+    }));
+    timers.settle = window.setTimeout(() => {
+      setOverlayCard((current) => {
+        if (!current) return null;
+        if (current.segment.kind !== overlaySegment.kind || current.text !== text) return current;
+        return { ...current, phase: "hold" };
+      });
+    }, preset.entryMs + 40);
+  }, [overlaySegment]);
 
   // Vigila la narracion en curso: cuando termina, promueve el siguiente sismo EN VIVO
   // encolado (lo muestra y lo anuncia como "Nuevo sismo detectado"), sin interrumpir.
@@ -595,19 +674,20 @@ export default function App() {
       ) : null}
 
       <section className="monitor-stage">
-        {directorMode !== "off" && overlaySegment ? (
+        {directorMode !== "off" && overlayCard ? (
           <div
-            className={`director-overlay director-${overlaySegment.kind}`}
-            style={directorOverlayStyle(normalizeSpanishText(overlaySegment.text))}
+            key={overlayCard.key}
+            className={`director-overlay director-${overlayCard.segment.kind} priority-${DIRECTOR_VISUAL_PRESETS[overlayCard.segment.kind].priority} phase-${overlayCard.phase}`}
+            style={directorOverlayStyle(overlayCard.segment, overlayCard.text)}
           >
             <header className="director-overlay-header">
-              <strong>{normalizeSpanishText(SEGMENT_TITLES[overlaySegment.kind])}</strong>
+              <strong>{normalizeSpanishText(SEGMENT_TITLES[overlayCard.segment.kind])}</strong>
               <span className="director-overlay-kind">
-                {normalizeSpanishText(SEGMENT_LABELS[overlaySegment.kind])}
+                {normalizeSpanishText(SEGMENT_LABELS[overlayCard.segment.kind])}
               </span>
             </header>
             <div className="director-overlay-body">
-              <span className="director-overlay-text">{normalizeSpanishText(overlaySegment.text)}</span>
+              <span className="director-overlay-text">{overlayCard.text}</span>
             </div>
           </div>
         ) : null}

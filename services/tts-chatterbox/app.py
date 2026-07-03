@@ -151,26 +151,71 @@ def _profile_summary() -> list[str]:
     return sorted(state.voice_profiles.keys())
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
+def _ensure_watermarker() -> None:
+    """resemble-perth queda roto en algunos Windows (PerthImplicitWatermarker=None) y revienta la
+    construccion del modelo. El marca-de-agua es opcional para uso interno: si falta, lo sustituye
+    por un no-op para que el modelo cargue."""
+    try:
+        import perth
+
+        if getattr(perth, "PerthImplicitWatermarker", None) is None:
+
+            class _NoopWatermarker:
+                def apply_watermark(self, wav, sample_rate=None, **_kwargs):  # noqa: ANN001
+                    return wav
+
+            perth.PerthImplicitWatermarker = _NoopWatermarker
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _load_model() -> None:
+    """Carga el modelo en GPU si no esta cargado (idempotente). Carga perezosa: solo ocupa VRAM
+    cuando este motor se usa; el API descarga el otro motor antes para no agotar la GPU."""
+    if state.model is not None:
+        return
+    _ensure_watermarker()
     from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
     state.device = _resolve_device()
-    state.model = ChatterboxMultilingualTTS.from_pretrained(device=state.device, t3_model="v3")
+    state.model = ChatterboxMultilingualTTS.from_pretrained(device=state.device)
     state.sample_rate = int(getattr(state.model, "sr", 24000))
+    print(f"[chatterbox] modelo cargado en {state.device} (sr={state.sample_rate})")
 
+
+def _unload_model() -> None:
+    """Libera el modelo y la VRAM (para dejar espacio a otro motor)."""
+    if state.model is None:
+        return
+    state.model = None
+    try:
+        import gc
+
+        import torch
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001
+        pass
+    print("[chatterbox] modelo descargado (VRAM liberada)")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    state.device = _resolve_device()
     state.voice_profiles = _load_voice_profiles()
     if DEFAULT_PROFILE and DEFAULT_PROFILE in state.voice_profiles:
         state.default_profile = DEFAULT_PROFILE
     elif state.voice_profiles:
         state.default_profile = next(iter(state.voice_profiles.keys()))
-
+    # Carga perezosa: el modelo se carga en el primer /synthesize (o /load), no al arrancar.
     print(
-        f"[chatterbox] modelo listo en {state.device} (sr={state.sample_rate}, "
-        f"default_profile={state.default_profile}, profiles={_profile_summary()})"
+        f"[chatterbox] servicio listo (device={state.device}, "
+        f"default_profile={state.default_profile}, profiles={_profile_summary()}) - modelo lazy"
     )
     yield
-    state.model = None
+    _unload_model()
 
 
 app = FastAPI(title="Sismica Chatterbox", version="0.1.0", lifespan=lifespan)
@@ -187,9 +232,10 @@ class SynthesizeRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    ready = state.model is not None
+    # ok = servicio disponible (sintetiza bajo demanda aunque el modelo este descargado en VRAM).
     return {
-        "ok": ready,
+        "ok": True,
+        "loaded": state.model is not None,
         "model": "chatterbox-multilingual",
         "device": state.device,
         "sampleRate": state.sample_rate,
@@ -197,6 +243,14 @@ def health() -> dict:
         "defaultProfile": state.default_profile,
         "profiles": _profile_summary(),
     }
+
+
+@app.post("/unload")
+def unload() -> dict:
+    """Descarga el modelo y libera VRAM (lo usa el API para conmutar de motor sin agotar la GPU)."""
+    with synthesis_lock:
+        _unload_model()
+    return {"ok": True, "loaded": state.model is not None}
 
 
 def _resolve_reference(requested_voice: str | None) -> tuple[str | None, str, str | None]:
@@ -209,9 +263,6 @@ def _resolve_reference(requested_voice: str | None) -> tuple[str | None, str, st
 
 @app.post("/synthesize")
 def synthesize(request: SynthesizeRequest) -> Response:
-    if state.model is None:
-        raise HTTPException(status_code=503, detail="Modelo Chatterbox no cargado")
-
     audio_prompt, profile_language, resolved_voice = _resolve_reference(request.speaker)
     language = request.language or profile_language
     kwargs: dict = {
@@ -226,6 +277,7 @@ def synthesize(request: SynthesizeRequest) -> Response:
 
     try:
         with synthesis_lock:
+            _load_model()  # carga perezosa / recarga bajo demanda.
             wav = state.model.generate(request.text, **kwargs)
     except Exception as error:  # noqa: BLE001
         raise HTTPException(

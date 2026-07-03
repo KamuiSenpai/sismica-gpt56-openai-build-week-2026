@@ -17,6 +17,7 @@ import {
   ConstantPositionProperty,
   ConstantProperty,
   EasingFunction,
+  EllipseGraphics,
   EllipsoidGeodesic,
   Entity,
   GeoJsonDataSource,
@@ -37,6 +38,12 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 
 import { useSeaLevelStationSeriesQuery } from "../hooks/queries";
 import { resolveCountryCode } from "../lib/countryGeocoder";
+import {
+  buildEventHaloLayers,
+  buildTectonicCorridorLayers,
+  type EventHaloLayer,
+  type TectonicCorridorLayer
+} from "../lib/mapActivity";
 import {
   estimatedIntensity,
   formatDepth,
@@ -93,6 +100,7 @@ const STATION_PREFIX = "station:";
 const SEA_LEVEL_STATION_PREFIX = "sea-level:";
 const SEA_LEVEL_FIELD_PREFIX = "sea-level-field:";
 const SEA_LEVEL_PULSE_PREFIX = "sea-level-pulse:";
+const TECTONIC_CORRIDOR_PREFIX = "tectonic-corridor:";
 const EXPERIMENTAL_ORIGIN_PREFIX = "origin:";
 const WAVE_PREFIX = "wave:";
 
@@ -157,26 +165,42 @@ function magnitudeSize(magnitude: number | null): number {
   return Math.max(8, Math.min(34, magnitude * 5));
 }
 
-function styleEntity(entity: Entity, event: SeismicEvent, selected: boolean): void {
+function styleEntity(
+  entity: Entity,
+  event: SeismicEvent,
+  selected: boolean,
+  halo: EventHaloLayer | null
+): void {
   if (!entity.point) return;
 
   const mmi = estimatedIntensity(event);
   const base = Color.fromCssColorString(intensityCssColor(mmi));
   const baseSize = magnitudeSize(event.magnitude);
+  const emphasized = selected || Boolean(halo);
 
-  entity.point.color = new ConstantProperty(base.withAlpha(selected ? 1 : 0.92));
+  entity.point.color = new ConstantProperty(base.withAlpha(emphasized ? 1 : 0.92));
   entity.point.outlineColor = new ConstantProperty(
-    selected ? Color.WHITE.withAlpha(0.96) : Color.fromCssColorString("#0b1220").withAlpha(0.9)
+    selected
+      ? Color.WHITE.withAlpha(0.96)
+      : halo
+        ? base.withAlpha(0.74)
+        : Color.fromCssColorString("#0b1220").withAlpha(0.9)
   );
-  entity.point.outlineWidth = new ConstantProperty(selected ? 3 : 1.5);
+  entity.point.outlineWidth = new ConstantProperty(selected ? 3 : halo ? 2.2 : 1.5);
 
   if (selected) {
     entity.point.pixelSize = new CallbackProperty(
       () => baseSize + 2.4 + Math.sin(Date.now() / 180) * 1.6,
       false
     );
+  } else if (halo) {
+    entity.point.pixelSize = new ConstantProperty(baseSize + (halo.strong ? 2 : 1.2));
   } else {
     entity.point.pixelSize = new ConstantProperty(baseSize);
+  }
+
+  if (entity.ellipse) {
+    entity.ellipse.show = new ConstantProperty(false);
   }
 }
 
@@ -703,6 +727,8 @@ export function MapPanel({
   const seaLevelSnapshotRef = useRef<Record<string, SeaLevelSnapshotEntry>>({});
   const experimentalOriginMapRef = useRef<Map<string, ExperimentalOrigin>>(new Map());
   const disasterMapRef = useRef<Map<string, DisasterContext>>(new Map());
+  const tectonicCorridorMapRef = useRef<Map<string, TectonicCorridorLayer>>(new Map());
+  const eventHaloMapRef = useRef<Map<string, EventHaloLayer>>(new Map());
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedEventId);
@@ -717,6 +743,7 @@ export function MapPanel({
     | { kind: "station"; station: SeismicStation; x: number; y: number }
     | { kind: "sea-level"; station: SeaLevelStation; x: number; y: number }
     | { kind: "origin"; origin: ExperimentalOrigin; x: number; y: number }
+    | { kind: "tectonic-corridor"; layer: TectonicCorridorLayer; x: number; y: number }
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
@@ -779,6 +806,12 @@ export function MapPanel({
         setSelectedStationId(null);
         setSelectedSeaLevelStationId(null);
         onSelectRef.current(picked.id.id);
+      } else if (tectonicCorridorMapRef.current.has(picked.id.id)) {
+        const layer = tectonicCorridorMapRef.current.get(picked.id.id);
+        if (!layer) return;
+        setSelectedStationId(null);
+        setSelectedSeaLevelStationId(null);
+        onSelectRef.current(layer.leadEventId);
       } else if (stationMapRef.current.has(picked.id.id)) {
         setSelectedSeaLevelStationId(null);
         setSelectedStationId(picked.id.id);
@@ -797,6 +830,7 @@ export function MapPanel({
       const station = typeof id === "string" ? stationMapRef.current.get(id) : undefined;
       const seaLevelStation = typeof id === "string" ? seaLevelStationMapRef.current.get(id) : undefined;
       const origin = typeof id === "string" ? experimentalOriginMapRef.current.get(id) : undefined;
+      const tectonicCorridor = typeof id === "string" ? tectonicCorridorMapRef.current.get(id) : undefined;
 
       const rect = canvas.getBoundingClientRect();
       if (event) {
@@ -839,6 +873,14 @@ export function MapPanel({
           y: rect.top + movement.endPosition.y
         });
         canvas.style.cursor = "default";
+      } else if (tectonicCorridor) {
+        setHover({
+          kind: "tectonic-corridor",
+          layer: tectonicCorridor,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "pointer";
       } else if (entity?.properties?.volcanoName) {
         setHover({
           kind: "volcano",
@@ -883,7 +925,13 @@ export function MapPanel({
 
     const collection = viewer.entities;
     const nextMap = new Map(events.map((event) => [event.eventId, event]));
+    const haloMap = new Map(
+      buildEventHaloLayers(events, selectedIdRef.current, Date.now()).map(
+        (halo) => [halo.eventId, halo] as const
+      )
+    );
     eventMapRef.current = nextMap;
+    eventHaloMapRef.current = haloMap;
     const firstLoad = !initializedRef.current;
 
     collection.suspendEvents();
@@ -894,6 +942,7 @@ export function MapPanel({
         (entity.id.startsWith(WAVE_PREFIX) ||
           entity.id.startsWith(SEA_LEVEL_FIELD_PREFIX) ||
           entity.id.startsWith(SEA_LEVEL_PULSE_PREFIX) ||
+          entity.id.startsWith(TECTONIC_CORRIDOR_PREFIX) ||
           entity.id.startsWith(DISASTER_PREFIX) ||
           entity.id.startsWith(STATION_PREFIX) ||
           entity.id.startsWith(SEA_LEVEL_STATION_PREFIX) ||
@@ -921,7 +970,7 @@ export function MapPanel({
         );
       }
 
-      styleEntity(entity, event, selected);
+      styleEntity(entity, event, selected, haloMap.get(event.eventId) ?? null);
 
       const isNew = !seenIdsRef.current.has(event.eventId);
       seenIdsRef.current.add(event.eventId);
@@ -934,6 +983,57 @@ export function MapPanel({
     collection.resumeEvents();
     initializedRef.current = true;
   }, [events, soundEnabled]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const nextMap = new Map<string, TectonicCorridorLayer>(
+      buildTectonicCorridorLayers(events, selectedEventId, Date.now()).map(
+        (layer) => [`${TECTONIC_CORRIDOR_PREFIX}${layer.corridorId}`, layer] as const
+      )
+    );
+    tectonicCorridorMapRef.current = nextMap;
+
+    for (const entity of [...viewer.entities.values]) {
+      if (
+        typeof entity.id === "string" &&
+        entity.id.startsWith(TECTONIC_CORRIDOR_PREFIX) &&
+        !nextMap.has(entity.id)
+      ) {
+        viewer.entities.remove(entity);
+      }
+    }
+
+    for (const [id, layer] of nextMap) {
+      let entity = viewer.entities.getById(id);
+      if (!entity) {
+        entity = viewer.entities.add({
+          id,
+          polyline: {}
+        });
+      }
+      if (!entity.polyline) continue;
+
+      const phase =
+        ((layer.points[0]?.latitude ?? 0) * 17 + (layer.points[0]?.longitude ?? 0) * 9) * (Math.PI / 180);
+      const corridorColor = Color.fromCssColorString(layer.color);
+      const positions = layer.points.map((point) => Cartesian3.fromDegrees(point.longitude, point.latitude));
+      entity.polyline.positions = new ConstantProperty(positions);
+      entity.polyline.clampToGround = new ConstantProperty(true);
+      entity.polyline.width = new CallbackProperty(
+        () => 4.4 + Math.sin(Date.now() / 1_350 + phase) * 0.28 * layer.emphasis,
+        false
+      );
+      entity.polyline.material = new ColorMaterialProperty(
+        new CallbackProperty(
+          () => corridorColor.withAlpha(0.4 + Math.sin(Date.now() / 1_520 + phase) * 0.02),
+          false
+        )
+      );
+      entity.polyline.show = new ConstantProperty(true);
+    }
+  }, [events, selectedEventId]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -1175,6 +1275,12 @@ export function MapPanel({
     selectedIdRef.current = selectedEventId;
     const viewer = viewerRef.current;
     if (!viewer) return;
+    const haloMap = new Map(
+      buildEventHaloLayers(Array.from(eventMapRef.current.values()), selectedEventId, Date.now()).map(
+        (halo) => [halo.eventId, halo] as const
+      )
+    );
+    eventHaloMapRef.current = haloMap;
 
     if (selectionWaveTimerRef.current !== null) {
       window.clearInterval(selectionWaveTimerRef.current);
@@ -1185,7 +1291,7 @@ export function MapPanel({
       if (typeof entity.id !== "string" || entity.id.startsWith(WAVE_PREFIX)) continue;
       const event = eventMapRef.current.get(entity.id);
       if (event) {
-        styleEntity(entity, event, entity.id === selectedEventId);
+        styleEntity(entity, event, entity.id === selectedEventId, haloMap.get(entity.id) ?? null);
       }
     }
 
@@ -1362,6 +1468,21 @@ export function MapPanel({
         </div>
       ) : null}
 
+      {hover?.kind === "tectonic-corridor" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>Corredor tectonico destacado</strong>
+          <span>{hover.layer.label}</span>
+          <span>Evento guia: {hover.layer.leadEventId}</span>
+          <span className="tt-source">
+            {hover.layer.kind === "subduction"
+              ? "Subduccion en foco editorial"
+              : hover.layer.kind === "transform"
+                ? "Falla transformante en foco editorial"
+                : "Corredor convergente en foco editorial"}
+          </span>
+        </div>
+      ) : null}
+
       {hover?.kind === "volcano" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>{hover.name}</strong>
@@ -1518,6 +1639,29 @@ export function MapPanel({
         <span className="legend-row">
           <i style={{ background: "linear-gradient(to right, #7aff93, #ff0000)", opacity: 0.8 }} />
           ShakeMap (USGS)
+        </span>
+        <span className="legend-section-separator" />
+        <span className="legend-title">Capas dinamicas 2D</span>
+        <span className="legend-row">
+          <i
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              border: "2px solid rgba(255,255,255,0.85)",
+              background: "rgba(125,211,252,0.8)"
+            }}
+          />
+          Punto priorizado
+        </span>
+        <span className="legend-row">
+          <i
+            style={{
+              height: "4px",
+              background: "rgba(251,191,36,0.78)"
+            }}
+          />
+          Corredor tectonico
         </span>
       </div>
 

@@ -225,8 +225,11 @@ def _stabilize_cuda_inference(model) -> None:
             module.use_flash = False
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
+def _load_model() -> None:
+    """Carga el modelo en GPU si no esta cargado (idempotente). Para conmutar de motor sin agotar
+    la VRAM, el modelo se puede descargar con _unload_model y se recarga aqui bajo demanda."""
+    if state.tts is not None:
+        return
     from TTS.api import TTS
 
     state.device = _resolve_device()
@@ -237,26 +240,44 @@ async def lifespan(_app: FastAPI):
     if synthesizer is not None and getattr(synthesizer, "output_sample_rate", None):
         state.sample_rate = int(synthesizer.output_sample_rate)
 
-    # Si no se configuro un locutor y el modelo trae voces incorporadas, usa la primera.
     speakers = getattr(state.tts, "speakers", None) or []
     if DEFAULT_SPEAKER:
         state.default_speaker = DEFAULT_SPEAKER
     elif not SPEAKER_WAV and speakers:
         state.default_speaker = speakers[0]
+    print(f"[xtts] modelo cargado en {state.device} (sr={state.sample_rate})")
 
+
+def _unload_model() -> None:
+    """Libera el modelo y la VRAM (para dejar espacio a otro motor)."""
+    if state.tts is None:
+        return
+    state.tts = None
+    try:
+        import gc
+
+        import torch
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001
+        pass
+    print("[xtts] modelo descargado (VRAM liberada)")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     state.voice_profiles = _load_voice_profiles()
     if DEFAULT_PROFILE and DEFAULT_PROFILE in state.voice_profiles:
         state.default_profile = DEFAULT_PROFILE
     elif state.voice_profiles:
         state.default_profile = next(iter(state.voice_profiles.keys()))
-
-    print(
-        "[xtts] modelo listo en "
-        f"{state.device} (sr={state.sample_rate}, speaker={state.default_speaker}, "
-        f"default_profile={state.default_profile}, profiles={_profile_summary()})"
-    )
+    # XTTS es el motor por defecto: se carga al arrancar (queda listo).
+    _load_model()
+    print(f"[xtts] listo (default_profile={state.default_profile}, profiles={_profile_summary()})")
     yield
-    state.tts = None
+    _unload_model()
 
 
 app = FastAPI(title="Sismica XTTS-v2", version="0.1.0", lifespan=lifespan)
@@ -290,9 +311,10 @@ def _resolve_inference_params(request: SynthesizeRequest) -> tuple[dict, bool]:
 
 @app.get("/health")
 def health() -> dict:
-    ready = state.tts is not None
+    # ok = servicio disponible (sintetiza bajo demanda aunque el modelo este descargado en VRAM).
     return {
-        "ok": ready,
+        "ok": True,
+        "loaded": state.tts is not None,
         "model": MODEL_NAME,
         "device": state.device,
         "sampleRate": state.sample_rate,
@@ -300,6 +322,14 @@ def health() -> dict:
         "defaultProfile": state.default_profile,
         "profiles": _profile_summary(),
     }
+
+
+@app.post("/unload")
+def unload() -> dict:
+    """Descarga el modelo y libera VRAM (lo usa el API para conmutar de motor sin agotar la GPU)."""
+    with synthesis_lock:
+        _unload_model()
+    return {"ok": True, "loaded": state.tts is not None}
 
 
 @app.get("/voices")
@@ -325,20 +355,19 @@ def voices() -> dict:
 
 @app.post("/synthesize")
 def synthesize(request: SynthesizeRequest) -> Response:
-    if state.tts is None:
-        raise HTTPException(status_code=503, detail="Modelo XTTS no cargado")
-
     voice_kwargs, resolved_voice = _resolve_voice_request(request.speaker, request.language)
     inference, split_sentences = _resolve_inference_params(request)
     kwargs: dict = {"text": request.text, **voice_kwargs, **inference, "split_sentences": split_sentences}
 
     try:
         with synthesis_lock:
+            _load_model()  # recarga bajo demanda si se descargo para ceder VRAM.
             waveform = state.tts.tts(**kwargs)
     except TypeError:
         # Un backend que no acepte algun parametro de inferencia no debe romper la sintesis:
         # reintenta solo con voz + idioma (comportamiento previo).
         with synthesis_lock:
+            _load_model()
             waveform = state.tts.tts(text=request.text, **voice_kwargs)
     except Exception as error:  # noqa: BLE001 - devolvemos 500 con el detalle
         raise HTTPException(
