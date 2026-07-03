@@ -19,12 +19,12 @@ export type CoastalAttentionLayer = {
   eventId: string;
   longitude: number;
   latitude: number;
-  radiusM: number;
   color: string;
   emphasis: number;
   label: string;
   tsunami: boolean;
   magnitude: number | null;
+  pathPoints: Array<{ longitude: number; latitude: number }>;
 };
 
 export type ActiveAreaLayer = {
@@ -38,6 +38,7 @@ export type ActiveAreaLayer = {
   count: number;
   maxMagnitude: number;
   corridorPoints: Array<{ longitude: number; latitude: number }>;
+  polygonPoints: Array<{ longitude: number; latitude: number }>;
 };
 
 export type TectonicCorridorLayer = {
@@ -236,6 +237,13 @@ function coastalDescriptor(title: string): string {
   return deaccentLower(getEventPlace(title));
 }
 
+function matchingCorridorPresets(event: SeismicEvent, descriptor: string): CorridorPreset[] {
+  return TECTONIC_CORRIDOR_PRESETS.filter((preset) => {
+    const keywordMatch = preset.keywords?.some((keyword) => descriptor.includes(keyword)) ?? false;
+    return keywordMatch || isInsideBoundingBox(event, preset.bbox);
+  });
+}
+
 function distanceKm(
   left: { latitude: number; longitude: number },
   right: { latitude: number; longitude: number }
@@ -278,6 +286,149 @@ function eventPriorityScore(
   const intensity = estimatedIntensity(event) ?? 2;
   const recent = recentWeight(eventAgeMs(event, referenceMs), ACTIVE_AREA_WINDOW_MS);
   return (event.eventId === selectedEventId ? 120 : 0) + magnitude * 18 + intensity * 10 + recent * 80;
+}
+
+function closestPresetPath(
+  event: SeismicEvent,
+  descriptor: string
+): Array<{ longitude: number; latitude: number }> {
+  const preset = matchingCorridorPresets(event, descriptor)[0];
+  if (!preset) return [];
+
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const [index, point] of preset.points.entries()) {
+    const currentDistance = distanceKm(
+      { latitude: event.latitude, longitude: event.longitude },
+      { latitude: point.latitude, longitude: point.longitude }
+    );
+    if (currentDistance < bestDistance) {
+      bestDistance = currentDistance;
+      bestIndex = index;
+    }
+  }
+
+  const start = Math.max(0, bestIndex - 1);
+  const end = Math.min(preset.points.length, start + 4);
+  const slice = preset.points.slice(Math.max(0, end - 4), end);
+  return slice.length >= 2 ? slice : preset.points;
+}
+
+function convexHull(
+  points: Array<{ longitude: number; latitude: number }>
+): Array<{ longitude: number; latitude: number }> {
+  if (points.length <= 3) return [...points];
+
+  const unique = [...points].sort((left, right) =>
+    left.longitude === right.longitude ? left.latitude - right.latitude : left.longitude - right.longitude
+  );
+  const cross = (
+    origin: { longitude: number; latitude: number },
+    a: { longitude: number; latitude: number },
+    b: { longitude: number; latitude: number }
+  ) =>
+    (a.longitude - origin.longitude) * (b.latitude - origin.latitude) -
+    (a.latitude - origin.latitude) * (b.longitude - origin.longitude);
+
+  const lower: Array<{ longitude: number; latitude: number }> = [];
+  for (const point of unique) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+
+  const upper: Array<{ longitude: number; latitude: number }> = [];
+  for (const point of [...unique].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+
+  lower.pop();
+  upper.pop();
+  return [...lower, ...upper];
+}
+
+function inflateHull(
+  hull: Array<{ longitude: number; latitude: number }>,
+  paddingKm: number
+): Array<{ longitude: number; latitude: number }> {
+  if (hull.length === 0) return [];
+
+  const centroid = hull.reduce(
+    (sum, point) => ({
+      latitude: sum.latitude + point.latitude / hull.length,
+      longitude: sum.longitude + point.longitude / hull.length
+    }),
+    { latitude: 0, longitude: 0 }
+  );
+  const lonKm = Math.max(35, 111 * Math.cos((centroid.latitude * Math.PI) / 180));
+
+  return hull.map((point) => {
+    const latDelta = point.latitude - centroid.latitude;
+    const lonDelta = point.longitude - centroid.longitude;
+    const distance = Math.hypot(latDelta * 111, lonDelta * lonKm);
+    if (distance <= 0.001) {
+      return {
+        longitude: point.longitude + paddingKm / lonKm,
+        latitude: point.latitude
+      };
+    }
+    const scale = (distance + paddingKm) / distance;
+    return {
+      longitude: centroid.longitude + lonDelta * scale,
+      latitude: centroid.latitude + latDelta * scale
+    };
+  });
+}
+
+function buildBufferedRibbonPolygon(
+  points: Array<{ longitude: number; latitude: number }>,
+  paddingKm: number
+): Array<{ longitude: number; latitude: number }> {
+  if (points.length < 2) return [...points];
+
+  const centroid = points.reduce(
+    (sum, point) => ({
+      latitude: sum.latitude + point.latitude / points.length,
+      longitude: sum.longitude + point.longitude / points.length
+    }),
+    { latitude: 0, longitude: 0 }
+  );
+  const lonKm = Math.max(35, 111 * Math.cos((centroid.latitude * Math.PI) / 180));
+  const upper: Array<{ longitude: number; latitude: number }> = [];
+  const lower: Array<{ longitude: number; latitude: number }> = [];
+
+  for (const [index, point] of points.entries()) {
+    const prev = points[Math.max(0, index - 1)] ?? point;
+    const next = points[Math.min(points.length - 1, index + 1)] ?? point;
+    let dxKm = (next.longitude - prev.longitude) * lonKm;
+    let dyKm = (next.latitude - prev.latitude) * 111;
+    const lengthKm = Math.hypot(dxKm, dyKm);
+
+    if (lengthKm <= 0.001) {
+      dxKm = lonKm;
+      dyKm = 0;
+    }
+
+    const normalXKm = -dyKm / Math.max(0.001, Math.hypot(dxKm, dyKm));
+    const normalYKm = dxKm / Math.max(0.001, Math.hypot(dxKm, dyKm));
+    const lonOffset = (normalXKm * paddingKm) / lonKm;
+    const latOffset = (normalYKm * paddingKm) / 111;
+
+    upper.push({
+      longitude: point.longitude + lonOffset,
+      latitude: point.latitude + latOffset
+    });
+    lower.unshift({
+      longitude: point.longitude - lonOffset,
+      latitude: point.latitude - latOffset
+    });
+  }
+
+  return [...upper, ...lower];
 }
 
 function isCoastalEvent(event: SeismicEvent): boolean {
@@ -394,6 +545,8 @@ export function buildCoastalAttentionLayers(
       if (!event.tsunami && !selected && magnitude < 4.6) return null;
 
       const descriptor = getEventPlace(event.title).trim();
+      const pathPoints = closestPresetPath(event, coastalDescriptor(event.title));
+      if (pathPoints.length < 2) return null;
       const score = (selected ? 90 : 0) + recent * 110 + magnitude * 18 + (event.tsunami ? 85 : 0);
 
       return {
@@ -403,12 +556,12 @@ export function buildCoastalAttentionLayers(
           eventId: event.eventId,
           longitude: event.longitude,
           latitude: event.latitude,
-          radiusM: Math.round(54_000 + magnitude * 19_000 + recent * 24_000 + (event.tsunami ? 52_000 : 0)),
           color: event.tsunami ? "#38bdf8" : "#7dd3fc",
           emphasis: Math.min(1.18, 0.7 + magnitude * 0.05 + recent * 0.12 + (event.tsunami ? 0.16 : 0)),
           label: descriptor || event.title,
           tsunami: event.tsunami,
-          magnitude: event.magnitude
+          magnitude: event.magnitude,
+          pathPoints
         }
       };
     })
@@ -505,7 +658,16 @@ export function buildActiveAreaLayers(events: SeismicEvent[], referenceMs = Date
           emphasis: Math.min(1.18, 0.7 + count * 0.04 + recent * 0.1 + maxMagnitude * 0.015),
           count,
           maxMagnitude,
-          corridorPoints: buildCorridorPoints(bucket)
+          corridorPoints: buildCorridorPoints(bucket),
+          polygonPoints: (() => {
+            const bucketPoints = bucket.map((event) => ({
+              longitude: event.longitude,
+              latitude: event.latitude
+            }));
+            const inflatedHull = inflateHull(convexHull(bucketPoints), 34 + count * 8);
+            if (inflatedHull.length >= 3) return inflatedHull;
+            return buildBufferedRibbonPolygon(buildCorridorPoints(bucket), 28 + count * 6);
+          })()
         }
       };
     })
@@ -538,10 +700,7 @@ export function buildTectonicCorridorLayers(
       const priority = eventPriorityScore(event, selectedEventId, referenceMs);
       if (priority < 65) return [];
 
-      return TECTONIC_CORRIDOR_PRESETS.filter((preset) => {
-        const keywordMatch = preset.keywords?.some((keyword) => descriptor.includes(keyword)) ?? false;
-        return keywordMatch || isInsideBoundingBox(event, preset.bbox);
-      }).map((preset) => ({
+      return matchingCorridorPresets(event, descriptor).map((preset) => ({
         score:
           priority +
           (event.eventId === selectedEventId ? 90 : 0) +

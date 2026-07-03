@@ -153,7 +153,8 @@ button {
   position: absolute;
   left: 50%;
   top: 30px;
-  transform: translate(-50%, -12px) scale(0.985);
+  transform: translate(-50%, calc(var(--director-overlay-entry-y, 12px) * -1))
+    scale(var(--director-overlay-entry-scale, 0.985));
   z-index: 30;
   box-sizing: border-box;
   inline-size: min(calc(var(--director-overlay-ideal-ch, 54ch) + 44px), calc(100vw - 36px));
@@ -200,7 +201,6 @@ button {
 .director-overlay.phase-enter,
 .director-overlay.phase-hold {
   opacity: 1;
-  transform: translate(-50%, 0) scale(1);
 }
 
 .director-overlay.phase-enter {
@@ -214,13 +214,15 @@ button {
 }
 
 .director-overlay.phase-hold {
-  filter: saturate(1.05);
+  filter: saturate(calc(1.02 + var(--director-overlay-hold-saturate, 0.03)));
+  animation: director-overlay-hold-breathe var(--director-overlay-hold-ms, 3200ms) ease-in-out infinite;
 }
 
 .director-overlay.phase-exit {
   opacity: 0;
-  transform: translate(-50%, -10px) scale(0.988);
-  filter: saturate(0.88) blur(0.2px);
+  transform: translate(-50%, calc(var(--director-overlay-exit-y, 10px) * -1))
+    scale(calc(1 - var(--director-overlay-exit-scale-loss, 0.012)));
+  filter: saturate(0.88) blur(var(--director-overlay-exit-blur, 0.2px));
 }
 
 .director-overlay.priority-high {
@@ -366,15 +368,27 @@ button {
 @keyframes director-overlay-enter {
   from {
     opacity: 0;
-    transform: translate(-50%, -16px) scale(0.982);
+    transform: translate(-50%, calc(var(--director-overlay-entry-y, 16px) * -1))
+      scale(var(--director-overlay-entry-scale, 0.982));
   }
   58% {
     opacity: 1;
-    transform: translate(-50%, 1px) scale(1.004);
+    transform: translate(-50%, 1px) scale(var(--director-overlay-overshoot-scale, 1.004));
   }
   to {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes director-overlay-hold-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, 0) scale(1);
+  }
+  50% {
+    transform: translate(-50%, calc(var(--director-overlay-hold-lift, 1px) * -1))
+      scale(var(--director-overlay-hold-scale, 1.003));
   }
 }
 

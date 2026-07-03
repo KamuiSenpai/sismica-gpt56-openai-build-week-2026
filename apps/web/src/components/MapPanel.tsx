@@ -17,7 +17,6 @@ import {
   ConstantPositionProperty,
   ConstantProperty,
   EasingFunction,
-  EllipseGraphics,
   EllipsoidGeodesic,
   Entity,
   GeoJsonDataSource,
@@ -26,6 +25,7 @@ import {
   Ion,
   JulianDate,
   Math as CesiumMath,
+  PolygonHierarchy,
   SceneTransforms,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
@@ -39,8 +39,12 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 import { useSeaLevelStationSeriesQuery } from "../hooks/queries";
 import { resolveCountryCode } from "../lib/countryGeocoder";
 import {
+  buildActiveAreaLayers,
+  buildCoastalAttentionLayers,
   buildEventHaloLayers,
   buildTectonicCorridorLayers,
+  type ActiveAreaLayer,
+  type CoastalAttentionLayer,
   type EventHaloLayer,
   type TectonicCorridorLayer
 } from "../lib/mapActivity";
@@ -100,6 +104,9 @@ const STATION_PREFIX = "station:";
 const SEA_LEVEL_STATION_PREFIX = "sea-level:";
 const SEA_LEVEL_FIELD_PREFIX = "sea-level-field:";
 const SEA_LEVEL_PULSE_PREFIX = "sea-level-pulse:";
+const COASTAL_ZONE_PREFIX = "coastal-zone:";
+const ACTIVE_AREA_PREFIX = "active-area:";
+const ACTIVE_CORRIDOR_PREFIX = "active-corridor:";
 const TECTONIC_CORRIDOR_PREFIX = "tectonic-corridor:";
 const EXPERIMENTAL_ORIGIN_PREFIX = "origin:";
 const WAVE_PREFIX = "wave:";
@@ -140,6 +147,7 @@ const EXPERIMENTAL_STATUS_STROKES: Record<ExperimentalOrigin["status"], string> 
 
 const EXPERIMENTAL_ORIGIN_SYMBOL_CACHE = new Map<string, string>();
 const SEA_LEVEL_SYMBOL_CACHE = new Map<string, string>();
+const PRIORITY_GLOW_SYMBOL_CACHE = new Map<string, string>();
 
 function readStoredSeaLevelSnapshot(): Record<string, SeaLevelSnapshotEntry> {
   try {
@@ -163,6 +171,21 @@ function writeStoredSeaLevelSnapshot(snapshot: Record<string, SeaLevelSnapshotEn
 function magnitudeSize(magnitude: number | null): number {
   if (magnitude === null) return 8;
   return Math.max(8, Math.min(34, magnitude * 5));
+}
+
+function priorityGlowSymbol(color: string, selected: boolean, strong: boolean): string {
+  const key = `${color}:${selected ? "selected" : strong ? "strong" : "normal"}`;
+  const cached = PRIORITY_GLOW_SYMBOL_CACHE.get(key);
+  if (cached) return cached;
+
+  const size = selected ? 56 : strong ? 48 : 42;
+  const outerRadius = selected ? 22 : strong ? 18 : 15;
+  const innerRadius = selected ? 10 : strong ? 8.5 : 7;
+  const strokeOpacity = selected ? 0.88 : strong ? 0.68 : 0.56;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><defs><radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="${color}" stop-opacity="${selected ? 0.48 : 0.34}"/><stop offset="58%" stop-color="${color}" stop-opacity="${selected ? 0.18 : 0.12}"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><circle cx="${size / 2}" cy="${size / 2}" r="${outerRadius}" fill="url(#g)"/><circle cx="${size / 2}" cy="${size / 2}" r="${innerRadius}" fill="none" stroke="${color}" stroke-opacity="${strokeOpacity}" stroke-width="${selected ? 2.2 : 1.8}"/></svg>`;
+  const symbol = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  PRIORITY_GLOW_SYMBOL_CACHE.set(key, symbol);
+  return symbol;
 }
 
 function styleEntity(
@@ -197,6 +220,23 @@ function styleEntity(
     entity.point.pixelSize = new ConstantProperty(baseSize + (halo.strong ? 2 : 1.2));
   } else {
     entity.point.pixelSize = new ConstantProperty(baseSize);
+  }
+
+  if (!entity.billboard) {
+    entity.billboard = new BillboardGraphics();
+  }
+
+  if (entity.billboard) {
+    if (halo) {
+      entity.billboard.image = new ConstantProperty(priorityGlowSymbol(halo.color, selected, halo.strong));
+      entity.billboard.scale = new ConstantProperty(1);
+      entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
+      entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.CENTER);
+      entity.billboard.disableDepthTestDistance = new ConstantProperty(Number.POSITIVE_INFINITY);
+      entity.billboard.show = new ConstantProperty(true);
+    } else {
+      entity.billboard.show = new ConstantProperty(false);
+    }
   }
 
   if (entity.ellipse) {
@@ -277,53 +317,6 @@ function spawnWavefront(
   if (options.playSound ?? true) {
     playSeismicWaveSound(event, soundEnabled);
   }
-}
-
-function spawnSeaLevelPulse(
-  viewer: Viewer,
-  longitude: number,
-  latitude: number,
-  trend: SeaLevelTrend,
-  amplitude: number
-): void {
-  if (trend !== "rising" && trend !== "falling") return;
-
-  const color = Color.fromCssColorString(trend === "rising" ? "#22c55e" : "#fb7185");
-  const start = performance.now();
-  const maxRadius = 45_000 + Math.min(95_000, Math.abs(amplitude) * 180_000);
-  const lifeMs = 4_400;
-  let radius = 0;
-
-  const progress = () => Math.min(1, (performance.now() - start) / lifeMs);
-  const semiMajorAxis = () => {
-    radius = 1 + maxRadius * progress();
-    return radius;
-  };
-  const semiMinorAxis = () => Math.max(1, radius - 0.001);
-  const fade = () => 1 - progress();
-
-  const ring = viewer.entities.add({
-    id: `${SEA_LEVEL_PULSE_PREFIX}${start}-${Math.random().toString(36).slice(2)}`,
-    position: Cartesian3.fromDegrees(longitude, latitude),
-    ellipse: {
-      height: 0,
-      semiMajorAxis: new CallbackProperty(semiMajorAxis, false),
-      semiMinorAxis: new CallbackProperty(semiMinorAxis, false),
-      fill: true,
-      material: new ColorMaterialProperty(new CallbackProperty(() => color.withAlpha(fade() * 0.08), false)),
-      outline: true,
-      outlineColor: new CallbackProperty(() => color.withAlpha(fade() * 0.92), false),
-      outlineWidth: 2.2
-    }
-  });
-
-  window.setTimeout(() => {
-    if (!viewer.isDestroyed()) viewer.entities.remove(ring);
-  }, lifeMs + 180);
-}
-
-function seaLevelFieldRadius(deltaValue: number): number {
-  return 32_000 + Math.min(120_000, Math.abs(deltaValue) * 320_000);
 }
 
 function stationSymbol(station: SeismicStation, selected: boolean): string {
@@ -543,8 +536,8 @@ function SeaLevelActivityPanel({ moves }: { moves: SeaLevelRecentMove[] }) {
       <span className="legend-title">Cambios Recientes IOC/UNESCO</span>
       <span className="sea-level-activity-note">
         {moves.length > 0
-          ? "Campo experimental visible sobre estaciones con cambio reciente."
-          : "Esperando una segunda lectura IOC/UNESCO comparable para dibujar el campo experimental."}
+          ? "Comparativo puntual entre lecturas recientes publicadas por estaciones IOC/UNESCO."
+          : "Esperando una segunda lectura IOC/UNESCO comparable para mostrar variaciones recientes."}
       </span>
       {moves.length > 0 ? (
         moves.slice(0, 5).map((move) => (
@@ -727,6 +720,8 @@ export function MapPanel({
   const seaLevelSnapshotRef = useRef<Record<string, SeaLevelSnapshotEntry>>({});
   const experimentalOriginMapRef = useRef<Map<string, ExperimentalOrigin>>(new Map());
   const disasterMapRef = useRef<Map<string, DisasterContext>>(new Map());
+  const coastalZoneMapRef = useRef<Map<string, CoastalAttentionLayer>>(new Map());
+  const activeAreaMapRef = useRef<Map<string, ActiveAreaLayer>>(new Map());
   const tectonicCorridorMapRef = useRef<Map<string, TectonicCorridorLayer>>(new Map());
   const eventHaloMapRef = useRef<Map<string, EventHaloLayer>>(new Map());
   const seenIdsRef = useRef<Set<string>>(new Set());
@@ -743,6 +738,8 @@ export function MapPanel({
     | { kind: "station"; station: SeismicStation; x: number; y: number }
     | { kind: "sea-level"; station: SeaLevelStation; x: number; y: number }
     | { kind: "origin"; origin: ExperimentalOrigin; x: number; y: number }
+    | { kind: "coastal-zone"; layer: CoastalAttentionLayer; x: number; y: number }
+    | { kind: "active-area"; layer: ActiveAreaLayer; x: number; y: number }
     | { kind: "tectonic-corridor"; layer: TectonicCorridorLayer; x: number; y: number }
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
@@ -806,6 +803,18 @@ export function MapPanel({
         setSelectedStationId(null);
         setSelectedSeaLevelStationId(null);
         onSelectRef.current(picked.id.id);
+      } else if (coastalZoneMapRef.current.has(picked.id.id)) {
+        const layer = coastalZoneMapRef.current.get(picked.id.id);
+        if (!layer) return;
+        setSelectedStationId(null);
+        setSelectedSeaLevelStationId(null);
+        onSelectRef.current(layer.eventId);
+      } else if (activeAreaMapRef.current.has(picked.id.id)) {
+        const layer = activeAreaMapRef.current.get(picked.id.id);
+        if (!layer) return;
+        setSelectedStationId(null);
+        setSelectedSeaLevelStationId(null);
+        onSelectRef.current(layer.leadEventId);
       } else if (tectonicCorridorMapRef.current.has(picked.id.id)) {
         const layer = tectonicCorridorMapRef.current.get(picked.id.id);
         if (!layer) return;
@@ -830,6 +839,8 @@ export function MapPanel({
       const station = typeof id === "string" ? stationMapRef.current.get(id) : undefined;
       const seaLevelStation = typeof id === "string" ? seaLevelStationMapRef.current.get(id) : undefined;
       const origin = typeof id === "string" ? experimentalOriginMapRef.current.get(id) : undefined;
+      const coastalLayer = typeof id === "string" ? coastalZoneMapRef.current.get(id) : undefined;
+      const activeArea = typeof id === "string" ? activeAreaMapRef.current.get(id) : undefined;
       const tectonicCorridor = typeof id === "string" ? tectonicCorridorMapRef.current.get(id) : undefined;
 
       const rect = canvas.getBoundingClientRect();
@@ -873,6 +884,22 @@ export function MapPanel({
           y: rect.top + movement.endPosition.y
         });
         canvas.style.cursor = "default";
+      } else if (coastalLayer) {
+        setHover({
+          kind: "coastal-zone",
+          layer: coastalLayer,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "pointer";
+      } else if (activeArea) {
+        setHover({
+          kind: "active-area",
+          layer: activeArea,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "pointer";
       } else if (tectonicCorridor) {
         setHover({
           kind: "tectonic-corridor",
@@ -942,6 +969,9 @@ export function MapPanel({
         (entity.id.startsWith(WAVE_PREFIX) ||
           entity.id.startsWith(SEA_LEVEL_FIELD_PREFIX) ||
           entity.id.startsWith(SEA_LEVEL_PULSE_PREFIX) ||
+          entity.id.startsWith(COASTAL_ZONE_PREFIX) ||
+          entity.id.startsWith(ACTIVE_AREA_PREFIX) ||
+          entity.id.startsWith(ACTIVE_CORRIDOR_PREFIX) ||
           entity.id.startsWith(TECTONIC_CORRIDOR_PREFIX) ||
           entity.id.startsWith(DISASTER_PREFIX) ||
           entity.id.startsWith(STATION_PREFIX) ||
@@ -983,6 +1013,157 @@ export function MapPanel({
     collection.resumeEvents();
     initializedRef.current = true;
   }, [events, soundEnabled]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const nextMap = new Map<string, CoastalAttentionLayer>(
+      buildCoastalAttentionLayers(events, selectedEventId, Date.now()).map(
+        (layer) => [`${COASTAL_ZONE_PREFIX}${layer.areaId}`, layer] as const
+      )
+    );
+    coastalZoneMapRef.current = nextMap;
+
+    for (const entity of [...viewer.entities.values]) {
+      if (
+        typeof entity.id === "string" &&
+        entity.id.startsWith(COASTAL_ZONE_PREFIX) &&
+        !nextMap.has(entity.id)
+      ) {
+        viewer.entities.remove(entity);
+      }
+    }
+
+    for (const [id, layer] of nextMap) {
+      let entity = viewer.entities.getById(id);
+      if (!entity) {
+        entity = viewer.entities.add({
+          id,
+          polyline: {}
+        });
+      }
+      if (!entity.polyline) continue;
+
+      const phase =
+        ((layer.pathPoints[0]?.latitude ?? 0) * 13 + (layer.pathPoints[0]?.longitude ?? 0) * 7) *
+        (Math.PI / 180);
+      const coastalColor = Color.fromCssColorString(layer.color);
+      const positions = layer.pathPoints.map((point) =>
+        Cartesian3.fromDegrees(point.longitude, point.latitude)
+      );
+      entity.polyline.positions = new ConstantProperty(positions);
+      entity.polyline.clampToGround = new ConstantProperty(true);
+      entity.polyline.width = new CallbackProperty(
+        () => 4.2 + layer.emphasis * 1.6 + Math.sin(Date.now() / 1_120 + phase) * 0.42,
+        false
+      );
+      entity.polyline.material = new ColorMaterialProperty(
+        new CallbackProperty(
+          () =>
+            coastalColor.withAlpha(
+              (layer.tsunami ? 0.62 : 0.42) + Math.sin(Date.now() / 1_280 + phase) * 0.03
+            ),
+          false
+        )
+      );
+      entity.polyline.show = new ConstantProperty(true);
+    }
+  }, [events, selectedEventId]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const interactionMap = new Map<string, ActiveAreaLayer>();
+    const layers = buildActiveAreaLayers(events, Date.now());
+
+    for (const layer of layers) {
+      interactionMap.set(`${ACTIVE_AREA_PREFIX}${layer.areaId}`, layer);
+      interactionMap.set(`${ACTIVE_CORRIDOR_PREFIX}${layer.areaId}`, layer);
+    }
+    activeAreaMapRef.current = interactionMap;
+
+    for (const entity of [...viewer.entities.values]) {
+      if (
+        typeof entity.id === "string" &&
+        (entity.id.startsWith(ACTIVE_AREA_PREFIX) || entity.id.startsWith(ACTIVE_CORRIDOR_PREFIX)) &&
+        !interactionMap.has(entity.id)
+      ) {
+        viewer.entities.remove(entity);
+      }
+    }
+
+    for (const layer of layers) {
+      const areaId = `${ACTIVE_AREA_PREFIX}${layer.areaId}`;
+      const corridorId = `${ACTIVE_CORRIDOR_PREFIX}${layer.areaId}`;
+      const color = Color.fromCssColorString(layer.color);
+      const phase = ((layer.latitude ?? 0) * 11 + (layer.longitude ?? 0) * 5) * (Math.PI / 180);
+
+      if (layer.polygonPoints.length >= 3) {
+        let areaEntity = viewer.entities.getById(areaId);
+        if (!areaEntity) {
+          areaEntity = viewer.entities.add({
+            id: areaId,
+            polygon: {}
+          });
+        }
+        if (areaEntity.polygon) {
+          areaEntity.polygon.hierarchy = new ConstantProperty(
+            new PolygonHierarchy(
+              layer.polygonPoints.map((point) => Cartesian3.fromDegrees(point.longitude, point.latitude))
+            )
+          );
+          areaEntity.polygon.height = new ConstantProperty(0);
+          areaEntity.polygon.material = new ColorMaterialProperty(
+            new CallbackProperty(
+              () => color.withAlpha(0.12 + Math.sin(Date.now() / 1_540 + phase) * 0.018),
+              false
+            )
+          );
+          areaEntity.polygon.outline = new ConstantProperty(true);
+          areaEntity.polygon.outlineColor = new CallbackProperty(
+            () => color.withAlpha(0.34 + Math.sin(Date.now() / 1_700 + phase) * 0.03),
+            false
+          );
+          areaEntity.polygon.show = new ConstantProperty(true);
+        }
+      } else {
+        const staleAreaEntity = viewer.entities.getById(areaId);
+        if (staleAreaEntity) viewer.entities.remove(staleAreaEntity);
+      }
+
+      if (layer.corridorPoints.length >= 2) {
+        let corridorEntity = viewer.entities.getById(corridorId);
+        if (!corridorEntity) {
+          corridorEntity = viewer.entities.add({
+            id: corridorId,
+            polyline: {}
+          });
+        }
+        if (corridorEntity.polyline) {
+          corridorEntity.polyline.positions = new ConstantProperty(
+            layer.corridorPoints.map((point) => Cartesian3.fromDegrees(point.longitude, point.latitude))
+          );
+          corridorEntity.polyline.clampToGround = new ConstantProperty(true);
+          corridorEntity.polyline.width = new CallbackProperty(
+            () => 2.2 + layer.emphasis * 1.1 + Math.sin(Date.now() / 1_320 + phase) * 0.2,
+            false
+          );
+          corridorEntity.polyline.material = new ColorMaterialProperty(
+            new CallbackProperty(
+              () => color.withAlpha(0.5 + Math.sin(Date.now() / 1_460 + phase) * 0.03),
+              false
+            )
+          );
+          corridorEntity.polyline.show = new ConstantProperty(true);
+        }
+      } else {
+        const staleCorridorEntity = viewer.entities.getById(corridorId);
+        if (staleCorridorEntity) viewer.entities.remove(staleCorridorEntity);
+      }
+    }
+  }, [events]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -1081,12 +1262,6 @@ export function MapPanel({
     const moves = detectSeaLevelRecentMoves(seaLevelStations, previousSnapshot);
     setSeaLevelRecentMoves(moves.slice(0, 8));
 
-    if (Object.keys(previousSnapshot).length > 0) {
-      for (const move of moves.slice(0, 4)) {
-        spawnSeaLevelPulse(viewer, move.longitude, move.latitude, move.trend, move.deltaValue);
-      }
-    }
-
     const nextSnapshot = buildSeaLevelSnapshot(seaLevelStations);
     seaLevelSnapshotRef.current = nextSnapshot;
     writeStoredSeaLevelSnapshot(nextSnapshot);
@@ -1137,64 +1312,15 @@ export function MapPanel({
     const viewer = viewerRef.current;
     if (!viewer) return;
 
-    const moveMap = new Map(
-      seaLevelRecentMoves.slice(0, 10).map((move) => [`${SEA_LEVEL_FIELD_PREFIX}${move.stationCode}`, move])
-    );
-
     for (const entity of [...viewer.entities.values]) {
       if (
         typeof entity.id === "string" &&
-        entity.id.startsWith(SEA_LEVEL_FIELD_PREFIX) &&
-        !moveMap.has(entity.id)
+        (entity.id.startsWith(SEA_LEVEL_FIELD_PREFIX) || entity.id.startsWith(SEA_LEVEL_PULSE_PREFIX))
       ) {
         viewer.entities.remove(entity);
       }
     }
-
-    for (const [id, move] of moveMap) {
-      let entity = viewer.entities.getById(id);
-      if (!entity) {
-        entity = viewer.entities.add({
-          id,
-          position: Cartesian3.fromDegrees(move.longitude, move.latitude),
-          ellipse: {}
-        });
-      } else {
-        entity.position = new ConstantPositionProperty(Cartesian3.fromDegrees(move.longitude, move.latitude));
-      }
-
-      if (entity.ellipse) {
-        const baseRadius = seaLevelFieldRadius(move.deltaValue);
-        const phase = Math.random() * Math.PI * 2;
-        entity.ellipse.height = new ConstantProperty(0);
-        entity.ellipse.semiMajorAxis = new CallbackProperty(
-          () => baseRadius + Math.sin(Date.now() / 850 + phase) * baseRadius * 0.08,
-          false
-        );
-        entity.ellipse.semiMinorAxis = new CallbackProperty(
-          () => baseRadius * 0.82 + Math.sin(Date.now() / 850 + phase) * baseRadius * 0.06,
-          false
-        );
-        entity.ellipse.fill = new ConstantProperty(true);
-        entity.ellipse.outline = new ConstantProperty(true);
-        entity.ellipse.material = new ColorMaterialProperty(
-          new CallbackProperty(
-            () =>
-              Color.fromCssColorString(seaLevelTrendColor(move.trend)).withAlpha(
-                0.08 + Math.sin(Date.now() / 900 + phase) * 0.015
-              ),
-            false
-          )
-        );
-        entity.ellipse.outlineColor = new CallbackProperty(
-          () => Color.fromCssColorString(seaLevelTrendColor(move.trend)).withAlpha(0.46),
-          false
-        );
-        entity.ellipse.outlineWidth = new ConstantProperty(2);
-        entity.ellipse.show = new ConstantProperty(seaLevelStationsVisible);
-      }
-    }
-  }, [seaLevelRecentMoves, seaLevelStationsVisible]);
+  }, [seaLevelRecentMoves]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -1468,6 +1594,29 @@ export function MapPanel({
         </div>
       ) : null}
 
+      {hover?.kind === "coastal-zone" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>Franja costera priorizada</strong>
+          <span>{hover.layer.label}</span>
+          <span>
+            {formatMagnitude(hover.layer.magnitude)} |{" "}
+            {hover.layer.tsunami ? "Bandera de tsunami en fuente" : "Evento costero reciente"}
+          </span>
+          <span className="tt-source">Enfoque costero editorial</span>
+        </div>
+      ) : null}
+
+      {hover?.kind === "active-area" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>Area activa reciente</strong>
+          <span>
+            {hover.layer.count} eventos agrupados | maxima {formatMagnitude(hover.layer.maxMagnitude)}
+          </span>
+          <span>Evento guia: {hover.layer.leadEventId}</span>
+          <span className="tt-source">Concentracion operativa reciente</span>
+        </div>
+      ) : null}
+
       {hover?.kind === "tectonic-corridor" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>Corredor tectonico destacado</strong>
@@ -1653,6 +1802,29 @@ export function MapPanel({
             }}
           />
           Punto priorizado
+        </span>
+        <span className="legend-row">
+          <i
+            style={{
+              width: "16px",
+              height: "4px",
+              borderRadius: "999px",
+              background: "rgba(125,211,252,0.82)"
+            }}
+          />
+          Franja costera
+        </span>
+        <span className="legend-row">
+          <i
+            style={{
+              width: "14px",
+              height: "10px",
+              borderRadius: "2px",
+              border: "1px solid rgba(255,255,255,0.28)",
+              background: "rgba(248,113,113,0.2)"
+            }}
+          />
+          Area activa
         </span>
         <span className="legend-row">
           <i

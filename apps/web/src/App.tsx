@@ -62,6 +62,7 @@ import {
 import { CountryFlag } from "./components/CountryFlag";
 import { Marquee } from "./components/Marquee";
 import { useBroadcastDirector, type BroadcastSegment, type DirectorMode } from "./lib/broadcastDirector";
+import { fallbackSegmentCue, type EditorialCue } from "./lib/editorial";
 import { normalizeSpanishText } from "./lib/spanishText";
 
 const DIRECTOR_MODES: DirectorMode[] = ["off", "rules", "ai"];
@@ -101,6 +102,18 @@ type DirectorVisualPreset = {
   glow: number;
   compactBias: number;
 };
+type DirectorVisualState = DirectorVisualPreset & {
+  entryYOffset: number;
+  entryScale: number;
+  overshootScale: number;
+  exitYOffset: number;
+  exitScaleLoss: number;
+  exitBlurPx: number;
+  holdMs: number;
+  holdLiftPx: number;
+  holdScale: number;
+  holdSaturate: number;
+};
 const DIRECTOR_VISUAL_PRESETS: Record<BroadcastSegment["kind"], DirectorVisualPreset> = {
   "en-vivo": { priority: "high", entryMs: 280, exitMs: 190, scanMs: 2100, glow: 0.28, compactBias: 8 },
   recorrido: { priority: "medium", entryMs: 320, exitMs: 210, scanMs: 2900, glow: 0.2, compactBias: 4 },
@@ -114,8 +127,64 @@ function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | nul
   return selectedEventId ? (events.find((event) => event.eventId === selectedEventId) ?? null) : null;
 }
 
-function directorOverlayStyle(segment: BroadcastSegment, text: string): CSSProperties {
+function cueForSegment(segment: BroadcastSegment): EditorialCue {
+  if (segment.cue) return segment.cue;
+  if (segment.kind === "en-vivo") return { urgency: "alta", rhythm: "agil", tone: "directo" };
+  if (segment.kind === "relevo") return { urgency: "media", rhythm: "fluido", tone: "directo" };
+  return fallbackSegmentCue(segment.kind);
+}
+
+function resolveDirectorVisualState(segment: BroadcastSegment, text: string): DirectorVisualState {
   const preset = DIRECTOR_VISUAL_PRESETS[segment.kind];
+  const cue = cueForSegment(segment);
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const density = clampNumber(normalized.length / 148, 0, 1);
+  const urgencyBoost = cue.urgency === "alta" ? 1 : cue.urgency === "media" ? 0.48 : 0;
+  const calmBias = cue.urgency === "baja" ? 1 : 0;
+  const agileBias = cue.rhythm === "agil" ? 1 : cue.rhythm === "fluido" ? 0.42 : 0;
+  const directBias = cue.tone === "directo" ? 1 : cue.tone === "calido" ? 0.2 : 0;
+  const priority =
+    cue.urgency === "alta"
+      ? "high"
+      : cue.urgency === "baja" && preset.priority !== "high"
+        ? "low"
+        : preset.priority;
+
+  return {
+    ...preset,
+    priority,
+    entryMs: Math.round(
+      clampNumber(preset.entryMs - urgencyBoost * 74 + calmBias * 42 - agileBias * 18, 220, 460)
+    ),
+    exitMs: Math.round(clampNumber(preset.exitMs - urgencyBoost * 36 + calmBias * 26, 170, 320)),
+    scanMs: Math.round(
+      clampNumber(
+        preset.scanMs - urgencyBoost * 760 - agileBias * 260 + calmBias * 420 + density * 190,
+        1600,
+        4800
+      )
+    ),
+    glow: Number(
+      clampNumber(preset.glow + urgencyBoost * 0.11 + directBias * 0.03 - calmBias * 0.03, 0.1, 0.42).toFixed(
+        2
+      )
+    ),
+    compactBias: preset.compactBias + (cue.rhythm === "agil" ? 6 : cue.rhythm === "sereno" ? -3 : 0),
+    entryYOffset: Math.round(16 + urgencyBoost * 8 + density * 4 - calmBias * 4),
+    entryScale: Number((0.985 - urgencyBoost * 0.008 + calmBias * 0.003).toFixed(3)),
+    overshootScale: Number((1.003 + urgencyBoost * 0.004 + agileBias * 0.001).toFixed(3)),
+    exitYOffset: Math.round(10 + urgencyBoost * 8 - calmBias * 2),
+    exitScaleLoss: Number((0.012 + urgencyBoost * 0.006 - calmBias * 0.002).toFixed(3)),
+    exitBlurPx: Number((0.2 + urgencyBoost * 0.34 - calmBias * 0.08).toFixed(2)),
+    holdMs: Math.round(clampNumber(preset.scanMs + 320 - urgencyBoost * 520 + calmBias * 760, 1900, 5200)),
+    holdLiftPx: Number((0.6 + urgencyBoost * 1.9 + agileBias * 0.4 - calmBias * 0.25).toFixed(2)),
+    holdScale: Number((1.001 + urgencyBoost * 0.004 + agileBias * 0.002 - calmBias * 0.001).toFixed(3)),
+    holdSaturate: Number((0.03 + urgencyBoost * 0.08 + directBias * 0.02 - calmBias * 0.01).toFixed(2))
+  };
+}
+
+function directorOverlayStyle(segment: BroadcastSegment, text: string): CSSProperties {
+  const preset = resolveDirectorVisualState(segment, text);
   const normalized = text.replace(/\s+/g, " ").trim();
   const length = normalized.length;
   const targetLines = length <= 72 ? 1 : length <= 132 ? 2 : 3;
@@ -125,7 +194,17 @@ function directorOverlayStyle(segment: BroadcastSegment, text: string): CSSPrope
     ["--director-overlay-entry-ms" as string]: `${preset.entryMs}ms`,
     ["--director-overlay-exit-ms" as string]: `${preset.exitMs}ms`,
     ["--director-overlay-scan-ms" as string]: `${preset.scanMs}ms`,
-    ["--director-overlay-glow" as string]: `${preset.glow}`
+    ["--director-overlay-glow" as string]: `${preset.glow}`,
+    ["--director-overlay-entry-y" as string]: `${preset.entryYOffset}px`,
+    ["--director-overlay-entry-scale" as string]: `${preset.entryScale}`,
+    ["--director-overlay-overshoot-scale" as string]: `${preset.overshootScale}`,
+    ["--director-overlay-exit-y" as string]: `${preset.exitYOffset}px`,
+    ["--director-overlay-exit-scale-loss" as string]: `${preset.exitScaleLoss}`,
+    ["--director-overlay-exit-blur" as string]: `${preset.exitBlurPx}px`,
+    ["--director-overlay-hold-ms" as string]: `${preset.holdMs}ms`,
+    ["--director-overlay-hold-lift" as string]: `${preset.holdLiftPx}px`,
+    ["--director-overlay-hold-scale" as string]: `${preset.holdScale}`,
+    ["--director-overlay-hold-saturate" as string]: `${preset.holdSaturate}`
   };
 }
 
@@ -258,6 +337,10 @@ export default function App() {
     if (kind === "boletin" || kind === "resumen") return "boletin";
     return "monitoreo";
   }, [overlaySegment]);
+  const overlayVisual = useMemo(
+    () => (overlayCard ? resolveDirectorVisualState(overlayCard.segment, overlayCard.text) : null),
+    [overlayCard]
+  );
 
   const handleIncomingEvent = useCallback(
     (incomingEvent: SeismicEvent) => {
@@ -321,7 +404,7 @@ export default function App() {
     if (!overlaySegment) {
       setOverlayCard((current) => {
         if (!current) return null;
-        const exitMs = DIRECTOR_VISUAL_PRESETS[current.segment.kind].exitMs;
+        const exitMs = resolveDirectorVisualState(current.segment, current.text).exitMs;
         timers.exit = window.setTimeout(() => setOverlayCard(null), exitMs);
         return { ...current, phase: "exit" };
       });
@@ -329,7 +412,7 @@ export default function App() {
     }
 
     const text = normalizeSpanishText(overlaySegment.text);
-    const preset = DIRECTOR_VISUAL_PRESETS[overlaySegment.kind];
+    const preset = resolveDirectorVisualState(overlaySegment, text);
     setOverlayCard((current) => ({
       key: (current?.key ?? 0) + 1,
       phase: "enter",
@@ -677,7 +760,7 @@ export default function App() {
         {directorMode !== "off" && overlayCard ? (
           <div
             key={overlayCard.key}
-            className={`director-overlay director-${overlayCard.segment.kind} priority-${DIRECTOR_VISUAL_PRESETS[overlayCard.segment.kind].priority} phase-${overlayCard.phase}`}
+            className={`director-overlay director-${overlayCard.segment.kind} priority-${overlayVisual?.priority ?? DIRECTOR_VISUAL_PRESETS[overlayCard.segment.kind].priority} phase-${overlayCard.phase}`}
             style={directorOverlayStyle(overlayCard.segment, overlayCard.text)}
           >
             <header className="director-overlay-header">

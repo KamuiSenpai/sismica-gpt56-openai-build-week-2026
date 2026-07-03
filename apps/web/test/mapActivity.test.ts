@@ -108,6 +108,10 @@ test("buildCoastalAttentionLayers detects coastal descriptors and tsunami flags"
     true
   );
   assert.equal(
+    layers.some((layer) => layer.eventId === "sea" && layer.pathPoints.length >= 2),
+    true
+  );
+  assert.equal(
     layers.some((layer) => layer.eventId === "tsunami" && layer.tsunami),
     true
   );
@@ -152,6 +156,7 @@ test("buildActiveAreaLayers groups nearby events and emits a corridor for elonga
   assert.equal(layers.length >= 1, true);
   assert.equal(layers[0]?.count, 3);
   assert.equal(layers[0]?.corridorPoints.length, 3);
+  assert.equal((layers[0]?.polygonPoints.length ?? 0) >= 3, true);
 });
 
 test("buildTectonicCorridorLayers highlights the matching tectonic belt without circular overlays", () => {
