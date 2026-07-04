@@ -32,6 +32,7 @@ import {
   isNeuralNarrationActive,
   prefetchNeural,
   speakNeural,
+  type NeuralBlobReadyMetrics,
   type NeuralEngine,
   type TtsHealth
 } from "./seismicNeuralSpeech";
@@ -148,11 +149,33 @@ const SPEECH_DEDUP_WINDOW_MS = 4_000;
 const NARRATION_CACHE_LIMIT = 24;
 const BRIDGE_START_DELAY_MS = 350;
 const BRIDGE_FADE_OUT_MS = 180;
+const STATION_GUIDE_POLL_MS = 500;
 const BRIDGE_FALLBACK_GROUP = "continuidad_neutra";
 const STATION_GUIDE_GROUP = "station_identity";
 const BRIDGE_SHORT_LIBRARY: SeismicBridgeLibrary = "short";
 const BRIDGE_EXTENDED_LIBRARY: SeismicBridgeLibrary = "extended";
 const STATION_GUIDE_LIBRARY: SeismicBridgeLibrary = "station";
+const BRIDGE_FILLER_RETRY_MS = 400;
+const BRIDGE_SHORT_ONLY_MAX_WORDS = 18;
+const BRIDGE_SINGLE_EXTENDED_MAX_WORDS = 30;
+const BRIDGE_DOUBLE_EXTENDED_MAX_WORDS = 48;
+const STATION_GUIDE_MIN_DELAY_MS = 18_000;
+const STATION_GUIDE_LONG_TEXT_MIN_DELAY_MS = 16_000;
+const STATION_GUIDE_DOUBLE_CLIP_MIN_WORDS = 64;
+const BRIDGE_MAX_ELAPSED_SHORT_TEXT_MS = 20_000;
+const BRIDGE_MAX_ELAPSED_MEDIUM_TEXT_MS = 30_000;
+const BRIDGE_MAX_ELAPSED_LONG_TEXT_MS = 38_000;
+const BRIDGE_MAX_ELAPSED_STATION_TEXT_MS = 46_000;
+const BRIDGE_MAX_ELAPSED_DOUBLE_STATION_TEXT_MS = 52_000;
+const BRIDGE_MIN_ELAPSED_SHORT_TEXT_MS = 16_000;
+const BRIDGE_MIN_ELAPSED_MEDIUM_TEXT_MS = 24_000;
+const BRIDGE_MIN_ELAPSED_LONG_TEXT_MS = 30_000;
+const BRIDGE_MIN_ELAPSED_STATION_TEXT_MS = 32_000;
+const BRIDGE_MIN_ELAPSED_DOUBLE_STATION_TEXT_MS = 38_000;
+const BLOB_READY_SAMPLE_LIMIT = 24;
+const BLOB_READY_VOICE_MIN_SAMPLES = 3;
+const BLOB_READY_BUCKET_MIN_SAMPLES = 5;
+const STATION_RECENT_HISTORY_LIMIT = 3;
 const BRIDGE_AVAILABLE_VOICES = new Set(["mx_carolina", "mx_liam"]);
 const SUBDUCTION_BRIDGE_KEYWORDS = [
   "alaska",
@@ -236,6 +259,7 @@ const inFlightNarrations = new Map<string, Promise<ResolvedNarrationPacket>>();
 const bridgeManifestCache = new Map<SeismicBridgeLibrary, Promise<SeismicBridgeManifest | null>>();
 const lastBridgeCandidateKeyByPool = new Map<string, string>();
 const bridgeCycleByPool = new Map<string, { signature: string; remainingKeys: string[] }>();
+const recentBridgeCandidateKeysByPool = new Map<string, string[]>();
 const VOICE_TELEMETRY_CLIENT_ID =
   globalThis.crypto?.randomUUID?.() ?? `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const VOICE_OWNER_KEY = "sismica.voiceOwner";
@@ -258,6 +282,23 @@ function emitVoiceTelemetry(
   details: Omit<Parameters<typeof reportVoiceTelemetry>[0], "clientId" | "kind"> = {}
 ): void {
   reportVoiceTelemetry({ clientId: VOICE_TELEMETRY_CLIENT_ID, kind, ...details });
+}
+
+function recordBlobReadyMetrics(
+  metrics: NeuralBlobReadyMetrics,
+  details: { eventId?: string; hostId?: BroadcastVoiceHostId }
+): void {
+  rememberBlobReadyTiming(metrics);
+  emitVoiceTelemetry("neural_blob_ready", {
+    eventId: details.eventId,
+    hostId: details.hostId,
+    engine: metrics.engine,
+    voice: metrics.voice,
+    cacheState: metrics.cacheState,
+    wordCount: metrics.wordCount,
+    wordBucket: blobReadyWordBucket(metrics.wordCount),
+    durationMs: metrics.durationMs
+  });
 }
 
 function readVoiceLease(): VoiceOwnerLease | null {
@@ -622,6 +663,35 @@ function narrowBridgeCandidates(
   return scored.filter((candidate) => candidate.score === bestScore).map((candidate) => candidate.item);
 }
 
+function recentBridgeHistoryKey(manifest: SeismicBridgeManifest, voice: string): string | null {
+  return manifest.library === STATION_GUIDE_LIBRARY ? `${manifest.library}|${voice}|recent` : null;
+}
+
+function excludeRecentBridgeCandidates(
+  poolKey: string | null,
+  candidates: readonly SeismicBridgeManifestItem[],
+  limit: number
+): readonly SeismicBridgeManifestItem[] {
+  if (!poolKey || limit <= 0 || candidates.length <= 1) return [];
+  const recentKeys = recentBridgeCandidateKeysByPool.get(poolKey) ?? [];
+  if (recentKeys.length === 0) return [];
+  return candidates.filter((item) => !recentKeys.includes(bridgeCandidateKey(item)));
+}
+
+function rememberRecentBridgeCandidate(
+  poolKey: string | null,
+  item: SeismicBridgeManifestItem,
+  limit: number
+): void {
+  if (!poolKey || limit <= 0) return;
+  const key = bridgeCandidateKey(item);
+  const recentKeys = [
+    key,
+    ...(recentBridgeCandidateKeysByPool.get(poolKey) ?? []).filter((entry) => entry !== key)
+  ];
+  recentBridgeCandidateKeysByPool.set(poolKey, recentKeys.slice(0, limit));
+}
+
 function refillBridgeCycle(poolKey: string, candidates: readonly SeismicBridgeManifestItem[]): string[] {
   const previousKey = lastBridgeCandidateKeyByPool.get(poolKey);
   const keys = shuffleBridgeKeys(candidates.map(bridgeCandidateKey));
@@ -640,30 +710,38 @@ function refillBridgeCycle(poolKey: string, candidates: readonly SeismicBridgeMa
 
 function drawBridgeCandidate(
   poolKey: string,
-  candidates: readonly SeismicBridgeManifestItem[]
+  candidates: readonly SeismicBridgeManifestItem[],
+  options: { recentHistoryKey?: string | null; recentHistoryLimit?: number } = {}
 ): SeismicBridgeManifestItem | null {
   if (candidates.length === 0) return null;
+  const filteredCandidates = excludeRecentBridgeCandidates(
+    options.recentHistoryKey ?? null,
+    candidates,
+    options.recentHistoryLimit ?? 0
+  );
+  const activeCandidates = filteredCandidates.length > 0 ? filteredCandidates : candidates;
 
-  const signature = bridgeCandidateSignature(candidates);
+  const signature = bridgeCandidateSignature(activeCandidates);
   const currentCycle = bridgeCycleByPool.get(poolKey);
   let remainingKeys =
     currentCycle?.signature === signature
       ? currentCycle.remainingKeys.filter((key) =>
-          candidates.some((item) => bridgeCandidateKey(item) === key)
+          activeCandidates.some((item) => bridgeCandidateKey(item) === key)
         )
       : [];
 
   if (remainingKeys.length === 0) {
-    remainingKeys = refillBridgeCycle(poolKey, candidates);
+    remainingKeys = refillBridgeCycle(poolKey, activeCandidates);
   }
 
   const selectedKey = remainingKeys.shift();
   bridgeCycleByPool.set(poolKey, { signature, remainingKeys });
 
   const selected =
-    candidates.find((item) => bridgeCandidateKey(item) === selectedKey) ?? candidates[0] ?? null;
+    activeCandidates.find((item) => bridgeCandidateKey(item) === selectedKey) ?? activeCandidates[0] ?? null;
   if (!selected) return null;
   lastBridgeCandidateKeyByPool.set(poolKey, bridgeCandidateKey(selected));
+  rememberRecentBridgeCandidate(options.recentHistoryKey ?? null, selected, options.recentHistoryLimit ?? 0);
   return selected;
 }
 
@@ -673,6 +751,8 @@ function pickBridgeCandidate(
   groupId: string,
   contextText?: string
 ): SeismicBridgeManifestItem | null {
+  const recentHistoryKey = recentBridgeHistoryKey(manifest, voice);
+  const recentHistoryLimit = manifest.library === STATION_GUIDE_LIBRARY ? STATION_RECENT_HISTORY_LIMIT : 0;
   const pools = [
     {
       id: `group:${groupId}`,
@@ -691,10 +771,29 @@ function pickBridgeCandidate(
   ];
 
   for (const pool of pools) {
-    const candidates = narrowBridgeCandidates(pool.candidates, contextText);
+    const narrowedCandidates = narrowBridgeCandidates(pool.candidates, contextText);
+    let candidates = narrowedCandidates;
+    if (recentHistoryKey && narrowedCandidates !== pool.candidates) {
+      const diversifiedCandidates = excludeRecentBridgeCandidates(
+        recentHistoryKey,
+        narrowedCandidates,
+        recentHistoryLimit
+      );
+      if (diversifiedCandidates.length === 0) {
+        const fallbackCandidates = excludeRecentBridgeCandidates(
+          recentHistoryKey,
+          pool.candidates,
+          recentHistoryLimit
+        );
+        if (fallbackCandidates.length > 0) candidates = fallbackCandidates;
+      }
+    }
     if (candidates.length === 0) continue;
     const poolKey = `${manifest.library}|${voice}|${pool.id}`;
-    const selected = drawBridgeCandidate(poolKey, candidates);
+    const selected = drawBridgeCandidate(poolKey, candidates, {
+      recentHistoryKey,
+      recentHistoryLimit
+    });
     if (!selected) continue;
     return selected;
   }
@@ -726,6 +825,7 @@ async function selectBridgeClip(
 export function resetBridgeSelectionStateForTests(): void {
   lastBridgeCandidateKeyByPool.clear();
   bridgeCycleByPool.clear();
+  recentBridgeCandidateKeysByPool.clear();
 }
 
 export function pickBridgeCandidateForTests(
@@ -735,6 +835,181 @@ export function pickBridgeCandidateForTests(
   contextText?: string
 ): SeismicBridgeManifestItem | null {
   return pickBridgeCandidate(manifest, voice, groupId, contextText);
+}
+
+type BridgePlaybackPlan = {
+  libraries: SeismicBridgeLibrary[];
+  stationEarliestAtMs: number | null;
+  overflowLibraries: SeismicBridgeLibrary[];
+  maxBridgeElapsedMs: number;
+};
+
+const blobReadySamplesByKey = new Map<string, number[]>();
+
+function spokenWordCount(value: string): number {
+  return canonicalizeEditorialText(value)
+    .split(" ")
+    .filter((term) => term.length > 0).length;
+}
+
+function blobReadyWordBucket(wordCount: number): string {
+  if (wordCount <= BRIDGE_SHORT_ONLY_MAX_WORDS) return "00-18";
+  if (wordCount <= BRIDGE_SINGLE_EXTENDED_MAX_WORDS) return "19-30";
+  if (wordCount <= BRIDGE_DOUBLE_EXTENDED_MAX_WORDS) return "31-48";
+  if (wordCount < STATION_GUIDE_DOUBLE_CLIP_MIN_WORDS) return "49-63";
+  if (wordCount <= 80) return "64-80";
+  return "81+";
+}
+
+function blobReadySampleKey(engine: NeuralEngine, voice: string, wordBucket: string): string {
+  return `${engine}|${voice}|${wordBucket}`;
+}
+
+function appendBlobReadySample(key: string, durationMs: number): void {
+  const samples = blobReadySamplesByKey.get(key) ?? [];
+  samples.push(Math.max(0, Math.round(durationMs)));
+  while (samples.length > BLOB_READY_SAMPLE_LIMIT) {
+    samples.shift();
+  }
+  blobReadySamplesByKey.set(key, samples);
+}
+
+function sampleQuantileMs(samples: readonly number[], quantile: number): number | null {
+  if (samples.length === 0) return null;
+  const sorted = [...samples].sort((left, right) => left - right);
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * quantile)));
+  return sorted[index] ?? null;
+}
+
+function rememberBlobReadyTiming(metrics: NeuralBlobReadyMetrics): void {
+  if (metrics.cacheState === "ready" || metrics.wordCount <= 0) return;
+  const wordBucket = blobReadyWordBucket(metrics.wordCount);
+  appendBlobReadySample(
+    blobReadySampleKey(metrics.engine, metrics.voice ?? "default", wordBucket),
+    metrics.durationMs
+  );
+  appendBlobReadySample(blobReadySampleKey(metrics.engine, "all", wordBucket), metrics.durationMs);
+}
+
+function estimateBlobReadyMs(
+  engine: NeuralEngine,
+  voice: string | undefined,
+  wordCount: number
+): number | null {
+  const wordBucket = blobReadyWordBucket(wordCount);
+  const voiceSamples =
+    blobReadySamplesByKey.get(blobReadySampleKey(engine, voice ?? "default", wordBucket)) ?? [];
+  if (voiceSamples.length >= BLOB_READY_VOICE_MIN_SAMPLES) {
+    return sampleQuantileMs(voiceSamples, 0.75);
+  }
+  const bucketSamples = blobReadySamplesByKey.get(blobReadySampleKey(engine, "all", wordBucket)) ?? [];
+  if (bucketSamples.length >= BLOB_READY_BUCKET_MIN_SAMPLES) {
+    return sampleQuantileMs(bucketSamples, 0.75);
+  }
+  return null;
+}
+
+function adaptiveStationGuideDelayMs(wordCount: number, engine: NeuralEngine, voice?: string): number {
+  const longText = wordCount >= STATION_GUIDE_DOUBLE_CLIP_MIN_WORDS;
+  const fallbackDelayMs = longText ? STATION_GUIDE_LONG_TEXT_MIN_DELAY_MS : STATION_GUIDE_MIN_DELAY_MS;
+  const estimatedBlobReadyMs = estimateBlobReadyMs(engine, voice, wordCount);
+  if (estimatedBlobReadyMs === null) return fallbackDelayMs;
+
+  const leadMs = longText ? 2_000 : 1_400;
+  const minDelayMs = longText ? 12_000 : 14_000;
+  const maxDelayMs = longText ? 22_000 : 24_000;
+  return Math.max(minDelayMs, Math.min(maxDelayMs, Math.round(estimatedBlobReadyMs - leadMs)));
+}
+
+function baseBridgeBudgetMs(wordCount: number): number {
+  if (wordCount <= BRIDGE_SHORT_ONLY_MAX_WORDS) return BRIDGE_MAX_ELAPSED_SHORT_TEXT_MS;
+  if (wordCount <= BRIDGE_SINGLE_EXTENDED_MAX_WORDS) return BRIDGE_MAX_ELAPSED_MEDIUM_TEXT_MS;
+  if (wordCount <= BRIDGE_DOUBLE_EXTENDED_MAX_WORDS) return BRIDGE_MAX_ELAPSED_LONG_TEXT_MS;
+  if (wordCount < STATION_GUIDE_DOUBLE_CLIP_MIN_WORDS) return BRIDGE_MAX_ELAPSED_STATION_TEXT_MS;
+  return BRIDGE_MAX_ELAPSED_DOUBLE_STATION_TEXT_MS;
+}
+
+function minimumBridgeBudgetMs(wordCount: number): number {
+  if (wordCount <= BRIDGE_SHORT_ONLY_MAX_WORDS) return BRIDGE_MIN_ELAPSED_SHORT_TEXT_MS;
+  if (wordCount <= BRIDGE_SINGLE_EXTENDED_MAX_WORDS) return BRIDGE_MIN_ELAPSED_MEDIUM_TEXT_MS;
+  if (wordCount <= BRIDGE_DOUBLE_EXTENDED_MAX_WORDS) return BRIDGE_MIN_ELAPSED_LONG_TEXT_MS;
+  if (wordCount < STATION_GUIDE_DOUBLE_CLIP_MIN_WORDS) return BRIDGE_MIN_ELAPSED_STATION_TEXT_MS;
+  return BRIDGE_MIN_ELAPSED_DOUBLE_STATION_TEXT_MS;
+}
+
+function adaptiveBridgeBudgetMs(wordCount: number, engine: NeuralEngine, voice?: string): number {
+  const hardCapMs = baseBridgeBudgetMs(wordCount);
+  const estimatedBlobReadyMs = estimateBlobReadyMs(engine, voice, wordCount);
+  if (estimatedBlobReadyMs === null) return hardCapMs;
+
+  const slackMs = wordCount < STATION_GUIDE_DOUBLE_CLIP_MIN_WORDS ? 2_500 : 4_000;
+  return Math.max(
+    minimumBridgeBudgetMs(wordCount),
+    Math.min(hardCapMs, Math.round(estimatedBlobReadyMs + slackMs))
+  );
+}
+
+function buildBridgePlaybackPlan(
+  text: string,
+  voice?: string,
+  engine: NeuralEngine = "chatterbox"
+): BridgePlaybackPlan {
+  const words = spokenWordCount(text);
+  if (words <= BRIDGE_SHORT_ONLY_MAX_WORDS) {
+    return {
+      libraries: [BRIDGE_SHORT_LIBRARY],
+      stationEarliestAtMs: null,
+      overflowLibraries: [BRIDGE_EXTENDED_LIBRARY],
+      maxBridgeElapsedMs: adaptiveBridgeBudgetMs(words, engine, voice)
+    };
+  }
+  if (words <= BRIDGE_SINGLE_EXTENDED_MAX_WORDS) {
+    return {
+      libraries: [BRIDGE_SHORT_LIBRARY, BRIDGE_EXTENDED_LIBRARY],
+      stationEarliestAtMs: null,
+      overflowLibraries: [BRIDGE_EXTENDED_LIBRARY],
+      maxBridgeElapsedMs: adaptiveBridgeBudgetMs(words, engine, voice)
+    };
+  }
+  if (words <= BRIDGE_DOUBLE_EXTENDED_MAX_WORDS) {
+    return {
+      libraries: [BRIDGE_SHORT_LIBRARY, BRIDGE_EXTENDED_LIBRARY, BRIDGE_EXTENDED_LIBRARY],
+      stationEarliestAtMs: null,
+      overflowLibraries: [BRIDGE_EXTENDED_LIBRARY],
+      maxBridgeElapsedMs: adaptiveBridgeBudgetMs(words, engine, voice)
+    };
+  }
+
+  const longText = words >= STATION_GUIDE_DOUBLE_CLIP_MIN_WORDS;
+  return {
+    libraries: [
+      BRIDGE_SHORT_LIBRARY,
+      BRIDGE_EXTENDED_LIBRARY,
+      BRIDGE_EXTENDED_LIBRARY,
+      STATION_GUIDE_LIBRARY
+    ],
+    stationEarliestAtMs: adaptiveStationGuideDelayMs(words, engine, voice),
+    overflowLibraries: longText
+      ? [BRIDGE_EXTENDED_LIBRARY, STATION_GUIDE_LIBRARY]
+      : [BRIDGE_EXTENDED_LIBRARY],
+    maxBridgeElapsedMs: adaptiveBridgeBudgetMs(words, engine, voice)
+  };
+}
+
+export function buildBridgePlaybackPlanForTests(
+  text: string,
+  voice?: string,
+  engine: NeuralEngine = "chatterbox"
+): BridgePlaybackPlan {
+  return buildBridgePlaybackPlan(text, voice, engine);
+}
+
+export function resetBlobReadyTelemetryForTests(): void {
+  blobReadySamplesByKey.clear();
+}
+
+export function rememberBlobReadyTimingForTests(metrics: NeuralBlobReadyMetrics): void {
+  rememberBlobReadyTiming(metrics);
 }
 
 type BridgeHandle = {
@@ -771,8 +1046,9 @@ function createBridgeHandle(options: {
 
   const bridgeVoice = resolveBridgeVoiceProfile(options.hostId, options.speaker);
   const stationVoice = resolveStationGuideVoiceProfile(options.hostId, options.speaker);
+  const neuralVoice = resolveNeuralSpeaker(options.engine, options.hostId, options.speaker);
   const blobState = getNeuralBlobState(options.text, options.engine, {
-    voice: resolveNeuralSpeaker(options.engine, options.hostId, options.speaker)
+    voice: neuralVoice
   });
   if (blobState === "ready") {
     return {
@@ -789,24 +1065,56 @@ function createBridgeHandle(options: {
   let activeClip: SeismicBridgeManifestItem | null = null;
   let activeLibrary: SeismicBridgeLibrary | null = null;
   let activeClipStartedAt: number | null = null;
-  const libraries: SeismicBridgeLibrary[] = [
-    BRIDGE_SHORT_LIBRARY,
-    BRIDGE_EXTENDED_LIBRARY,
-    BRIDGE_EXTENDED_LIBRARY,
-    STATION_GUIDE_LIBRARY,
-    STATION_GUIDE_LIBRARY,
-    STATION_GUIDE_LIBRARY
-  ];
+  const bridgePlan = buildBridgePlaybackPlan(options.text, neuralVoice, options.engine);
+  const libraries = bridgePlan.libraries;
+  const overflowLibraries = bridgePlan.overflowLibraries;
   let nextLibraryIndex = 0;
+  let nextOverflowIndex = 0;
   let stopped = false;
   let stopPromise: Promise<void> | null = null;
   let stationCompletionResolve: (() => void) | null = null;
   const timers: number[] = [];
+  let bridgeArmedAt: number | null = null;
+  let bridgeBudgetLogged = false;
 
   const clearTimers = () => {
     while (timers.length > 0) {
       window.clearTimeout(timers.pop());
     }
+  };
+
+  const currentBlobState = () =>
+    getNeuralBlobState(options.text, options.engine, {
+      voice: neuralVoice
+    });
+
+  const scheduleNextLibrary = (delayMs: number) => {
+    timers.push(
+      window.setTimeout(() => {
+        void playNextLibrary();
+      }, delayMs)
+    );
+  };
+
+  const stationGuideDelayRemainingMs = () => {
+    if (bridgePlan.stationEarliestAtMs === null || bridgeArmedAt === null) return 0;
+    return Math.max(0, bridgePlan.stationEarliestAtMs - (performance.now() - bridgeArmedAt));
+  };
+
+  const bridgeElapsedMs = () => (bridgeArmedAt === null ? 0 : performance.now() - bridgeArmedAt);
+
+  const bridgeBudgetReached = () =>
+    bridgeArmedAt !== null && bridgeElapsedMs() >= bridgePlan.maxBridgeElapsedMs;
+
+  const logBridgeBudgetReached = () => {
+    if (bridgeBudgetLogged || !bridgeBudgetReached()) return;
+    bridgeBudgetLogged = true;
+    emitVoiceTelemetry("bridge_budget_reached", {
+      eventId: options.eventId,
+      hostId: options.hostId,
+      requestedGroupId: options.groupId,
+      durationMs: bridgeElapsedMs()
+    });
   };
 
   const detachAudio = (
@@ -823,6 +1131,9 @@ function createBridgeHandle(options: {
           hostId: options.hostId,
           library: activeLibrary,
           variant: activeClip.variant,
+          requestedGroupId: options.groupId,
+          selectedGroupId: activeClip.groupId,
+          clipText: activeClip.text,
           reason,
           durationMs: activeClipStartedAt === null ? undefined : performance.now() - activeClipStartedAt
         });
@@ -840,15 +1151,23 @@ function createBridgeHandle(options: {
   const playLibrary = async (library: SeismicBridgeLibrary): Promise<void> => {
     if (stopped || audio) return;
     const stationGuide = library === STATION_GUIDE_LIBRARY;
+    // Para las capsulas educativas (station) enriquecemos el contexto con la
+    // clasificacion tectonica del evento (groupId: subduccion/profundo/marino/
+    // colision/continental...) ademas del texto de la narracion, para que la
+    // seleccion por keywords elija una capsula RELACIONADA con el evento
+    // (lugar, profundidad, tipo) y no una aleatoria.
+    const contextText = stationGuide ? `${options.text} ${options.groupId ?? ""}` : options.text;
     const clip = await selectBridgeClip(
       library,
       stationGuide ? stationVoice : bridgeVoice,
       stationGuide ? STATION_GUIDE_GROUP : options.groupId,
       stationGuide,
-      options.text
+      contextText
     );
     if (!clip || stopped || audio) {
-      if (!stopped && !audio) void playNextLibrary();
+      // Sin clip (pool sin candidatos) reintentamos con un pequeno respiro para
+      // no entrar en bucle cerrado si el manifiesto no responde.
+      if (!stopped && !audio) scheduleNextLibrary(BRIDGE_FILLER_RETRY_MS);
       return;
     }
 
@@ -883,26 +1202,49 @@ function createBridgeHandle(options: {
           eventId: options.eventId,
           hostId: options.hostId,
           library,
-          variant: clip.variant
+          variant: clip.variant,
+          requestedGroupId: options.groupId,
+          selectedGroupId: clip.groupId,
+          clipText: clip.text
         });
       })
       .catch(() => cleanup("error"));
   };
 
   const playNextLibrary = async (): Promise<void> => {
-    if (stopped || audio || nextLibraryIndex >= libraries.length) return;
-    const library = libraries[nextLibraryIndex];
-    nextLibraryIndex += 1;
-    await playLibrary(library);
+    if (stopped || audio) return;
+    if (currentBlobState() === "ready") return;
+    if (bridgeBudgetReached()) {
+      logBridgeBudgetReached();
+      return;
+    }
+    if (nextLibraryIndex < libraries.length) {
+      const library = libraries[nextLibraryIndex];
+      if (library === STATION_GUIDE_LIBRARY) {
+        const delayRemainingMs = stationGuideDelayRemainingMs();
+        if (delayRemainingMs > 0) {
+          scheduleNextLibrary(Math.min(delayRemainingMs, STATION_GUIDE_POLL_MS));
+          return;
+        }
+        if (currentBlobState() === "ready") return;
+      }
+      nextLibraryIndex += 1;
+      await playLibrary(library);
+      return;
+    }
+    if (nextOverflowIndex < overflowLibraries.length) {
+      const fillerLibrary = overflowLibraries[nextOverflowIndex];
+      nextOverflowIndex += 1;
+      await playLibrary(fillerLibrary);
+      return;
+    }
+    logBridgeBudgetReached();
   };
 
   return {
     arm() {
-      timers.push(
-        window.setTimeout(() => {
-          void playNextLibrary();
-        }, BRIDGE_START_DELAY_MS)
-      );
+      bridgeArmedAt = performance.now();
+      scheduleNextLibrary(BRIDGE_START_DELAY_MS);
     },
     async stop(mode = "fade") {
       if (stopPromise) {
@@ -1174,6 +1516,7 @@ async function runNeuralCascade(
     kind: CueContextKind;
     allowFallback?: boolean;
     beforePlayback?: () => Promise<void>;
+    onBlobReady?: (metrics: NeuralBlobReadyMetrics) => void;
   }
 ): Promise<void> {
   const spokenText = normalizeSpokenText(text);
@@ -1184,7 +1527,8 @@ async function runNeuralCascade(
       await speakNeural(spokenText, engine, {
         voice: resolveNeuralSpeaker(engine, options.hostId, options.speaker),
         playbackRate: delivery.playbackRate,
-        beforePlayback: options.beforePlayback
+        beforePlayback: options.beforePlayback,
+        onBlobReady: options.onBlobReady
       });
       return;
     } catch (error) {
@@ -1270,6 +1614,11 @@ async function dispatchNarration(
         cue,
         kind: "evento",
         allowFallback: !(options.mode === "breaking" || options.intro),
+        onBlobReady: (metrics) =>
+          recordBlobReadyMetrics(metrics, {
+            eventId: event.eventId,
+            hostId: options.hostId ?? activeBroadcastHostId
+          }),
         beforePlayback: async () => {
           await bridge.stop("fade");
           neuralPlaybackStartedAt = performance.now();
@@ -1380,6 +1729,11 @@ async function dispatchText(
           await speakNeural(spokenText, engine, {
             voice: resolveNeuralSpeaker(engine),
             playbackRate: delivery.playbackRate,
+            onBlobReady: (metrics) =>
+              recordBlobReadyMetrics(metrics, {
+                eventId: options.eventId,
+                hostId: activeBroadcastHostId
+              }),
             beforePlayback: async () => {
               await bridge.stop("fade");
               neuralPlaybackStartedAt = performance.now();
@@ -1463,6 +1817,11 @@ async function dispatchTextWithSpeaker(
           await speakNeural(spokenText, engine, {
             voice: resolveNeuralSpeaker(engine, options.hostId, options.speaker),
             playbackRate: delivery.playbackRate,
+            onBlobReady: (metrics) =>
+              recordBlobReadyMetrics(metrics, {
+                eventId: options.eventId,
+                hostId: options.hostId ?? activeBroadcastHostId
+              }),
             beforePlayback: () => bridge.stop("fade")
           });
           return;

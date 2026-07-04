@@ -243,7 +243,20 @@ export function createApp(streamBroker: StreamBroker) {
       clientId,
       kind
     };
-    for (const key of ["eventId", "hostId", "library", "variant", "reason", "outcome"] as const) {
+    for (const key of [
+      "eventId",
+      "hostId",
+      "engine",
+      "voice",
+      "library",
+      "variant",
+      "requestedGroupId",
+      "selectedGroupId",
+      "cacheState",
+      "wordBucket",
+      "reason",
+      "outcome"
+    ] as const) {
       const value = body[key];
       record[key] = typeof value === "string" ? value.slice(0, 160) : null;
     }
@@ -251,6 +264,11 @@ export function createApp(streamBroker: StreamBroker) {
       typeof body.durationMs === "number" && Number.isFinite(body.durationMs)
         ? Math.max(0, Math.round(body.durationMs))
         : null;
+    record.wordCount =
+      typeof body.wordCount === "number" && Number.isFinite(body.wordCount)
+        ? Math.max(0, Math.round(body.wordCount))
+        : null;
+    record.clipText = typeof body.clipText === "string" ? body.clipText.slice(0, 1_600) : null;
     voiceTelemetry.push(record);
     if (voiceTelemetry.length > 1000) {
       voiceTelemetry.splice(0, voiceTelemetry.length - 1000);

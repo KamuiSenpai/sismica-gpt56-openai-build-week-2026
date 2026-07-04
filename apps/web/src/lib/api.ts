@@ -80,10 +80,18 @@ export type VoiceTelemetryEvent = {
   kind: string;
   eventId?: string;
   hostId?: string;
+  engine?: string;
+  voice?: string;
   library?: SeismicBridgeLibrary;
   variant?: string;
+  requestedGroupId?: string;
+  selectedGroupId?: string;
+  clipText?: string;
+  cacheState?: string;
+  wordBucket?: string;
   reason?: string;
   outcome?: string;
+  wordCount?: number;
   durationMs?: number;
 };
 

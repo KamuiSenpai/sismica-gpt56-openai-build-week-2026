@@ -5,10 +5,13 @@ import { type SeismicEvent } from "@sismica/shared";
 
 import { clearEditorialHistory } from "../src/lib/editorialHistory";
 import {
+  buildBridgePlaybackPlanForTests,
   classifyBridgeGroup,
   neuralFallbackOrder,
   pickBridgeCandidateForTests,
   pickBreakingNarrationIntro,
+  rememberBlobReadyTimingForTests,
+  resetBlobReadyTelemetryForTests,
   resetBridgeSelectionStateForTests,
   resolveEventNarration
 } from "../src/lib/seismicVoice";
@@ -48,6 +51,10 @@ function makeEvent(overrides: Partial<SeismicEvent> = {}): SeismicEvent {
     ingestedAt: "2026-07-01T23:13:00.000Z",
     ...overrides
   };
+}
+
+function repeatedTerms(count: number): string {
+  return Array.from({ length: count }, (_value, index) => `termino${index}`).join(" ");
 }
 
 function mockEditorial(payload: Record<string, unknown>): () => void {
@@ -448,4 +455,162 @@ test("station guides prefer keyword-matching context when available", () => {
     "Sismo detectado en la costa de Peru"
   );
   assert.equal(selected?.variant, "03");
+});
+
+test("station guides widen to generic alternatives before repeating the same contextual clip", () => {
+  resetBridgeSelectionStateForTests();
+  const manifest = {
+    library: "station",
+    version: "test",
+    generatedAtUtc: "2026-07-04T00:00:00.000Z",
+    voices: ["mx_sofia"],
+    groups: [],
+    items: [
+      {
+        voice: "mx_sofia",
+        groupId: "station_identity",
+        variant: "03",
+        text: "Sudamerica",
+        bytes: 1,
+        path: "/tmp/03.wav",
+        url: "http://localhost/03.wav",
+        keywords: ["peru", "chile", "ecuador"]
+      },
+      {
+        voice: "mx_sofia",
+        groupId: "station_identity",
+        variant: "11",
+        text: "General 1",
+        bytes: 1,
+        path: "/tmp/11.wav",
+        url: "http://localhost/11.wav",
+        keywords: []
+      },
+      {
+        voice: "mx_sofia",
+        groupId: "station_identity",
+        variant: "13",
+        text: "General 2",
+        bytes: 1,
+        path: "/tmp/13.wav",
+        url: "http://localhost/13.wav",
+        keywords: []
+      }
+    ]
+  } as const;
+
+  const first = pickBridgeCandidateForTests(
+    manifest,
+    "mx_sofia",
+    "station_identity",
+    "Sismo detectado en Peru"
+  );
+  const second = pickBridgeCandidateForTests(
+    manifest,
+    "mx_sofia",
+    "station_identity",
+    "Sismo detectado en Peru"
+  );
+  const third = pickBridgeCandidateForTests(
+    manifest,
+    "mx_sofia",
+    "station_identity",
+    "Sismo detectado en Peru"
+  );
+
+  assert.equal(first?.variant, "03");
+  assert.ok(second);
+  assert.ok(third);
+  assert.equal(second?.variant === "03", false);
+  assert.equal(third?.variant === "03", false);
+  assert.equal(new Set([second?.variant, third?.variant]).size, 2);
+});
+
+test("bridge plan skips long station fillers for short and medium texts", () => {
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(8)), {
+    libraries: ["short"],
+    stationEarliestAtMs: null,
+    overflowLibraries: ["extended"],
+    maxBridgeElapsedMs: 20000
+  });
+
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(25)), {
+    libraries: ["short", "extended"],
+    stationEarliestAtMs: null,
+    overflowLibraries: ["extended"],
+    maxBridgeElapsedMs: 30000
+  });
+
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(40)), {
+    libraries: ["short", "extended", "extended"],
+    stationEarliestAtMs: null,
+    overflowLibraries: ["extended"],
+    maxBridgeElapsedMs: 38000
+  });
+});
+
+test("bridge plan only enables station guides for clearly long texts", () => {
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(55)), {
+    libraries: ["short", "extended", "extended", "station"],
+    stationEarliestAtMs: 18000,
+    overflowLibraries: ["extended"],
+    maxBridgeElapsedMs: 46000
+  });
+
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(70)), {
+    libraries: ["short", "extended", "extended", "station"],
+    stationEarliestAtMs: 16000,
+    overflowLibraries: ["extended", "station"],
+    maxBridgeElapsedMs: 52000
+  });
+});
+
+test("bridge plan adapts station delay from recent blob-ready telemetry by voice and length", () => {
+  resetBlobReadyTelemetryForTests();
+  rememberBlobReadyTimingForTests({
+    engine: "chatterbox",
+    voice: "mx_carolina",
+    durationMs: 21000,
+    wordCount: 55,
+    cacheState: "missing"
+  });
+  rememberBlobReadyTimingForTests({
+    engine: "chatterbox",
+    voice: "mx_carolina",
+    durationMs: 22000,
+    wordCount: 55,
+    cacheState: "pending"
+  });
+  rememberBlobReadyTimingForTests({
+    engine: "chatterbox",
+    voice: "mx_carolina",
+    durationMs: 23000,
+    wordCount: 55,
+    cacheState: "missing"
+  });
+
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(55), "mx_carolina", "chatterbox"), {
+    libraries: ["short", "extended", "extended", "station"],
+    stationEarliestAtMs: 20600,
+    overflowLibraries: ["extended"],
+    maxBridgeElapsedMs: 32000
+  });
+});
+
+test("ready-cache blob timings do not skew adaptive station delay", () => {
+  resetBlobReadyTelemetryForTests();
+  rememberBlobReadyTimingForTests({
+    engine: "chatterbox",
+    voice: "mx_carolina",
+    durationMs: 500,
+    wordCount: 55,
+    cacheState: "ready"
+  });
+
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(55), "mx_carolina", "chatterbox"), {
+    libraries: ["short", "extended", "extended", "station"],
+    stationEarliestAtMs: 18000,
+    overflowLibraries: ["extended"],
+    maxBridgeElapsedMs: 46000
+  });
 });
