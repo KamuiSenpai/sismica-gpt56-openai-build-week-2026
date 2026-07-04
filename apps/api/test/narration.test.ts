@@ -95,6 +95,26 @@ test("generateNarration cierra con un remate curado que rota sin repetir", async
   }
 });
 
+test("generateNarration aporta microcontexto regional para Japon", async () => {
+  const editorial = await generateNarration({
+    eventId: "USGS:japan-1",
+    source: "USGS",
+    title: "M4.7 - Hokkaido, Japan",
+    normalizedPlace: "Hokkaido, Japon",
+    country: "Japon",
+    mode: "seguimiento",
+    latitude: 43.1,
+    longitude: 142.9,
+    magnitude: 4.7,
+    depthKm: 52
+  });
+
+  assert.equal(
+    editorial.tectonicContext,
+    "Japon registra sismicidad frecuente por la convergencia de placas en el Pacifico occidental"
+  );
+});
+
 test("sanitizeNarrationEditorial bloquea aperturas 'nuevo' cuando el modo es seguimiento", () => {
   const raw = {
     intro: "Nuevo sismo detectado",

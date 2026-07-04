@@ -50,6 +50,31 @@ type ExperimentalOriginsResponse = {
   items: ExperimentalOrigin[];
 };
 
+export type SeismicBridgeLibrary = "short" | "extended";
+export type SeismicBridgeManifestItem = {
+  voice: string;
+  groupId: string;
+  variant: string;
+  text: string;
+  bytes: number | null;
+  path: string;
+  url: string;
+};
+export type SeismicBridgeManifestGroup = {
+  id: string;
+  kind: string | null;
+  status: string | null;
+  variants: number;
+};
+export type SeismicBridgeManifest = {
+  library: SeismicBridgeLibrary;
+  version: string | null;
+  generatedAtUtc: string | null;
+  voices: string[];
+  groups: SeismicBridgeManifestGroup[];
+  items: SeismicBridgeManifestItem[];
+};
+
 type EventsInput = {
   minMagnitude?: number;
   hours?: number;
@@ -119,6 +144,28 @@ export async function fetchSourceStatuses(): Promise<SourceStatus[]> {
         errorMessage: "Fallback directo a USGS (backend no disponible)"
       }
     ];
+  }
+}
+
+export async function fetchSeismicBridgeManifest(
+  library: SeismicBridgeLibrary,
+  signal?: AbortSignal
+): Promise<SeismicBridgeManifest | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/tts/bridges/${library}/manifest`, { signal });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as Omit<SeismicBridgeManifest, "items"> & {
+      items: Array<Omit<SeismicBridgeManifestItem, "url">>;
+    };
+    return {
+      ...payload,
+      items: payload.items.map((item) => ({
+        ...item,
+        url: new URL(item.path, `${API_BASE_URL}/`).toString()
+      }))
+    };
+  } catch {
+    return null;
   }
 }
 

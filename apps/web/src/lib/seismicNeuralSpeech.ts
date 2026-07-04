@@ -2,7 +2,11 @@
 // El API enruta a Piper (binario local) o hace proxy a XTTS-v2 (servicio Python).
 
 export type NeuralEngine = "piper" | "xtts" | "chatterbox";
-export type NeuralSpeechOptions = { voice?: string; playbackRate?: number };
+export type NeuralSpeechOptions = {
+  voice?: string;
+  playbackRate?: number;
+  beforePlayback?: () => Promise<void> | void;
+};
 export type NeuralSpeechRequest = { text: string; voice?: string };
 
 export type TtsEngineHealth = {
@@ -37,6 +41,17 @@ const inFlightBlobRequests = new Map<string, PendingBlobRequest>();
 
 function cacheKey(engine: NeuralEngine, text: string, voice?: string): string {
   return `${engine}|${voice ?? "default"}|${text}`;
+}
+
+export function getNeuralBlobState(
+  text: string,
+  engine: NeuralEngine,
+  options: Pick<NeuralSpeechOptions, "voice"> = {}
+): "ready" | "pending" | "missing" {
+  const key = cacheKey(engine, text, options.voice);
+  if (blobCache.has(key)) return "ready";
+  if (inFlightBlobRequests.has(key)) return "pending";
+  return "missing";
 }
 
 function rememberBlob(key: string, blob: Blob): void {
@@ -328,6 +343,8 @@ export async function speakNeural(
   const playback = (async () => {
     const blob = await obtainBlob(request, engine, controller, seq);
     if (!blob) return;
+    await options.beforePlayback?.();
+    if (seq !== requestSeq || controller.signal.aborted) return;
     await playBlob(blob, controller, seq, options.playbackRate ?? 1);
   })().finally(() => {
     if (activePlaybackPromise === playback) {

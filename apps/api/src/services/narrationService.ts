@@ -158,6 +158,46 @@ const CONTINENTAL_KEYWORDS = [
   "mongolia",
   "kazajistan"
 ] as const;
+const JAPAN_KEYWORDS = ["japon", "japan", "hokkaido", "honshu", "kyushu", "shikoku", "okinawa"] as const;
+const ANDEAN_KEYWORDS = ["chile", "peru", "iquique", "arequipa", "arica", "antofagasta", "lima"] as const;
+const MEXICO_KEYWORDS = [
+  "mexico",
+  "oaxaca",
+  "guerrero",
+  "chiapas",
+  "michoacan",
+  "colima",
+  "jalisco"
+] as const;
+const ALASKA_KEYWORDS = ["alaska", "aleutian", "aleutianas", "anchorage", "adak"] as const;
+const INDONESIA_KEYWORDS = [
+  "indonesia",
+  "sumatra",
+  "java",
+  "jawa",
+  "sulawesi",
+  "papua",
+  "molucas",
+  "molucca",
+  "flores",
+  "timor"
+] as const;
+const TURKEY_GREECE_KEYWORDS = ["turquia", "turkey", "grecia", "greece", "egeo", "aegean", "egean"] as const;
+const CARIBBEAN_KEYWORDS = [
+  "caribe",
+  "puerto rico",
+  "haiti",
+  "republica dominicana",
+  "dominican republic",
+  "jamaica",
+  "cuba",
+  "guadalupe",
+  "guadeloupe",
+  "martinica",
+  "martinique",
+  "islas virgenes",
+  "virgin islands"
+] as const;
 const OFFSHORE_PATTERN = /\b(costa|mar|estrecho|offshore|frente a la costa)\b/iu;
 // Incluye tambien frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
 // pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
@@ -286,6 +326,62 @@ function containsKeyword(text: string, keywords: readonly string[]): boolean {
   return keywords.some((keyword) => normalized.includes(keyword));
 }
 
+function inferRegionalTectonicHint(combined: string): TectonicHint | null {
+  if (containsKeyword(combined, JAPAN_KEYWORDS)) {
+    return {
+      summary: "Japon y el Pacifico occidental",
+      contextLine:
+        "Japon registra sismicidad frecuente por la convergencia de placas en el Pacifico occidental"
+    };
+  }
+
+  if (containsKeyword(combined, ANDEAN_KEYWORDS)) {
+    return {
+      summary: "margen andino del Pacifico",
+      contextLine: "El margen andino del Pacifico concentra sismos por la subduccion frente a Sudamerica"
+    };
+  }
+
+  if (containsKeyword(combined, MEXICO_KEYWORDS)) {
+    return {
+      summary: "Pacifico mexicano",
+      contextLine: "El Pacifico mexicano registra sismicidad frecuente por subduccion frente a su costa"
+    };
+  }
+
+  if (containsKeyword(combined, ALASKA_KEYWORDS)) {
+    return {
+      summary: "Alaska y arco Aleutiano",
+      contextLine: "Alaska y el arco Aleutiano mantienen sismicidad frecuente en el Pacifico norte"
+    };
+  }
+
+  if (containsKeyword(combined, INDONESIA_KEYWORDS)) {
+    return {
+      summary: "arco insular de Indonesia",
+      contextLine:
+        "Indonesia concentra sismicidad frecuente por varias zonas de subduccion en su arco insular"
+    };
+  }
+
+  if (containsKeyword(combined, TURKEY_GREECE_KEYWORDS)) {
+    return {
+      summary: "Turquia y el Egeo",
+      contextLine:
+        "Turquia y el Egeo mantienen sismicidad frecuente por fallas activas y convergencia regional"
+    };
+  }
+
+  if (containsKeyword(combined, CARIBBEAN_KEYWORDS)) {
+    return {
+      summary: "bordes de placa del Caribe",
+      contextLine: "El Caribe combina fallas activas y subduccion, con sismicidad recurrente en sus bordes"
+    };
+  }
+
+  return null;
+}
+
 function inferTectonicHint(request: NarrationRequest): TectonicHint {
   const place = canonicalize(request.normalizedPlace);
   const country = canonicalize(request.country ?? "");
@@ -295,6 +391,11 @@ function inferTectonicHint(request: NarrationRequest): TectonicHint {
   const shallow = typeof depth === "number" && depth <= 35;
   const intermediate = typeof depth === "number" && depth > 35 && depth < 120;
   const deep = typeof depth === "number" && depth >= 120;
+  const regional = inferRegionalTectonicHint(combined);
+
+  if (regional) {
+    return regional;
+  }
 
   if (containsKeyword(combined, SUBDUCTION_KEYWORDS)) {
     if (deep) {

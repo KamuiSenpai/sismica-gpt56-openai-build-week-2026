@@ -49,6 +49,7 @@ import {
   isEngineAvailable,
   isSeismicNarrationActive,
   isSeismicVoiceSupported,
+  pickBreakingNarrationIntro,
   prefetchSeismicNarration,
   primeSeismicVoices,
   refreshTtsHealth,
@@ -367,7 +368,7 @@ export default function App() {
       }
       queue.push(incomingEvent);
       if (voiceEnabled) {
-        prefetchSeismicNarration(incomingEvent, true, { intro: "Nuevo sismo detectado" });
+        prefetchSeismicNarration(incomingEvent, true, { intro: pickBreakingNarrationIntro(incomingEvent) });
       }
     },
     [queryClient, minMagnitude, hours, tourPaused, voiceEnabled]
@@ -452,7 +453,7 @@ export default function App() {
       const next = queue.shift();
       if (!next) return;
       pendingVoiceIntroRef.current = voiceEnabled
-        ? { eventId: next.eventId, intro: "Nuevo sismo detectado" }
+        ? { eventId: next.eventId, intro: pickBreakingNarrationIntro(next) }
         : null;
       promotedLiveAtRef.current = Date.now();
       liveHoldUntilRef.current = Date.now() + MIN_LIVE_DISPLAY_MS;

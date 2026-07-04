@@ -36,6 +36,11 @@ import {
   TtsUnavailableError,
   voiceEngineSchema
 } from "./services/ttsService.js";
+import {
+  getTtsBridgeManifest,
+  resolveTtsBridgeFile,
+  type TtsBridgeLibrary
+} from "./services/ttsBridgeService.js";
 import { generateNarration, narrationRequestSchema } from "./services/narrationService.js";
 import {
   generateHandoffSegment,
@@ -54,6 +59,7 @@ function hasValidEngineToken(candidate: string | undefined): boolean {
 
 export function createApp(streamBroker: StreamBroker) {
   const app = express();
+  const bridgeLibraries = new Set<TtsBridgeLibrary>(["short", "extended"]);
 
   const eventsCache = new LRUCache<
     string,
@@ -169,6 +175,49 @@ export function createApp(streamBroker: StreamBroker) {
   app.get("/api/tts/health", async (_request, response) => {
     try {
       response.json(await getTtsHealth());
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/tts/bridges/:library/manifest", async (request, response) => {
+    const library = request.params.library;
+    if (!bridgeLibraries.has(library as TtsBridgeLibrary)) {
+      response.status(404).json({ error: "Biblioteca de puentes no encontrada" });
+      return;
+    }
+    try {
+      const manifest = await getTtsBridgeManifest(library as TtsBridgeLibrary);
+      if (!manifest) {
+        response.status(404).json({ error: "Manifest de puentes no disponible" });
+        return;
+      }
+      response.setHeader("Cache-Control", "public, max-age=300");
+      response.json(manifest);
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/tts/bridges/:library/:voice/:fileName", async (request, response) => {
+    const library = request.params.library;
+    if (!bridgeLibraries.has(library as TtsBridgeLibrary)) {
+      response.status(404).json({ error: "Biblioteca de puentes no encontrada" });
+      return;
+    }
+    try {
+      const filePath = await resolveTtsBridgeFile(
+        library as TtsBridgeLibrary,
+        request.params.voice,
+        request.params.fileName
+      );
+      if (!filePath) {
+        response.status(404).json({ error: "Clip puente no encontrado" });
+        return;
+      }
+      response.setHeader("Cache-Control", "public, max-age=86400");
+      response.setHeader("Content-Type", "audio/wav");
+      response.sendFile(filePath);
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }

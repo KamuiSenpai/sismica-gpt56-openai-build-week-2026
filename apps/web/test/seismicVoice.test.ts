@@ -4,7 +4,7 @@ import test from "node:test";
 import { type SeismicEvent } from "@sismica/shared";
 
 import { clearEditorialHistory } from "../src/lib/editorialHistory";
-import { resolveEventNarration } from "../src/lib/seismicVoice";
+import { pickBreakingNarrationIntro, resolveEventNarration } from "../src/lib/seismicVoice";
 
 function makeEvent(overrides: Partial<SeismicEvent> = {}): SeismicEvent {
   return {
@@ -284,4 +284,20 @@ test("resolveEventNarration preserves one useful tectonic context sentence", asy
   );
   assert.equal((narration.text.match(/Mindanao/gu) ?? []).length, 1);
   assert.equal((narration.text.match(/Filipinas/gu) ?? []).length, 1);
+});
+
+test("pickBreakingNarrationIntro returns a stable allowed intro for the same event", () => {
+  const event = makeEvent({ eventId: "USGS:breaking-1" });
+  const introA = pickBreakingNarrationIntro(event);
+  const introB = pickBreakingNarrationIntro(event);
+
+  assert.equal(introA, introB);
+  assert.ok(
+    [
+      "Nuevo sismo detectado",
+      "Se registra un nuevo sismo",
+      "Actualizacion sismica reciente",
+      "Evento sismico reciente"
+    ].includes(introA)
+  );
 });
