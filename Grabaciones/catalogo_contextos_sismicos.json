@@ -1,0 +1,176 @@
+{
+  "version": "2026-07-04",
+  "phase1Voices": ["mx_carolina", "mx_liam"],
+  "counts": {
+    "immediatePerVoice": 47,
+    "recommendedPerVoice": 56,
+    "didacticAddOnPerVoice": 18
+  },
+  "selectionOrder": ["family_specific", "depth_generic", "continuity_neutral"],
+  "groups": [
+    {
+      "id": "subduccion_pacifico_superficial",
+      "status": "current",
+      "recommendedVariants": 5,
+      "kind": "tectonic_family",
+      "zones": ["Chile", "Peru", "Ecuador", "Colombia", "Mexico Pacifico", "Japon", "Filipinas", "Indonesia"],
+      "phrases": [
+        "Zona de subduccion activa del Pacifico",
+        "Tramo costero con acople entre placas",
+        "Margen convergente de alta sismicidad",
+        "Segmento superficial del cinturon del Pacifico",
+        "Franja de subduccion cercana a la costa"
+      ]
+    },
+    {
+      "id": "subduccion_pacifico_intermedio",
+      "status": "current",
+      "recommendedVariants": 5,
+      "kind": "tectonic_family",
+      "zones": ["Andes", "Japon", "Filipinas", "Indonesia", "Tonga"],
+      "phrases": [
+        "Foco intermedio en margen de subduccion",
+        "Evento intermedio dentro de la placa descendente",
+        "Sismo de transicion bajo el arco del Pacifico",
+        "Energia liberada a profundidad intermedia",
+        "Tramo de subduccion con foco intermedio"
+      ]
+    },
+    {
+      "id": "subduccion_pacifico_profundo",
+      "status": "current",
+      "recommendedVariants": 5,
+      "kind": "tectonic_family",
+      "zones": ["Peru", "Bolivia", "norte de Chile", "Japon", "Fiji", "Tonga"],
+      "phrases": [
+        "Foco profundo dentro de la placa subducida",
+        "Sismo profundo bajo el sistema de subduccion",
+        "Liberacion de energia a gran profundidad",
+        "Evento profundo en el interior de la placa",
+        "Tramo profundo del margen convergente"
+      ]
+    },
+    {
+      "id": "colision_mediterraneo_asiatica",
+      "status": "current",
+      "recommendedVariants": 4,
+      "kind": "tectonic_family",
+      "zones": ["Italia", "Grecia", "Turquia", "Iran", "Chipre", "Albania"],
+      "phrases": [
+        "Franja de colision entre bloques continentales",
+        "Zona compresiva del Mediterraneo oriental",
+        "Regimen tectonico de colision regional",
+        "Ajuste cortical en el corredor mediterraneo asiatico"
+      ]
+    },
+    {
+      "id": "continental_superficial",
+      "status": "current",
+      "recommendedVariants": 5,
+      "kind": "tectonic_family",
+      "zones": ["Polonia", "Texas", "Nevada", "Utah", "Mongolia", "Kazajistan"],
+      "phrases": [
+        "Sismo cortical en bloque continental",
+        "Ajuste superficial dentro de la corteza continental",
+        "Ruptura somera lejos del borde oceanico",
+        "Evento cortical de poca profundidad",
+        "Actividad superficial en interior continental"
+      ]
+    },
+    {
+      "id": "marino_superficial",
+      "status": "current",
+      "recommendedVariants": 4,
+      "kind": "tectonic_family",
+      "zones": ["mar abierto", "frente a la costa", "estrechos", "offshore"],
+      "phrases": [
+        "Evento marino de poca profundidad",
+        "Sismo superficial bajo el fondo oceanico",
+        "Ajuste somero en sector costa afuera",
+        "Energia liberada en plataforma o talud marino"
+      ]
+    },
+    {
+      "id": "foco_intermedio_generico",
+      "status": "current",
+      "recommendedVariants": 4,
+      "kind": "depth_generic",
+      "zones": ["global"],
+      "phrases": [
+        "Sismo de foco intermedio",
+        "Profundidad media dentro del sistema tectonico",
+        "Evento a profundidad intermedia",
+        "Liberacion sismica fuera del rango superficial"
+      ]
+    },
+    {
+      "id": "foco_profundo_generico",
+      "status": "current",
+      "recommendedVariants": 4,
+      "kind": "depth_generic",
+      "zones": ["global"],
+      "phrases": [
+        "Sismo profundo",
+        "Evento originado a gran profundidad",
+        "Liberacion sismica en niveles profundos",
+        "Foco profundo bajo la region"
+      ]
+    },
+    {
+      "id": "superficial_generico",
+      "status": "current",
+      "recommendedVariants": 5,
+      "kind": "depth_generic",
+      "zones": ["global"],
+      "phrases": [
+        "Sismo superficial",
+        "Evento de poca profundidad",
+        "Foco somero con energia cercana a superficie",
+        "Ajuste cortical superficial",
+        "Liberacion sismica en niveles someros"
+      ]
+    },
+    {
+      "id": "continuidad_neutra",
+      "status": "current",
+      "recommendedVariants": 6,
+      "kind": "editorial_bridge",
+      "zones": ["global"],
+      "phrases": [
+        "Seguimos el recorrido sismico global",
+        "Continuamos sobre el mapa activo",
+        "Pasamos al siguiente registro del planeta",
+        "Recorremos otra zona del tablero sismico",
+        "La secuencia continua sobre el mapa mundial",
+        "Vamos al siguiente punto del recorrido"
+      ]
+    },
+    {
+      "id": "dorsal_oceanica",
+      "status": "expansion",
+      "recommendedVariants": 5,
+      "kind": "tectonic_family",
+      "zones": ["Reykjanes Ridge", "Mid-Atlantic Ridge", "Azores", "dorsales del Pacifico"],
+      "phrases": [
+        "Actividad sobre una dorsal oceanica",
+        "Extension tectonica en corteza oceanica",
+        "Ajuste superficial en una cresta submarina",
+        "Ruptura asociada a expansion del fondo oceanico",
+        "Tramo oceanico de apertura entre placas"
+      ]
+    },
+    {
+      "id": "transformante",
+      "status": "expansion",
+      "recommendedVariants": 4,
+      "kind": "tectonic_family",
+      "zones": ["California", "Caribe", "Golfo de California", "Anatolia norte"],
+      "phrases": [
+        "Deslizamiento lateral entre bloques tectonicos",
+        "Ajuste en una falla de rumbo activa",
+        "Movimiento cortante en limite transformante",
+        "Evento asociado a desplazamiento horizontal"
+      ]
+    }
+  ]
+}

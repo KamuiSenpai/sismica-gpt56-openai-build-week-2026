@@ -140,6 +140,7 @@ const LOCATION_NOISE_TERMS = new Set([
 
 const STORAGE_KEY = "sismica.voiceEngine";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
+const NARRATION_CACHE_LIMIT = 24;
 
 let voiceEnabled = false;
 let engineExplicit = false;
@@ -150,6 +151,8 @@ let lastSpeechAt = 0;
 let activeBroadcastHostId: BroadcastVoiceHostId = BROADCAST_VOICE_HOSTS[0].id;
 // Secuencia de narraciones: al resolver el texto (IA es async) descarta las superadas.
 let narrationSeq = 0;
+const narrationCache = new Map<string, ResolvedNarrationPacket>();
+const inFlightNarrations = new Map<string, Promise<ResolvedNarrationPacket>>();
 
 function canonicalizeEditorialText(value: string): string {
   return value
@@ -210,6 +213,32 @@ function pickEditorialIntro(
 
 function containsUnsupportedEditorialText(value: string): boolean {
   return UNSUPPORTED_EDITORIAL_CLAIM_PATTERN.test(canonicalizeEditorialText(value));
+}
+
+function narrationCacheKey(
+  event: SeismicEvent,
+  options: { intro?: string; closing?: string | null; mode?: NarrationMode } = {}
+): string {
+  const eventVersion = event.updatedAtUtc ?? event.eventTimeUtc;
+  const mode = options.mode ?? (options.intro ? "breaking" : "seguimiento");
+  const intro = options.intro?.trim() ?? "";
+  const closing =
+    options.closing === undefined
+      ? "__editorial__"
+      : options.closing === null
+        ? "__none__"
+        : options.closing.trim();
+  return [event.eventId, eventVersion, mode, intro, closing].join("|");
+}
+
+function rememberNarrationPacket(key: string, packet: ResolvedNarrationPacket): void {
+  narrationCache.delete(key);
+  narrationCache.set(key, packet);
+  while (narrationCache.size > NARRATION_CACHE_LIMIT) {
+    const oldest = narrationCache.keys().next().value;
+    if (oldest === undefined) break;
+    narrationCache.delete(oldest);
+  }
 }
 
 function loadEngine(): VoiceEngine {
@@ -386,39 +415,57 @@ export async function resolveEventNarration(
   event: SeismicEvent,
   options: { intro?: string; closing?: string | null; mode?: NarrationMode } = {}
 ): Promise<ResolvedNarrationPacket> {
-  const mode = options.mode ?? (options.intro ? "breaking" : "seguimiento");
-  const place = broadcastPlace(event);
-  const country = broadcastCountryName(countryCode(event));
-  const intro = options.intro?.trim() || undefined;
-  const editorial =
-    (await fetchNarrationEditorial(event, {
-      normalizedPlace: place,
-      country,
-      mode,
-      recentLines: getRecentEditorialLines()
-    })) ?? fallbackNarrationEditorial(mode);
-  const narrationIntro = pickEditorialIntro(intro, editorial.intro, place, country, mode);
-  const mergedClosing = [
-    editorial.tectonicContext,
-    options.closing === undefined ? editorial.closing : options.closing
-  ]
-    .filter((value): value is string => Boolean(value && value.trim()))
-    .filter((value, index, values) => {
-      if (containsUnsupportedEditorialText(value)) return false;
-      const canonical = canonicalizeEditorialText(value);
-      return values.findIndex((candidate) => canonicalizeEditorialText(candidate) === canonical) === index;
-    })
-    .join(". ");
-  const text = buildSeismicNarration(event, {
-    intro: narrationIntro,
-    place,
-    closing: mergedClosing || null
+  const key = narrationCacheKey(event, options);
+  const cached = narrationCache.get(key);
+  if (cached) return cached;
+
+  const inFlight = inFlightNarrations.get(key);
+  if (inFlight) return inFlight;
+
+  const pending = (async (): Promise<ResolvedNarrationPacket> => {
+    const mode = options.mode ?? (options.intro ? "breaking" : "seguimiento");
+    const place = broadcastPlace(event);
+    const country = broadcastCountryName(countryCode(event));
+    const intro = options.intro?.trim() || undefined;
+    const editorial =
+      (await fetchNarrationEditorial(event, {
+        normalizedPlace: place,
+        country,
+        mode,
+        recentLines: getRecentEditorialLines()
+      })) ?? fallbackNarrationEditorial(mode);
+    const narrationIntro = pickEditorialIntro(intro, editorial.intro, place, country, mode);
+    const mergedClosing = [
+      editorial.tectonicContext,
+      options.closing === undefined ? editorial.closing : options.closing
+    ]
+      .filter((value): value is string => Boolean(value && value.trim()))
+      .filter((value, index, values) => {
+        if (containsUnsupportedEditorialText(value)) return false;
+        const canonical = canonicalizeEditorialText(value);
+        return values.findIndex((candidate) => canonicalizeEditorialText(candidate) === canonical) === index;
+      })
+      .join(". ");
+    const packet = {
+      text: buildSeismicNarration(event, {
+        intro: narrationIntro,
+        place,
+        closing: mergedClosing || null
+      }),
+      cue: editorial.cue,
+      tectonicContext: editorial.tectonicContext
+    } satisfies ResolvedNarrationPacket;
+    rememberNarrationPacket(key, packet);
+    return packet;
+  })();
+
+  inFlightNarrations.set(key, pending);
+  void pending.finally(() => {
+    if (inFlightNarrations.get(key) === pending) {
+      inFlightNarrations.delete(key);
+    }
   });
-  return {
-    text,
-    cue: editorial.cue,
-    tectonicContext: editorial.tectonicContext
-  };
+  return pending;
 }
 
 export function prefetchSeismicNarration(

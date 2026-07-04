@@ -24,10 +24,16 @@ const API_BASE_URL =
 const SYNTH_TIMEOUT_MS = 120_000;
 const ENGINE_SWITCH_TIMEOUT_MS = 300_000;
 const PREFETCH_CACHE_LIMIT = 8;
+const ABORTED_PENDING_BLOB = Symbol("aborted-pending-blob");
+type PendingBlobRequest = {
+  controller: AbortController;
+  consumers: Set<symbol>;
+  promise: Promise<Blob>;
+};
 
 // Cache de audios ya sintetizados (Blob) para reproducir sin ida y vuelta a la red.
 const blobCache = new Map<string, Blob>();
-const inFlightPrefetch = new Map<string, Promise<Blob | null>>();
+const inFlightBlobRequests = new Map<string, PendingBlobRequest>();
 
 function cacheKey(engine: NeuralEngine, text: string, voice?: string): string {
   return `${engine}|${voice ?? "default"}|${text}`;
@@ -60,11 +66,97 @@ async function requestNeuralBlob(
   return response.blob();
 }
 
+function startSharedBlobRequest(request: NeuralSpeechRequest, engine: NeuralEngine): PendingBlobRequest {
+  const key = cacheKey(engine, request.text, request.voice);
+  const existing = inFlightBlobRequests.get(key);
+  if (existing) return existing;
+
+  const controller = new AbortController();
+  const pending = {
+    controller,
+    consumers: new Set<symbol>(),
+    promise: Promise.resolve<Blob>(null as never)
+  } satisfies PendingBlobRequest;
+
+  pending.promise = requestNeuralBlob(
+    request,
+    engine,
+    AbortSignal.any([controller.signal, AbortSignal.timeout(SYNTH_TIMEOUT_MS)])
+  )
+    .then((blob) => {
+      rememberBlob(key, blob);
+      return blob;
+    })
+    .finally(() => {
+      if (inFlightBlobRequests.get(key) === pending) {
+        inFlightBlobRequests.delete(key);
+      }
+    });
+
+  inFlightBlobRequests.set(key, pending);
+  return pending;
+}
+
+function releaseBlobConsumer(key: string, pending: PendingBlobRequest, token: symbol): void {
+  pending.consumers.delete(token);
+  if (pending.consumers.size === 0 && inFlightBlobRequests.get(key) === pending) {
+    pending.controller.abort();
+  }
+}
+
+async function awaitBlobRequest(key: string, pending: PendingBlobRequest): Promise<Blob> {
+  const token = Symbol(key);
+  pending.consumers.add(token);
+  try {
+    return await pending.promise;
+  } finally {
+    releaseBlobConsumer(key, pending, token);
+  }
+}
+
+async function waitForBlobRequest(
+  key: string,
+  pending: PendingBlobRequest,
+  signal: AbortSignal
+): Promise<Blob | typeof ABORTED_PENDING_BLOB> {
+  if (signal.aborted) return ABORTED_PENDING_BLOB;
+  const token = Symbol(key);
+  pending.consumers.add(token);
+  return await new Promise<Blob | typeof ABORTED_PENDING_BLOB>((resolve, reject) => {
+    let settled = false;
+
+    const finish = (value?: Blob | typeof ABORTED_PENDING_BLOB, error?: unknown) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      releaseBlobConsumer(key, pending, token);
+      if (error !== undefined) reject(error);
+      else resolve(value ?? ABORTED_PENDING_BLOB);
+    };
+
+    const onAbort = () => {
+      finish(ABORTED_PENDING_BLOB);
+    };
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    void pending.promise.then(
+      (blob) => {
+        finish(blob);
+      },
+      (error) => {
+        finish(undefined, error);
+      }
+    );
+  });
+}
+
 let currentAudio: HTMLAudioElement | null = null;
 let currentUrl: string | null = null;
 // Secuencia de peticiones: una narracion mas reciente invalida a las anteriores, para que
 // XTTS (aun siendo lento) no se reproduzca ni caiga al respaldo cuando ya fue superada.
 let activeController: AbortController | null = null;
+let activeRequestKey: string | null = null;
+let activePlaybackPromise: Promise<void> | null = null;
 let requestSeq = 0;
 
 function stopCurrent(): void {
@@ -83,6 +175,8 @@ export function cancelNeuralNarration(): void {
   requestSeq += 1;
   activeController?.abort();
   activeController = null;
+  activeRequestKey = null;
+  activePlaybackPromise = null;
   stopCurrent();
 }
 
@@ -127,21 +221,15 @@ async function obtainBlob(
   const key = cacheKey(engine, request.text, request.voice);
   let blob = blobCache.get(key) ?? null;
 
-  if (!blob && inFlightPrefetch.has(key)) {
-    blob = (await inFlightPrefetch.get(key)) ?? null;
-    if (seq !== requestSeq || controller.signal.aborted) return null;
-    if (!blob) {
-      throw new Error(`TTS ${engine} no disponible desde prefetch`);
-    }
-  }
-
   if (!blob) {
     try {
-      blob = await requestNeuralBlob(
-        request,
-        engine,
-        AbortSignal.any([controller.signal, AbortSignal.timeout(SYNTH_TIMEOUT_MS)])
+      const result = await waitForBlobRequest(
+        key,
+        startSharedBlobRequest(request, engine),
+        controller.signal
       );
+      if (result === ABORTED_PENDING_BLOB) return null;
+      blob = result;
     } catch (error) {
       if (controller.signal.aborted) return null;
       throw error;
@@ -212,22 +300,11 @@ export async function prefetchNeural(
 ): Promise<void> {
   const request: NeuralSpeechRequest = { text, voice: options.voice };
   const key = cacheKey(engine, request.text, request.voice);
-  if (blobCache.has(key) || inFlightPrefetch.has(key)) return;
-
-  const pending = requestNeuralBlob(request, engine, AbortSignal.timeout(SYNTH_TIMEOUT_MS))
-    .then((blob) => {
-      rememberBlob(key, blob);
-      return blob;
-    })
-    .catch(() => null)
-    .finally(() => {
-      if (inFlightPrefetch.get(key) === pending) {
-        inFlightPrefetch.delete(key);
-      }
-    });
-
-  inFlightPrefetch.set(key, pending);
-  await pending;
+  if (blobCache.has(key)) return;
+  // Chatterbox sintetiza de a una; no conviene abrir otra prefetch distinta mientras el
+  // motor sigue ocupado porque solo apila trabajo especulativo y aumenta los timeouts.
+  if (!inFlightBlobRequests.has(key) && inFlightBlobRequests.size > 0) return;
+  await awaitBlobRequest(key, startSharedBlobRequest(request, engine)).catch(() => undefined);
 }
 
 // Sintetiza y reproduce. Lanza SOLO ante un fallo real (motor no disponible, error de red,
@@ -238,14 +315,34 @@ export async function speakNeural(
   engine: NeuralEngine,
   options: NeuralSpeechOptions = {}
 ): Promise<void> {
+  const request: NeuralSpeechRequest = { text, voice: options.voice };
+  const key = cacheKey(engine, request.text, request.voice);
+  if (activeRequestKey === key && activePlaybackPromise) return activePlaybackPromise;
+
   const seq = ++requestSeq;
   activeController?.abort(); // cancela la peticion anterior en vuelo
   const controller = new AbortController();
   activeController = controller;
-  const request: NeuralSpeechRequest = { text, voice: options.voice };
-  const blob = await obtainBlob(request, engine, controller, seq);
-  if (!blob) return;
-  await playBlob(blob, controller, seq, options.playbackRate ?? 1);
+  activeRequestKey = key;
+
+  const playback = (async () => {
+    const blob = await obtainBlob(request, engine, controller, seq);
+    if (!blob) return;
+    await playBlob(blob, controller, seq, options.playbackRate ?? 1);
+  })().finally(() => {
+    if (activePlaybackPromise === playback) {
+      activePlaybackPromise = null;
+    }
+    if (activeRequestKey === key) {
+      activeRequestKey = null;
+    }
+    if (activeController === controller) {
+      activeController = null;
+    }
+  });
+
+  activePlaybackPromise = playback;
+  return playback;
 }
 
 export async function speakNeuralSequence(
@@ -256,11 +353,24 @@ export async function speakNeuralSequence(
   activeController?.abort();
   const controller = new AbortController();
   activeController = controller;
+  activeRequestKey = null;
 
-  for (const request of requests) {
-    if (seq !== requestSeq || controller.signal.aborted) return;
-    const blob = await obtainBlob(request, engine, controller, seq);
-    if (!blob) return;
-    await playBlob(blob, controller, seq, request.playbackRate ?? 1);
-  }
+  const playback = (async () => {
+    for (const request of requests) {
+      if (seq !== requestSeq || controller.signal.aborted) return;
+      const blob = await obtainBlob(request, engine, controller, seq);
+      if (!blob) return;
+      await playBlob(blob, controller, seq, request.playbackRate ?? 1);
+    }
+  })().finally(() => {
+    if (activePlaybackPromise === playback) {
+      activePlaybackPromise = null;
+    }
+    if (activeController === controller) {
+      activeController = null;
+    }
+  });
+
+  activePlaybackPromise = playback;
+  return playback;
 }

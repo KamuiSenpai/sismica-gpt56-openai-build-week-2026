@@ -1,0 +1,139 @@
+{
+  "version": "2026-07-04-extended",
+  "phase1Voices": ["mx_carolina", "mx_liam"],
+  "counts": {
+    "immediatePerVoice": 47,
+    "recommendedPerVoice": 47,
+    "didacticAddOnPerVoice": 0
+  },
+  "selectionOrder": ["family_specific", "depth_generic", "continuity_neutral"],
+  "groups": [
+    {
+      "id": "subduccion_pacifico_superficial",
+      "status": "current",
+      "kind": "tectonic_family",
+      "zones": ["Chile", "Peru", "Ecuador", "Colombia", "Mexico Pacifico", "Japon", "Filipinas", "Indonesia"],
+      "phrases": [
+        "Corresponde a un tramo superficial de subduccion donde una placa oceanica desciende bajo el margen del Pacifico",
+        "Es un ajuste somero en un borde convergente del Pacifico, tipico de zonas activas frente a la costa",
+        "La senal encaja con un margen de subduccion superficial donde interactuan placas oceanicas y continentales",
+        "Se ubica en un corredor del Pacifico con acople entre placas y liberacion somera de energia",
+        "Corresponde a un segmento costero del Pacifico donde la subduccion concentra sismicidad superficial"
+      ]
+    },
+    {
+      "id": "subduccion_pacifico_intermedio",
+      "status": "current",
+      "kind": "tectonic_family",
+      "zones": ["Andes", "Japon", "Filipinas", "Indonesia", "Tonga"],
+      "phrases": [
+        "El foco intermedio sugiere energia liberada dentro de la placa que desciende bajo el arco del Pacifico",
+        "Corresponde a una profundidad media tipica de la placa subducida en margenes convergentes del Pacifico",
+        "Es un evento de transicion dentro del sistema de subduccion, por debajo del frente costero",
+        "La profundidad intermedia encaja con deformacion interna de la placa que se hunde bajo el margen",
+        "Se trata de un foco intermedio bajo un arco activo del cinturon sismico del Pacifico"
+      ]
+    },
+    {
+      "id": "subduccion_pacifico_profundo",
+      "status": "current",
+      "kind": "tectonic_family",
+      "zones": ["Peru", "Bolivia", "norte de Chile", "Japon", "Fiji", "Tonga"],
+      "phrases": [
+        "La profundidad apunta a ruptura dentro de la placa subducida, muy por debajo del margen del Pacifico",
+        "Es un sismo profundo asociado al descenso prolongado de una placa oceanica bajo el sistema convergente",
+        "La energia se libera en niveles profundos del sistema de subduccion que domina este sector del Pacifico",
+        "Corresponde a deformacion interna de la placa que continua hundiendose a gran profundidad",
+        "El foco profundo es consistente con actividad sismica dentro de una losa en subduccion"
+      ]
+    },
+    {
+      "id": "colision_mediterraneo_asiatica",
+      "status": "current",
+      "kind": "tectonic_family",
+      "zones": ["Italia", "Grecia", "Turquia", "Iran", "Chipre", "Albania"],
+      "phrases": [
+        "Corresponde a una franja de compresion donde varios bloques continentales ajustan esfuerzos acumulados",
+        "Es compatible con la tectonica de colision activa entre el Mediterraneo oriental y Asia occidental",
+        "La senal encaja con un corredor compresivo de fallas activas y deformacion cortical regional",
+        "Se ubica en una zona donde convergen microplacas y bloques continentales del sistema mediterraneo"
+      ]
+    },
+    {
+      "id": "continental_superficial",
+      "status": "current",
+      "kind": "tectonic_family",
+      "zones": ["Polonia", "Texas", "Nevada", "Utah", "Mongolia", "Kazajistan"],
+      "phrases": [
+        "Se trata de una ruptura cortical somera en el interior de un bloque continental activo",
+        "Corresponde a deformacion superficial dentro de la corteza, lejos de un gran margen oceanico",
+        "Es un ajuste sismico de poca profundidad en fallas internas del continente",
+        "La senal encaja con actividad cortical superficial dentro de una region continental",
+        "Muestra una liberacion somera de energia en estructuras tectonicas del interior continental"
+      ]
+    },
+    {
+      "id": "marino_superficial",
+      "status": "current",
+      "kind": "tectonic_family",
+      "zones": ["mar abierto", "frente a la costa", "estrechos", "offshore"],
+      "phrases": [
+        "Es un evento de poca profundidad bajo el fondo marino, cerca de la franja costera",
+        "Corresponde a una ruptura somera en corteza oceanica o en plataforma continental",
+        "La senal apunta a actividad superficial debajo del mar, en un sector costa afuera",
+        "Se trata de energia liberada a escasa profundidad bajo el piso oceanico"
+      ]
+    },
+    {
+      "id": "foco_intermedio_generico",
+      "status": "current",
+      "kind": "depth_generic",
+      "zones": ["global"],
+      "phrases": [
+        "La profundidad lo ubica en un rango intermedio, por debajo de la sismicidad superficial tipica",
+        "Es un evento de foco intermedio, con ruptura a una profundidad media del sistema tectonico",
+        "La senal corresponde a liberacion de energia fuera del nivel cortical mas somero",
+        "Se trata de una ruptura a profundidad intermedia dentro del marco tectonico regional"
+      ]
+    },
+    {
+      "id": "foco_profundo_generico",
+      "status": "current",
+      "kind": "depth_generic",
+      "zones": ["global"],
+      "phrases": [
+        "Corresponde a un foco profundo, con origen muy por debajo de la corteza superior",
+        "La energia se libera a gran profundidad dentro del sistema tectonico regional",
+        "Es un evento profundo, alejado del rango habitual de sismicidad superficial",
+        "La senal apunta a una ruptura en niveles tectonicos profundos"
+      ]
+    },
+    {
+      "id": "superficial_generico",
+      "status": "current",
+      "kind": "depth_generic",
+      "zones": ["global"],
+      "phrases": [
+        "Se trata de un foco somero, con energia liberada cerca de la superficie",
+        "Corresponde a un evento superficial dentro del nivel mas alto de la corteza",
+        "La ruptura ocurre a poca profundidad, en el rango tipico de los sismos someros",
+        "Es un ajuste sismico superficial dentro de la corteza mas cercana a superficie",
+        "La senal encaja con un evento de poca profundidad y origen cortical"
+      ]
+    },
+    {
+      "id": "continuidad_neutra",
+      "status": "current",
+      "kind": "editorial_bridge",
+      "zones": ["global"],
+      "phrases": [
+        "Seguimos el recorrido global mientras entra el siguiente contexto sismico sobre el mapa",
+        "Pasamos a otro punto activo del planeta dentro de esta secuencia sismica continua",
+        "El mapa mundial mantiene actividad y avanzamos hacia el siguiente registro disponible",
+        "Continuamos el barrido global con otro evento dentro de la ruta sismica del planeta",
+        "La secuencia del mapa sigue en marcha y damos paso al siguiente evento",
+        "Revisamos ahora otro tramo de actividad sismica dentro del panorama mundial"
+      ]
+    }
+  ]
+}

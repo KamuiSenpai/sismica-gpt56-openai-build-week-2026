@@ -135,20 +135,52 @@ const FALLBACK_HANDOFF_VARIANTS: Array<
   (currentHost: string, nextHost: string) => { currentHostLine: string; nextHostLine: string }
 > = [
   (currentHost, nextHost) => ({
-    currentHostLine: `${nextHost}, te dejo la posta con toda confianza. Un gusto compartir cabina contigo, cuidalos bien.`,
-    nextHostLine: `Gracias, ${currentHost}, siempre un placer. Tomo la posta y seguimos juntos al aire con la cobertura sismica.`
+    currentHostLine: `Termina mi bloque. Quedan con ${nextHost}.`,
+    nextHostLine: `Gracias, ${currentHost}. Seguimos monitoreando la red sismica.`
   }),
   (currentHost, nextHost) => ({
-    currentHostLine: `${nextHost}, hasta aqui mi turno, quedas en las mejores manos. Nos vemos al rato, un abrazo.`,
-    nextHostLine: `Con carino, ${currentHost}. Recibo la posta y sigo acompanando al publico con la cobertura en vivo.`
+    currentHostLine: `Concluye mi turno. Cedo la palabra a ${nextHost}.`,
+    nextHostLine: `Asumo la conduccion. Gracias, ${currentHost}.`
   }),
   (currentHost, nextHost) => ({
-    currentHostLine: `${nextHost}, te paso la posta y me despido de la audiencia. Que tengas un gran turno, colega.`,
-    nextHostLine: `Un gusto, ${currentHost}, descansa. Aqui sigo yo, atentos y en calma con la cobertura en vivo.`
+    currentHostLine: `Cambio de turno en cabina. Adelante, ${nextHost}.`,
+    nextHostLine: `Un saludo, ${currentHost}. Continuamos con el reporte sismico.`
   }),
   (currentHost, nextHost) => ({
-    currentHostLine: `${nextHost}, cierro mi turno y te dejo la conduccion. Gracias por tanto, seguimos en contacto.`,
-    nextHostLine: `Gracias por el relevo, ${currentHost}. Tomo la posta y continuamos con la informacion sismica al aire.`
+    currentHostLine: `Me despido por ahora. Tu turno, ${nextHost}.`,
+    nextHostLine: `Recibo el pase, ${currentHost}. Vamos con los datos actualizados.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Cierro mi guardia. Te escuchamos, ${nextHost}.`,
+    nextHostLine: `Gracias, ${currentHost}. Seguimos al aire con mas reportes.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Finalizo este segmento. Adelante, ${nextHost}.`,
+    nextHostLine: `Tomo el control de la cabina. Un abrazo, ${currentHost}.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Paso el relevo a ${nextHost}.`,
+    nextHostLine: `Recibido, ${currentHost}. Vamos con la actividad reciente.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Hasta aqui mi reporte. Todo tuyo, ${nextHost}.`,
+    nextHostLine: `Gracias por el pase, ${currentHost}. Seguimos informando.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Termino mi turno. Sigue ${nextHost}.`,
+    nextHostLine: `Gracias, ${currentHost}. Empezamos la revision de datos.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Cierro transmision por ahora. Adelante, ${nextHost}.`,
+    nextHostLine: `Asumo el turno. Gracias, ${currentHost}.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Momento del relevo. Te toca, ${nextHost}.`,
+    nextHostLine: `Tomando la palabra. Gracias, ${currentHost}.`
+  }),
+  (currentHost, nextHost) => ({
+    currentHostLine: `Me retiro de cabina. Sigue la cobertura con ${nextHost}.`,
+    nextHostLine: `Acepto el pase, ${currentHost}. Seguimos vigilando.`
   })
 ];
 let fallbackHandoffIndex = 0;
