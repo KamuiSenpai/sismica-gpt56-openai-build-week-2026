@@ -17,8 +17,8 @@ function Save-Manifest {
 
 $catalog = Get-Content -Raw $CatalogPath | ConvertFrom-Json
 $items = @($catalog.items)
-if ($items.Count -ne 20) {
-  throw "El catalogo debe contener exactamente 20 pautas; contiene $($items.Count)"
+if ($items.Count -ne 40) {
+  throw "El catalogo debe contener exactamente 40 pautas; contiene $($items.Count)"
 }
 
 $requiredVoices = @(
@@ -135,6 +135,7 @@ foreach ($item in $items) {
       variant = $variant
       text = $text
       paragraphs = $paragraphs
+      keywords = @($item.keywords | Where-Object { $_ -is [string] -and $_.Trim().Length -gt 0 } | ForEach-Object { ([string]$_).Trim() })
       outputPath = $targetPath
       bytes = $file.Length
       elapsedMs = $elapsedMs

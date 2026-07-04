@@ -27,6 +27,7 @@ type RawBridgeItem = {
   text?: unknown;
   outputPath?: unknown;
   bytes?: unknown;
+  keywords?: unknown;
 };
 
 export type TtsBridgeManifestItem = {
@@ -36,6 +37,7 @@ export type TtsBridgeManifestItem = {
   text: string;
   bytes: number | null;
   path: string;
+  keywords: string[];
 };
 
 export type TtsBridgeManifestGroup = {
@@ -121,7 +123,12 @@ async function loadBridgeLibrary(library: TtsBridgeLibrary): Promise<CachedBridg
         variant: item.variant,
         text: item.text.trim(),
         bytes: typeof item.bytes === "number" && Number.isFinite(item.bytes) ? item.bytes : null,
-        path: `/api/tts/bridges/${library}/${encodeURIComponent(item.voice)}/${encodeURIComponent(fileName)}`
+        path: `/api/tts/bridges/${library}/${encodeURIComponent(item.voice)}/${encodeURIComponent(fileName)}`,
+        keywords: Array.isArray(item.keywords)
+          ? item.keywords
+              .filter((keyword): keyword is string => isString(keyword))
+              .map((keyword) => keyword.trim())
+          : []
       });
       variantCounts.set(item.groupId, (variantCounts.get(item.groupId) ?? 0) + 1);
     }

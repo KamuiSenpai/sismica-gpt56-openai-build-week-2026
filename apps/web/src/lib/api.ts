@@ -59,6 +59,7 @@ export type SeismicBridgeManifestItem = {
   bytes: number | null;
   path: string;
   url: string;
+  keywords: string[];
 };
 export type SeismicBridgeManifestGroup = {
   id: string;

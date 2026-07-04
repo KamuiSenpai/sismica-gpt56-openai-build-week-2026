@@ -6,7 +6,10 @@ import { type SeismicEvent } from "@sismica/shared";
 import { clearEditorialHistory } from "../src/lib/editorialHistory";
 import {
   classifyBridgeGroup,
+  neuralFallbackOrder,
+  pickBridgeCandidateForTests,
   pickBreakingNarrationIntro,
+  resetBridgeSelectionStateForTests,
   resolveEventNarration
 } from "../src/lib/seismicVoice";
 
@@ -331,4 +334,118 @@ test("classifyBridgeGroup uses standard shallow, intermediate and deep ranges", 
     ),
     "subduccion_pacifico_profundo"
   );
+});
+
+test("a newly arrived earthquake never switches from Chatterbox to Piper", () => {
+  assert.deepEqual(neuralFallbackOrder("chatterbox", false), ["chatterbox"]);
+  assert.deepEqual(neuralFallbackOrder("chatterbox", true), ["chatterbox", "piper"]);
+});
+
+test("station guides exhaust the active voice pool before repeating", () => {
+  resetBridgeSelectionStateForTests();
+  const manifest = {
+    library: "station",
+    version: "test",
+    generatedAtUtc: "2026-07-04T00:00:00.000Z",
+    voices: ["mx_carolina"],
+    groups: [],
+    items: [
+      {
+        voice: "mx_carolina",
+        groupId: "station_identity",
+        variant: "13",
+        text: "a",
+        bytes: 1,
+        path: "/tmp/13.wav",
+        url: "http://localhost/13.wav",
+        keywords: []
+      },
+      {
+        voice: "mx_carolina",
+        groupId: "station_identity",
+        variant: "15",
+        text: "b",
+        bytes: 1,
+        path: "/tmp/15.wav",
+        url: "http://localhost/15.wav",
+        keywords: []
+      },
+      {
+        voice: "mx_carolina",
+        groupId: "station_identity",
+        variant: "17",
+        text: "c",
+        bytes: 1,
+        path: "/tmp/17.wav",
+        url: "http://localhost/17.wav",
+        keywords: []
+      },
+      {
+        voice: "mx_carolina",
+        groupId: "station_identity",
+        variant: "19",
+        text: "d",
+        bytes: 1,
+        path: "/tmp/19.wav",
+        url: "http://localhost/19.wav",
+        keywords: []
+      }
+    ]
+  } as const;
+
+  const firstCycle = Array.from(
+    { length: 4 },
+    () => pickBridgeCandidateForTests(manifest, "mx_carolina", "station_identity")?.variant
+  );
+  assert.equal(
+    firstCycle.every((variant): variant is string => typeof variant === "string"),
+    true
+  );
+  assert.equal(new Set(firstCycle).size, 4);
+
+  const fifth = pickBridgeCandidateForTests(manifest, "mx_carolina", "station_identity");
+  assert.ok(fifth);
+  assert.equal(firstCycle.includes(fifth.variant), true);
+  assert.equal(fifth.variant === firstCycle[3], false);
+});
+
+test("station guides prefer keyword-matching context when available", () => {
+  resetBridgeSelectionStateForTests();
+  const manifest = {
+    library: "station",
+    version: "test",
+    generatedAtUtc: "2026-07-04T00:00:00.000Z",
+    voices: ["mx_sofia"],
+    groups: [],
+    items: [
+      {
+        voice: "mx_sofia",
+        groupId: "station_identity",
+        variant: "03",
+        text: "Sudamerica",
+        bytes: 1,
+        path: "/tmp/03.wav",
+        url: "http://localhost/03.wav",
+        keywords: ["peru", "chile", "ecuador"]
+      },
+      {
+        voice: "mx_sofia",
+        groupId: "station_identity",
+        variant: "11",
+        text: "General",
+        bytes: 1,
+        path: "/tmp/11.wav",
+        url: "http://localhost/11.wav",
+        keywords: []
+      }
+    ]
+  } as const;
+
+  const selected = pickBridgeCandidateForTests(
+    manifest,
+    "mx_sofia",
+    "station_identity",
+    "Sismo detectado en la costa de Peru"
+  );
+  assert.equal(selected?.variant, "03");
 });

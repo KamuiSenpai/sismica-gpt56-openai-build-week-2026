@@ -234,7 +234,8 @@ let activeBridgePlaybackCount = 0;
 const narrationCache = new Map<string, ResolvedNarrationPacket>();
 const inFlightNarrations = new Map<string, Promise<ResolvedNarrationPacket>>();
 const bridgeManifestCache = new Map<SeismicBridgeLibrary, Promise<SeismicBridgeManifest | null>>();
-const lastBridgeVariantByPool = new Map<string, string>();
+const lastBridgeCandidateKeyByPool = new Map<string, string>();
+const bridgeCycleByPool = new Map<string, { signature: string; remainingKeys: string[] }>();
 const VOICE_TELEMETRY_CLIENT_ID =
   globalThis.crypto?.randomUUID?.() ?? `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const VOICE_OWNER_KEY = "sismica.voiceOwner";
@@ -568,26 +569,133 @@ async function loadBridgeManifest(library: SeismicBridgeLibrary): Promise<Seismi
   return pending;
 }
 
+function bridgeCandidateKey(item: Pick<SeismicBridgeManifestItem, "voice" | "groupId" | "variant">): string {
+  return `${item.voice}|${item.groupId}|${item.variant}`;
+}
+
+function bridgeCandidateSignature(candidates: readonly SeismicBridgeManifestItem[]): string {
+  return candidates.map(bridgeCandidateKey).sort().join("||");
+}
+
+function shuffleBridgeKeys(keys: readonly string[]): string[] {
+  const shuffled = [...keys];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+function foldBridgeText(value: string): string {
+  return value
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ");
+}
+
+function scoreBridgeCandidate(item: SeismicBridgeManifestItem, foldedContext: string): number {
+  if (item.keywords.length === 0 || !foldedContext) return 0;
+  let score = 0;
+  for (const keyword of item.keywords) {
+    const foldedKeyword = foldBridgeText(keyword).trim();
+    if (foldedKeyword && foldedContext.includes(foldedKeyword)) score += 1;
+  }
+  return score;
+}
+
+function narrowBridgeCandidates(
+  candidates: readonly SeismicBridgeManifestItem[],
+  contextText?: string
+): readonly SeismicBridgeManifestItem[] {
+  if (!contextText) return candidates;
+  const foldedContext = foldBridgeText(contextText).trim();
+  if (!foldedContext) return candidates;
+
+  let bestScore = 0;
+  const scored = candidates.map((item) => {
+    const score = scoreBridgeCandidate(item, foldedContext);
+    if (score > bestScore) bestScore = score;
+    return { item, score };
+  });
+  if (bestScore <= 0) return candidates;
+  return scored.filter((candidate) => candidate.score === bestScore).map((candidate) => candidate.item);
+}
+
+function refillBridgeCycle(poolKey: string, candidates: readonly SeismicBridgeManifestItem[]): string[] {
+  const previousKey = lastBridgeCandidateKeyByPool.get(poolKey);
+  const keys = shuffleBridgeKeys(candidates.map(bridgeCandidateKey));
+  if (previousKey && keys.length > 1 && keys[0] === previousKey) {
+    const nextIndex = keys.findIndex((key) => key !== previousKey);
+    if (nextIndex > 0) {
+      [keys[0], keys[nextIndex]] = [keys[nextIndex], keys[0]];
+    }
+  }
+  bridgeCycleByPool.set(poolKey, {
+    signature: bridgeCandidateSignature(candidates),
+    remainingKeys: keys
+  });
+  return keys;
+}
+
+function drawBridgeCandidate(
+  poolKey: string,
+  candidates: readonly SeismicBridgeManifestItem[]
+): SeismicBridgeManifestItem | null {
+  if (candidates.length === 0) return null;
+
+  const signature = bridgeCandidateSignature(candidates);
+  const currentCycle = bridgeCycleByPool.get(poolKey);
+  let remainingKeys =
+    currentCycle?.signature === signature
+      ? currentCycle.remainingKeys.filter((key) =>
+          candidates.some((item) => bridgeCandidateKey(item) === key)
+        )
+      : [];
+
+  if (remainingKeys.length === 0) {
+    remainingKeys = refillBridgeCycle(poolKey, candidates);
+  }
+
+  const selectedKey = remainingKeys.shift();
+  bridgeCycleByPool.set(poolKey, { signature, remainingKeys });
+
+  const selected =
+    candidates.find((item) => bridgeCandidateKey(item) === selectedKey) ?? candidates[0] ?? null;
+  if (!selected) return null;
+  lastBridgeCandidateKeyByPool.set(poolKey, bridgeCandidateKey(selected));
+  return selected;
+}
+
 function pickBridgeCandidate(
   manifest: SeismicBridgeManifest,
   voice: string,
-  groupId: string
+  groupId: string,
+  contextText?: string
 ): SeismicBridgeManifestItem | null {
   const pools = [
-    manifest.items.filter((item) => item.voice === voice && item.groupId === groupId),
-    manifest.items.filter((item) => item.voice === voice && item.groupId === BRIDGE_FALLBACK_GROUP),
-    manifest.items.filter((item) => item.voice === voice)
+    {
+      id: `group:${groupId}`,
+      candidates: manifest.items.filter((item) => item.voice === voice && item.groupId === groupId)
+    },
+    {
+      id: `group:${BRIDGE_FALLBACK_GROUP}`,
+      candidates: manifest.items.filter(
+        (item) => item.voice === voice && item.groupId === BRIDGE_FALLBACK_GROUP
+      )
+    },
+    {
+      id: "voice:any",
+      candidates: manifest.items.filter((item) => item.voice === voice)
+    }
   ];
 
-  for (const candidates of pools) {
+  for (const pool of pools) {
+    const candidates = narrowBridgeCandidates(pool.candidates, contextText);
     if (candidates.length === 0) continue;
-    const poolKey = `${manifest.library}|${voice}|${groupId}`;
-    const previousVariant = lastBridgeVariantByPool.get(poolKey);
-    const filtered = candidates.filter((item) => item.variant !== previousVariant);
-    const pool = filtered.length > 0 ? filtered : candidates;
-    const selected = pool[Math.floor(Math.random() * pool.length)] ?? pool[0] ?? null;
+    const poolKey = `${manifest.library}|${voice}|${pool.id}`;
+    const selected = drawBridgeCandidate(poolKey, candidates);
     if (!selected) continue;
-    lastBridgeVariantByPool.set(poolKey, selected.variant);
     return selected;
   }
 
@@ -598,22 +706,35 @@ async function selectBridgeClip(
   library: SeismicBridgeLibrary,
   voice: string,
   groupId: string,
-  allowAnyVoice = false
+  allowAnyVoice = false,
+  contextText?: string
 ): Promise<SeismicBridgeManifestItem | null> {
   const manifest = await loadBridgeManifest(library);
   if (!manifest) return null;
-  const selected = pickBridgeCandidate(manifest, voice, groupId);
+  const selected = pickBridgeCandidate(manifest, voice, groupId, contextText);
   if (selected || !allowAnyVoice) return selected;
 
-  const candidates = manifest.items.filter((item) => item.groupId === groupId);
+  const candidates = narrowBridgeCandidates(
+    manifest.items.filter((item) => item.groupId === groupId),
+    contextText
+  );
   if (candidates.length === 0) return null;
   const poolKey = `${manifest.library}|all|${groupId}`;
-  const previousVariant = lastBridgeVariantByPool.get(poolKey);
-  const filtered = candidates.filter((item) => item.variant !== previousVariant);
-  const pool = filtered.length > 0 ? filtered : candidates;
-  const fallback = pool[Math.floor(Math.random() * pool.length)] ?? pool[0] ?? null;
-  if (fallback) lastBridgeVariantByPool.set(poolKey, fallback.variant);
-  return fallback;
+  return drawBridgeCandidate(poolKey, candidates);
+}
+
+export function resetBridgeSelectionStateForTests(): void {
+  lastBridgeCandidateKeyByPool.clear();
+  bridgeCycleByPool.clear();
+}
+
+export function pickBridgeCandidateForTests(
+  manifest: SeismicBridgeManifest,
+  voice: string,
+  groupId: string,
+  contextText?: string
+): SeismicBridgeManifestItem | null {
+  return pickBridgeCandidate(manifest, voice, groupId, contextText);
 }
 
 type BridgeHandle = {
@@ -672,6 +793,8 @@ function createBridgeHandle(options: {
     BRIDGE_SHORT_LIBRARY,
     BRIDGE_EXTENDED_LIBRARY,
     BRIDGE_EXTENDED_LIBRARY,
+    STATION_GUIDE_LIBRARY,
+    STATION_GUIDE_LIBRARY,
     STATION_GUIDE_LIBRARY
   ];
   let nextLibraryIndex = 0;
@@ -721,7 +844,8 @@ function createBridgeHandle(options: {
       library,
       stationGuide ? stationVoice : bridgeVoice,
       stationGuide ? STATION_GUIDE_GROUP : options.groupId,
-      stationGuide
+      stationGuide,
+      options.text
     );
     if (!clip || stopped || audio) {
       if (!stopped && !audio) void playNextLibrary();
@@ -1024,7 +1148,8 @@ export function prefetchSeismicNarration(
 }
 
 // Orden de intentos: el motor elegido primero, luego el resto de neurales por prioridad.
-function neuralFallbackOrder(start: NeuralEngine): NeuralEngine[] {
+export function neuralFallbackOrder(start: NeuralEngine, allowFallback = true): NeuralEngine[] {
+  if (!allowFallback) return [start];
   return [start, ...NEURAL_PRIORITY.filter((engine) => engine !== start)];
 }
 
@@ -1047,12 +1172,13 @@ async function runNeuralCascade(
     speaker?: string;
     cue: EditorialCue;
     kind: CueContextKind;
+    allowFallback?: boolean;
     beforePlayback?: () => Promise<void>;
   }
 ): Promise<void> {
   const spokenText = normalizeSpokenText(text);
   const delivery = deliveryForCue(spokenText, options.cue, options.kind);
-  for (const engine of neuralFallbackOrder(start)) {
+  for (const engine of neuralFallbackOrder(start, options.allowFallback)) {
     if (!isEngineAvailable(engine)) continue;
     try {
       await speakNeural(spokenText, engine, {
@@ -1143,6 +1269,7 @@ async function dispatchNarration(
         ...options,
         cue,
         kind: "evento",
+        allowFallback: !(options.mode === "breaking" || options.intro),
         beforePlayback: async () => {
           await bridge.stop("fade");
           neuralPlaybackStartedAt = performance.now();
@@ -1246,7 +1373,8 @@ async function dispatchText(
     let neuralPlaybackStartedAt: number | null = null;
     try {
       cancelBrowserNarration();
-      for (const engine of neuralFallbackOrder(voiceEngine as NeuralEngine)) {
+      const allowFallback = options.kind !== "en-vivo";
+      for (const engine of neuralFallbackOrder(voiceEngine as NeuralEngine, allowFallback)) {
         if (!isEngineAvailable(engine)) continue;
         try {
           await speakNeural(spokenText, engine, {
