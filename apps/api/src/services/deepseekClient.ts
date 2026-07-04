@@ -3,7 +3,9 @@ import { env } from "../config/env.js";
 // DeepSeek es compatible con la API de OpenAI (POST /chat/completions).
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-const CHAT_TIMEOUT_MS = 15_000;
+// La pauta editorial no puede retrasar la locucion. Si DeepSeek no responde rapido,
+// el llamador usa inmediatamente las aperturas y el contexto tectonico locales.
+const CHAT_TIMEOUT_MS = 2_000;
 
 // Error de "IA no disponible" -> el llamador cae a la plantilla.
 export class DeepSeekUnavailableError extends Error {

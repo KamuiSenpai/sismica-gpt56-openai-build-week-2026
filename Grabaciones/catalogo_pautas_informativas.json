@@ -1,0 +1,187 @@
+{
+  "version": "2026-07-04",
+  "library": "station",
+  "description": "Pautas generales para cubrir esperas de sintesis sin atribuir datos no verificados a un evento.",
+  "items": [
+    {
+      "id": "01",
+      "voice": "mx_valentina",
+      "paragraphs": [
+        "Este sistema mantiene vigilancia automatizada las veinticuatro horas sobre los eventos sísmicos publicados por redes de todo el mundo.",
+        "Integra datos del Servicio Geológico de Estados Unidos, del Centro Sismológico Euromediterráneo y de organismos nacionales reconocidos.",
+        "Cada registro se normaliza para presentar hora, ubicación, magnitud, profundidad y fuente dentro de un mismo recorrido."
+      ]
+    },
+    {
+      "id": "02",
+      "voice": "mx_martin",
+      "paragraphs": [
+        "El mapa se actualiza de manera continua con reportes emitidos por instituciones sismológicas y catálogos internacionales.",
+        "Entre las fuentes destacadas están el USGS, la Agencia Meteorológica de Japón, GeoNet de Nueva Zelanda y el EMSC.",
+        "Los datos pueden revisarse después de su publicación, por eso cada tarjeta conserva la fuente y el estado disponible."
+      ]
+    },
+    {
+      "id": "03",
+      "voice": "mx_sofia",
+      "paragraphs": [
+        "En Sudamérica se consultan reportes de organismos como el IGP del Perú, el CSN de Chile, el IGEPN de Ecuador y el SGC de Colombia.",
+        "También se incorporan publicaciones del INPRES de Argentina y de otras redes regionales cuando están disponibles.",
+        "La integración permite recorrer el margen andino sin confundir informes de distintas instituciones sobre un mismo evento."
+      ]
+    },
+    {
+      "id": "04",
+      "voice": "mx_ninoska",
+      "paragraphs": [
+        "Para México y Centroamérica, el sistema consulta fuentes como el SSN, INSIVUMEH, MARN y OVSICORI.",
+        "Estas redes cubren territorios donde la subducción del Pacífico y las fallas corticales producen actividad frecuente.",
+        "El contexto es general; la interpretación definitiva de cada sismo corresponde siempre al organismo que publica el informe."
+      ]
+    },
+    {
+      "id": "05",
+      "voice": "mx_valentina",
+      "paragraphs": [
+        "En Asia y el Pacífico occidental se integran publicaciones de la JMA de Japón, BMKG de Indonesia y CWA de Taiwán.",
+        "La región reúne arcos insulares, fosas oceánicas y límites de placas con una sismicidad muy activa.",
+        "El mapa muestra el reporte disponible sin convertir una ubicación automática en una conclusión tectónica definitiva."
+      ]
+    },
+    {
+      "id": "06",
+      "voice": "mx_martin",
+      "paragraphs": [
+        "En Europa se consideran catálogos como INGV de Italia, IGN de España, SED de Suiza y el centro EMSC.",
+        "El Mediterráneo combina zonas de convergencia, extensión y fallas activas distribuidas entre varios países.",
+        "Cuando dos fuentes describen el mismo evento, el sistema procura asociarlas y mantener visibles sus referencias."
+      ]
+    },
+    {
+      "id": "07",
+      "voice": "mx_sofia",
+      "paragraphs": [
+        "La calidad de una localización sísmica depende de la cobertura y distribución de las estaciones que registran las ondas.",
+        "Métricas como número de estaciones, brecha azimutal y error residual ayudan a interpretar la solución publicada.",
+        "Si esos valores no están disponibles, la interfaz los marca como datos no determinados en lugar de estimarlos."
+      ]
+    },
+    {
+      "id": "08",
+      "voice": "mx_ninoska",
+      "paragraphs": [
+        "Muchos eventos aparecen primero como soluciones automáticas o preliminares y pueden cambiar con una revisión posterior.",
+        "La magnitud, la profundidad y hasta la ubicación pueden ajustarse cuando llegan más observaciones a la red.",
+        "Por eso el sistema conserva estados y actualizaciones sin presentar la primera solución como un resultado inmutable."
+      ]
+    },
+    {
+      "id": "09",
+      "voice": "mx_valentina",
+      "paragraphs": [
+        "La magnitud representa el tamaño físico estimado del sismo y se expresa mediante una escala logarítmica.",
+        "La intensidad describe los efectos observados en lugares concretos y puede variar a distintas distancias del epicentro.",
+        "Un mismo evento tiene una magnitud publicada, pero puede producir intensidades diferentes según suelo, distancia y construcción."
+      ]
+    },
+    {
+      "id": "10",
+      "voice": "mx_martin",
+      "paragraphs": [
+        "La profundidad ayuda a describir dónde comenzó la ruptura dentro de la Tierra.",
+        "Como referencia general, se habla de sismos superficiales hasta setenta kilómetros, intermedios hasta trescientos y profundos por debajo de ese nivel.",
+        "Esta clasificación aporta contexto, pero no reemplaza el análisis específico de la fuente responsable."
+      ]
+    },
+    {
+      "id": "11",
+      "voice": "mx_sofia",
+      "paragraphs": [
+        "Este monitor informa sobre sismos ya registrados y publicados; no intenta predecir cuándo ocurrirá el siguiente.",
+        "La ciencia puede evaluar amenazas y probabilidades a largo plazo, pero no anticipar con precisión fecha, lugar y magnitud.",
+        "Ante un evento importante, deben seguirse los comunicados de protección civil y de las autoridades competentes."
+      ]
+    },
+    {
+      "id": "12",
+      "voice": "mx_ninoska",
+      "paragraphs": [
+        "Un sismo bajo el mar no implica automáticamente la generación de un tsunami.",
+        "La magnitud, profundidad, mecanismo de ruptura y deformación del fondo oceánico son factores esenciales para una evaluación.",
+        "Las alertas válidas proceden de los centros oficiales de vigilancia de tsunamis y no de una inferencia visual del mapa."
+      ]
+    },
+    {
+      "id": "13",
+      "voice": "mx_carolina",
+      "paragraphs": [
+        "Un mismo sismo puede ser publicado por varias redes con identificadores, tiempos o magnitudes ligeramente diferentes.",
+        "El sistema compara ubicación, hora y características para reducir duplicados y reunir referencias relacionadas.",
+        "Cuando la asociación no es suficientemente clara, los informes permanecen separados para evitar una unión incorrecta."
+      ]
+    },
+    {
+      "id": "14",
+      "voice": "mx_liam",
+      "paragraphs": [
+        "La llegada de datos no es simultánea en todas las fuentes y cada institución trabaja con sus propios intervalos de actualización.",
+        "Una demora en el mapa puede corresponder al tiempo de publicación, a la red de origen o a la conexión con el proveedor.",
+        "La hora del sismo y la hora de incorporación son datos distintos y se conservan para interpretar esa diferencia."
+      ]
+    },
+    {
+      "id": "15",
+      "voice": "mx_carolina",
+      "paragraphs": [
+        "Además de los epicentros, el mapa incorpora límites de placas, fallas activas y volcanes como referencias geográficas.",
+        "Estas capas ayudan a reconocer el entorno regional mientras la cámara recorre el planeta.",
+        "Su cercanía visual no demuestra por sí sola que una falla o un volcán específico haya causado el evento."
+      ]
+    },
+    {
+      "id": "16",
+      "voice": "mx_liam",
+      "paragraphs": [
+        "Cada tarjeta intenta conservar un enlace hacia el reporte de la institución que originó el dato.",
+        "Ese documento es la referencia adecuada para consultar revisiones, parámetros técnicos y comunicados asociados.",
+        "La visualización resume información para el recorrido, pero la fuente oficial mantiene la descripción autorizada."
+      ]
+    },
+    {
+      "id": "17",
+      "voice": "mx_carolina",
+      "paragraphs": [
+        "El recorrido usa un umbral mínimo de magnitud para mantener legible la actividad reciente mostrada en pantalla.",
+        "Eso significa que el mapa no representa necesariamente todos los microsismos detectados por cada red local.",
+        "Los catálogos especializados de cada país pueden contener muchos más eventos y soluciones con mayor detalle."
+      ]
+    },
+    {
+      "id": "18",
+      "voice": "mx_liam",
+      "paragraphs": [
+        "La actividad reciente se presenta junto con referencias históricas para ofrecer una escala más amplia.",
+        "Comparar cantidades requiere usar períodos, magnitudes mínimas y coberturas equivalentes.",
+        "Un aumento visible de puntos no basta por sí solo para afirmar que cambió la tasa sísmica de una región."
+      ]
+    },
+    {
+      "id": "19",
+      "voice": "mx_carolina",
+      "paragraphs": [
+        "La narración combina datos deterministas de la tarjeta con contexto editorial previamente limitado y revisado.",
+        "No se agregan daños, víctimas, alertas o evacuaciones si esos elementos no aparecen en una fuente competente.",
+        "El objetivo es mantener una cobertura clara y continua sin convertir una ausencia de datos en una afirmación."
+      ]
+    },
+    {
+      "id": "20",
+      "voice": "mx_liam",
+      "paragraphs": [
+        "Este canal automatizado puede mantener el recorrido global durante todo el día mientras los servicios permanezcan operativos.",
+        "Las fuentes institucionales aportan los eventos y el sistema organiza, relaciona y presenta la información disponible.",
+        "La audiencia conserva siempre la posibilidad de abrir el reporte original y contrastar cada actualización."
+      ]
+    }
+  ]
+}

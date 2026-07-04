@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type TtsBridgeLibrary = "short" | "extended";
+export type TtsBridgeLibrary = "short" | "extended" | "station";
 
 type RawBridgeManifest = {
   version?: string;
@@ -62,7 +62,8 @@ type CachedBridgeLibrary = {
 const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const BRIDGE_LIBRARY_ROOTS: Record<TtsBridgeLibrary, string> = {
   short: join(REPO_ROOT, "Grabaciones", "contexto-pregabado"),
-  extended: join(REPO_ROOT, "Grabaciones", "contexto-extendido")
+  extended: join(REPO_ROOT, "Grabaciones", "contexto-extendido"),
+  station: join(REPO_ROOT, "Grabaciones", "pautas-informativas")
 };
 const manifestCache = new Map<TtsBridgeLibrary, Promise<CachedBridgeLibrary | null>>();
 

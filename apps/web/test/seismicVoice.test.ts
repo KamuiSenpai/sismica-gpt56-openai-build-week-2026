@@ -4,7 +4,11 @@ import test from "node:test";
 import { type SeismicEvent } from "@sismica/shared";
 
 import { clearEditorialHistory } from "../src/lib/editorialHistory";
-import { pickBreakingNarrationIntro, resolveEventNarration } from "../src/lib/seismicVoice";
+import {
+  classifyBridgeGroup,
+  pickBreakingNarrationIntro,
+  resolveEventNarration
+} from "../src/lib/seismicVoice";
 
 function makeEvent(overrides: Partial<SeismicEvent> = {}): SeismicEvent {
   return {
@@ -299,5 +303,32 @@ test("pickBreakingNarrationIntro returns a stable allowed intro for the same eve
       "Actualizacion sismica reciente",
       "Evento sismico reciente"
     ].includes(introA)
+  );
+});
+
+test("classifyBridgeGroup uses standard shallow, intermediate and deep ranges", () => {
+  assert.equal(
+    classifyBridgeGroup(
+      makeEvent({ title: "M3.4 - Fukushima, Japon", depthKm: 50, latitude: 37.7, longitude: 141.7 })
+    ),
+    "subduccion_pacifico_superficial"
+  );
+  assert.equal(
+    classifyBridgeGroup(
+      makeEvent({ title: "M4.4 - Pastaza, Peru", depthKm: 130, latitude: -4.2, longitude: -76.8 })
+    ),
+    "subduccion_pacifico_intermedio"
+  );
+  assert.equal(
+    classifyBridgeGroup(
+      makeEvent({ title: "M3.2 - Socaire, Chile", depthKm: 213, latitude: -23.9, longitude: -67.4 })
+    ),
+    "subduccion_pacifico_intermedio"
+  );
+  assert.equal(
+    classifyBridgeGroup(
+      makeEvent({ title: "M5.0 - Tonga", depthKm: 350, latitude: -20.0, longitude: -175.0 })
+    ),
+    "subduccion_pacifico_profundo"
   );
 });

@@ -1,0 +1,343 @@
+﻿{
+  "version": "2026-07-04",
+  "catalogVersion": "2026-07-04",
+  "generatedAtUtc": "2026-07-04T19:32:07.5277713Z",
+  "runStartedUtc": "2026-07-04T19:23:27.5461287Z",
+  "voices": ["mx_carolina", "mx_liam", "mx_martin", "mx_ninoska", "mx_sofia", "mx_valentina"],
+  "service": {
+    "url": "http://127.0.0.1:8091",
+    "device": "cuda",
+    "precision": "bf16",
+    "compileMode": "off"
+  },
+  "groups": [
+    {
+      "id": "station_identity",
+      "kind": "station_identity",
+      "status": "current",
+      "variants": 20
+    }
+  ],
+  "items": [
+    {
+      "voice": "mx_valentina",
+      "groupId": "station_identity",
+      "variant": "01",
+      "text": "Este sistema mantiene vigilancia automatizada las veinticuatro horas sobre los eventos sÃ­smicos publicados por redes de todo el mundo.\n\nIntegra datos del Servicio GeolÃ³gico de Estados Unidos, del Centro SismolÃ³gico EuromediterrÃ¡neo y de organismos nacionales reconocidos.\n\nCada registro se normaliza para presentar hora, ubicaciÃ³n, magnitud, profundidad y fuente dentro de un mismo recorrido.",
+      "paragraphs": [
+        "Este sistema mantiene vigilancia automatizada las veinticuatro horas sobre los eventos sÃ­smicos publicados por redes de todo el mundo.",
+        "Integra datos del Servicio GeolÃ³gico de Estados Unidos, del Centro SismolÃ³gico EuromediterrÃ¡neo y de organismos nacionales reconocidos.",
+        "Cada registro se normaliza para presentar hora, ubicaciÃ³n, magnitud, profundidad y fuente dentro de un mismo recorrido."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_valentina\\pauta_mx_valentina_01.wav",
+      "bytes": 1069484,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:01:42.7630923Z"
+    },
+    {
+      "voice": "mx_martin",
+      "groupId": "station_identity",
+      "variant": "02",
+      "text": "El mapa se actualiza de manera continua con reportes emitidos por instituciones sismolÃ³gicas y catÃ¡logos internacionales.\n\nEntre las fuentes destacadas estÃ¡n el USGS, la Agencia MeteorolÃ³gica de JapÃ³n, GeoNet de Nueva Zelanda y el EMSC.\n\nLos datos pueden revisarse despuÃ©s de su publicaciÃ³n, por eso cada tarjeta conserva la fuente y el estado disponible.",
+      "paragraphs": [
+        "El mapa se actualiza de manera continua con reportes emitidos por instituciones sismolÃ³gicas y catÃ¡logos internacionales.",
+        "Entre las fuentes destacadas estÃ¡n el USGS, la Agencia MeteorolÃ³gica de JapÃ³n, GeoNet de Nueva Zelanda y el EMSC.",
+        "Los datos pueden revisarse despuÃ©s de su publicaciÃ³n, por eso cada tarjeta conserva la fuente y el estado disponible."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_martin\\pauta_mx_martin_02.wav",
+      "bytes": 1186638,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:10:43.1552919Z"
+    },
+    {
+      "voice": "mx_sofia",
+      "groupId": "station_identity",
+      "variant": "03",
+      "text": "En SudamÃ©rica se consultan reportes de organismos como el IGP del PerÃº, el CSN de Chile, el IGEPN de Ecuador y el SGC de Colombia.\n\nTambiÃ©n se incorporan publicaciones del INPRES de Argentina y de otras redes regionales cuando estÃ¡n disponibles.\n\nLa integraciÃ³n permite recorrer el margen andino sin confundir informes de distintas instituciones sobre un mismo evento.",
+      "paragraphs": [
+        "En SudamÃ©rica se consultan reportes de organismos como el IGP del PerÃº, el CSN de Chile, el IGEPN de Ecuador y el SGC de Colombia.",
+        "TambiÃ©n se incorporan publicaciones del INPRES de Argentina y de otras redes regionales cuando estÃ¡n disponibles.",
+        "La integraciÃ³n permite recorrer el margen andino sin confundir informes de distintas instituciones sobre un mismo evento."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_sofia\\pauta_mx_sofia_03.wav",
+      "bytes": 1159758,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:11:31.9542151Z"
+    },
+    {
+      "voice": "mx_ninoska",
+      "groupId": "station_identity",
+      "variant": "04",
+      "text": "Para MÃ©xico y CentroamÃ©rica, el sistema consulta fuentes como el SSN, INSIVUMEH, MARN y OVSICORI.\n\nEstas redes cubren territorios donde la subducciÃ³n del PacÃ­fico y las fallas corticales producen actividad frecuente.\n\nEl contexto es general; la interpretaciÃ³n definitiva de cada sismo corresponde siempre al organismo que publica el informe.",
+      "paragraphs": [
+        "Para MÃ©xico y CentroamÃ©rica, el sistema consulta fuentes como el SSN, INSIVUMEH, MARN y OVSICORI.",
+        "Estas redes cubren territorios donde la subducciÃ³n del PacÃ­fico y las fallas corticales producen actividad frecuente.",
+        "El contexto es general; la interpretaciÃ³n definitiva de cada sismo corresponde siempre al organismo que publica el informe."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_ninoska\\pauta_mx_ninoska_04.wav",
+      "bytes": 1096398,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:12:17.7910956Z"
+    },
+    {
+      "voice": "mx_valentina",
+      "groupId": "station_identity",
+      "variant": "05",
+      "text": "En Asia y el PacÃ­fico occidental se integran publicaciones de la JMA de JapÃ³n, BMKG de Indonesia y CWA de TaiwÃ¡n.\n\nLa regiÃ³n reÃºne arcos insulares, fosas oceÃ¡nicas y lÃ­mites de placas con una sismicidad muy activa.\n\nEl mapa muestra el reporte disponible sin convertir una ubicaciÃ³n automÃ¡tica en una conclusiÃ³n tectÃ³nica definitiva.",
+      "paragraphs": [
+        "En Asia y el PacÃ­fico occidental se integran publicaciones de la JMA de JapÃ³n, BMKG de Indonesia y CWA de TaiwÃ¡n.",
+        "La regiÃ³n reÃºne arcos insulares, fosas oceÃ¡nicas y lÃ­mites de placas con una sismicidad muy activa.",
+        "El mapa muestra el reporte disponible sin convertir una ubicaciÃ³n automÃ¡tica en una conclusiÃ³n tectÃ³nica definitiva."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_valentina\\pauta_mx_valentina_05.wav",
+      "bytes": 1059918,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:13:11.3562536Z"
+    },
+    {
+      "voice": "mx_martin",
+      "groupId": "station_identity",
+      "variant": "06",
+      "text": "En Europa se consideran catÃ¡logos como INGV de Italia, IGN de EspaÃ±a, SED de Suiza y el centro EMSC.\n\nEl MediterrÃ¡neo combina zonas de convergencia, extensiÃ³n y fallas activas distribuidas entre varios paÃ­ses.\n\nCuando dos fuentes describen el mismo evento, el sistema procura asociarlas y mantener visibles sus referencias.",
+      "paragraphs": [
+        "En Europa se consideran catÃ¡logos como INGV de Italia, IGN de EspaÃ±a, SED de Suiza y el centro EMSC.",
+        "El MediterrÃ¡neo combina zonas de convergencia, extensiÃ³n y fallas activas distribuidas entre varios paÃ­ses.",
+        "Cuando dos fuentes describen el mismo evento, el sistema procura asociarlas y mantener visibles sus referencias."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_martin\\pauta_mx_martin_06.wav",
+      "bytes": 1115598,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:13:59.2910857Z"
+    },
+    {
+      "voice": "mx_sofia",
+      "groupId": "station_identity",
+      "variant": "07",
+      "text": "La calidad de una localizaciÃ³n sÃ­smica depende de la cobertura y distribuciÃ³n de las estaciones que registran las ondas.\n\nMÃ©tricas como nÃºmero de estaciones, brecha azimutal y error residual ayudan a interpretar la soluciÃ³n publicada.\n\nSi esos valores no estÃ¡n disponibles, la interfaz los marca como datos no determinados en lugar de estimarlos.",
+      "paragraphs": [
+        "La calidad de una localizaciÃ³n sÃ­smica depende de la cobertura y distribuciÃ³n de las estaciones que registran las ondas.",
+        "MÃ©tricas como nÃºmero de estaciones, brecha azimutal y error residual ayudan a interpretar la soluciÃ³n publicada.",
+        "Si esos valores no estÃ¡n disponibles, la interfaz los marca como datos no determinados en lugar de estimarlos."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_sofia\\pauta_mx_sofia_07.wav",
+      "bytes": 1067598,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:15:53.0283165Z"
+    },
+    {
+      "voice": "mx_ninoska",
+      "groupId": "station_identity",
+      "variant": "08",
+      "text": "Muchos eventos aparecen primero como soluciones automÃ¡ticas o preliminares y pueden cambiar con una revisiÃ³n posterior.\n\nLa magnitud, la profundidad y hasta la ubicaciÃ³n pueden ajustarse cuando llegan mÃ¡s observaciones a la red.\n\nPor eso el sistema conserva estados y actualizaciones sin presentar la primera soluciÃ³n como un resultado inmutable.",
+      "paragraphs": [
+        "Muchos eventos aparecen primero como soluciones automÃ¡ticas o preliminares y pueden cambiar con una revisiÃ³n posterior.",
+        "La magnitud, la profundidad y hasta la ubicaciÃ³n pueden ajustarse cuando llegan mÃ¡s observaciones a la red.",
+        "Por eso el sistema conserva estados y actualizaciones sin presentar la primera soluciÃ³n como un resultado inmutable."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_ninoska\\pauta_mx_ninoska_08.wav",
+      "bytes": 1102158,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:17:23.0627914Z"
+    },
+    {
+      "voice": "mx_valentina",
+      "groupId": "station_identity",
+      "variant": "09",
+      "text": "La magnitud representa el tamaÃ±o fÃ­sico estimado del sismo y se expresa mediante una escala logarÃ­tmica.\n\nLa intensidad describe los efectos observados en lugares concretos y puede variar a distintas distancias del epicentro.\n\nUn mismo evento tiene una magnitud publicada, pero puede producir intensidades diferentes segÃºn suelo, distancia y construcciÃ³n.",
+      "paragraphs": [
+        "La magnitud representa el tamaÃ±o fÃ­sico estimado del sismo y se expresa mediante una escala logarÃ­tmica.",
+        "La intensidad describe los efectos observados en lugares concretos y puede variar a distintas distancias del epicentro.",
+        "Un mismo evento tiene una magnitud publicada, pero puede producir intensidades diferentes segÃºn suelo, distancia y construcciÃ³n."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_valentina\\pauta_mx_valentina_09.wav",
+      "bytes": 1084878,
+      "elapsedMs": null,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T19:21:25.0603283Z"
+    },
+    {
+      "voice": "mx_martin",
+      "groupId": "station_identity",
+      "variant": "10",
+      "text": "La profundidad ayuda a describir dÃ³nde comenzÃ³ la ruptura dentro de la Tierra.\n\nComo referencia general, se habla de sismos superficiales hasta setenta kilÃ³metros, intermedios hasta trescientos y profundos por debajo de ese nivel.\n\nEsta clasificaciÃ³n aporta contexto, pero no reemplaza el anÃ¡lisis especÃ­fico de la fuente responsable.",
+      "paragraphs": [
+        "La profundidad ayuda a describir dÃ³nde comenzÃ³ la ruptura dentro de la Tierra.",
+        "Como referencia general, se habla de sismos superficiales hasta setenta kilÃ³metros, intermedios hasta trescientos y profundos por debajo de ese nivel.",
+        "Esta clasificaciÃ³n aporta contexto, pero no reemplaza el anÃ¡lisis especÃ­fico de la fuente responsable."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_martin\\pauta_mx_martin_10.wav",
+      "bytes": 1098318,
+      "elapsedMs": 45264.8,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:24:12.8234438Z"
+    },
+    {
+      "voice": "mx_sofia",
+      "groupId": "station_identity",
+      "variant": "11",
+      "text": "Este monitor informa sobre sismos ya registrados y publicados; no intenta predecir cuÃ¡ndo ocurrirÃ¡ el siguiente.\n\nLa ciencia puede evaluar amenazas y probabilidades a largo plazo, pero no anticipar con precisiÃ³n fecha, lugar y magnitud.\n\nAnte un evento importante, deben seguirse los comunicados de protecciÃ³n civil y de las autoridades competentes.",
+      "paragraphs": [
+        "Este monitor informa sobre sismos ya registrados y publicados; no intenta predecir cuÃ¡ndo ocurrirÃ¡ el siguiente.",
+        "La ciencia puede evaluar amenazas y probabilidades a largo plazo, pero no anticipar con precisiÃ³n fecha, lugar y magnitud.",
+        "Ante un evento importante, deben seguirse los comunicados de protecciÃ³n civil y de las autoridades competentes."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_sofia\\pauta_mx_sofia_11.wav",
+      "bytes": 1102158,
+      "elapsedMs": 45392.3,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:24:58.2389068Z"
+    },
+    {
+      "voice": "mx_ninoska",
+      "groupId": "station_identity",
+      "variant": "12",
+      "text": "Un sismo bajo el mar no implica automÃ¡ticamente la generaciÃ³n de un tsunami.\n\nLa magnitud, profundidad, mecanismo de ruptura y deformaciÃ³n del fondo oceÃ¡nico son factores esenciales para una evaluaciÃ³n.\n\nLas alertas vÃ¡lidas proceden de los centros oficiales de vigilancia de tsunamis y no de una inferencia visual del mapa.",
+      "paragraphs": [
+        "Un sismo bajo el mar no implica automÃ¡ticamente la generaciÃ³n de un tsunami.",
+        "La magnitud, profundidad, mecanismo de ruptura y deformaciÃ³n del fondo oceÃ¡nico son factores esenciales para una evaluaciÃ³n.",
+        "Las alertas vÃ¡lidas proceden de los centros oficiales de vigilancia de tsunamis y no de una inferencia visual del mapa."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_ninoska\\pauta_mx_ninoska_12.wav",
+      "bytes": 1127118,
+      "elapsedMs": 46396.1,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:25:44.6374397Z"
+    },
+    {
+      "voice": "mx_carolina",
+      "groupId": "station_identity",
+      "variant": "13",
+      "text": "Un mismo sismo puede ser publicado por varias redes con identificadores, tiempos o magnitudes ligeramente diferentes.\n\nEl sistema compara ubicaciÃ³n, hora y caracterÃ­sticas para reducir duplicados y reunir referencias relacionadas.\n\nCuando la asociaciÃ³n no es suficientemente clara, los informes permanecen separados para evitar una uniÃ³n incorrecta.",
+      "paragraphs": [
+        "Un mismo sismo puede ser publicado por varias redes con identificadores, tiempos o magnitudes ligeramente diferentes.",
+        "El sistema compara ubicaciÃ³n, hora y caracterÃ­sticas para reducir duplicados y reunir referencias relacionadas.",
+        "Cuando la asociaciÃ³n no es suficientemente clara, los informes permanecen separados para evitar una uniÃ³n incorrecta."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_carolina\\pauta_mx_carolina_13.wav",
+      "bytes": 925518,
+      "elapsedMs": 39248.1,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:26:23.8870808Z"
+    },
+    {
+      "voice": "mx_liam",
+      "groupId": "station_identity",
+      "variant": "14",
+      "text": "La llegada de datos no es simultÃ¡nea en todas las fuentes y cada instituciÃ³n trabaja con sus propios intervalos de actualizaciÃ³n.\n\nUna demora en el mapa puede corresponder al tiempo de publicaciÃ³n, a la red de origen o a la conexiÃ³n con el proveedor.\n\nLa hora del sismo y la hora de incorporaciÃ³n son datos distintos y se conservan para interpretar esa diferencia.",
+      "paragraphs": [
+        "La llegada de datos no es simultÃ¡nea en todas las fuentes y cada instituciÃ³n trabaja con sus propios intervalos de actualizaciÃ³n.",
+        "Una demora en el mapa puede corresponder al tiempo de publicaciÃ³n, a la red de origen o a la conexiÃ³n con el proveedor.",
+        "La hora del sismo y la hora de incorporaciÃ³n son datos distintos y se conservan para interpretar esa diferencia."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_liam\\pauta_mx_liam_14.wav",
+      "bytes": 923598,
+      "elapsedMs": 53268.9,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:27:17.1590382Z"
+    },
+    {
+      "voice": "mx_carolina",
+      "groupId": "station_identity",
+      "variant": "15",
+      "text": "AdemÃ¡s de los epicentros, el mapa incorpora lÃ­mites de placas, fallas activas y volcanes como referencias geogrÃ¡ficas.\n\nEstas capas ayudan a reconocer el entorno regional mientras la cÃ¡mara recorre el planeta.\n\nSu cercanÃ­a visual no demuestra por sÃ­ sola que una falla o un volcÃ¡n especÃ­fico haya causado el evento.",
+      "paragraphs": [
+        "AdemÃ¡s de los epicentros, el mapa incorpora lÃ­mites de placas, fallas activas y volcanes como referencias geogrÃ¡ficas.",
+        "Estas capas ayudan a reconocer el entorno regional mientras la cÃ¡mara recorre el planeta.",
+        "Su cercanÃ­a visual no demuestra por sÃ­ sola que una falla o un volcÃ¡n especÃ­fico haya causado el evento."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_carolina\\pauta_mx_carolina_15.wav",
+      "bytes": 881358,
+      "elapsedMs": 41197.8,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:27:58.3588851Z"
+    },
+    {
+      "voice": "mx_liam",
+      "groupId": "station_identity",
+      "variant": "16",
+      "text": "Cada tarjeta intenta conservar un enlace hacia el reporte de la instituciÃ³n que originÃ³ el dato.\n\nEse documento es la referencia adecuada para consultar revisiones, parÃ¡metros tÃ©cnicos y comunicados asociados.\n\nLa visualizaciÃ³n resume informaciÃ³n para el recorrido, pero la fuente oficial mantiene la descripciÃ³n autorizada.",
+      "paragraphs": [
+        "Cada tarjeta intenta conservar un enlace hacia el reporte de la instituciÃ³n que originÃ³ el dato.",
+        "Ese documento es la referencia adecuada para consultar revisiones, parÃ¡metros tÃ©cnicos y comunicados asociados.",
+        "La visualizaciÃ³n resume informaciÃ³n para el recorrido, pero la fuente oficial mantiene la descripciÃ³n autorizada."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_liam\\pauta_mx_liam_16.wav",
+      "bytes": 958158,
+      "elapsedMs": 45364.3,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:28:43.7252219Z"
+    },
+    {
+      "voice": "mx_carolina",
+      "groupId": "station_identity",
+      "variant": "17",
+      "text": "El recorrido usa un umbral mÃ­nimo de magnitud para mantener legible la actividad reciente mostrada en pantalla.\n\nEso significa que el mapa no representa necesariamente todos los microsismos detectados por cada red local.\n\nLos catÃ¡logos especializados de cada paÃ­s pueden contener muchos mÃ¡s eventos y soluciones con mayor detalle.",
+      "paragraphs": [
+        "El recorrido usa un umbral mÃ­nimo de magnitud para mantener legible la actividad reciente mostrada en pantalla.",
+        "Eso significa que el mapa no representa necesariamente todos los microsismos detectados por cada red local.",
+        "Los catÃ¡logos especializados de cada paÃ­s pueden contener muchos mÃ¡s eventos y soluciones con mayor detalle."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_carolina\\pauta_mx_carolina_17.wav",
+      "bytes": 848718,
+      "elapsedMs": 49661.4,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:29:33.3886136Z"
+    },
+    {
+      "voice": "mx_liam",
+      "groupId": "station_identity",
+      "variant": "18",
+      "text": "La actividad reciente se presenta junto con referencias histÃ³ricas para ofrecer una escala mÃ¡s amplia.\n\nComparar cantidades requiere usar perÃ­odos, magnitudes mÃ­nimas y coberturas equivalentes.\n\nUn aumento visible de puntos no basta por sÃ­ solo para afirmar que cambiÃ³ la tasa sÃ­smica de una regiÃ³n.",
+      "paragraphs": [
+        "La actividad reciente se presenta junto con referencias histÃ³ricas para ofrecer una escala mÃ¡s amplia.",
+        "Comparar cantidades requiere usar perÃ­odos, magnitudes mÃ­nimas y coberturas equivalentes.",
+        "Un aumento visible de puntos no basta por sÃ­ solo para afirmar que cambiÃ³ la tasa sÃ­smica de una regiÃ³n."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_liam\\pauta_mx_liam_18.wav",
+      "bytes": 881358,
+      "elapsedMs": 62162.8,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:30:35.5507469Z"
+    },
+    {
+      "voice": "mx_carolina",
+      "groupId": "station_identity",
+      "variant": "19",
+      "text": "La narraciÃ³n combina datos deterministas de la tarjeta con contexto editorial previamente limitado y revisado.\n\nNo se agregan daÃ±os, vÃ­ctimas, alertas o evacuaciones si esos elementos no aparecen en una fuente competente.\n\nEl objetivo es mantener una cobertura clara y continua sin convertir una ausencia de datos en una afirmaciÃ³n.",
+      "paragraphs": [
+        "La narraciÃ³n combina datos deterministas de la tarjeta con contexto editorial previamente limitado y revisado.",
+        "No se agregan daÃ±os, vÃ­ctimas, alertas o evacuaciones si esos elementos no aparecen en una fuente competente.",
+        "El objetivo es mantener una cobertura clara y continua sin convertir una ausencia de datos en una afirmaciÃ³n."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_carolina\\pauta_mx_carolina_19.wav",
+      "bytes": 894798,
+      "elapsedMs": 47269.2,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:31:22.8211818Z"
+    },
+    {
+      "voice": "mx_liam",
+      "groupId": "station_identity",
+      "variant": "20",
+      "text": "Este canal automatizado puede mantener el recorrido global durante todo el dÃ­a mientras los servicios permanezcan operativos.\n\nLas fuentes institucionales aportan los eventos y el sistema organiza, relaciona y presenta la informaciÃ³n disponible.\n\nLa audiencia conserva siempre la posibilidad de abrir el reporte original y contrastar cada actualizaciÃ³n.",
+      "paragraphs": [
+        "Este canal automatizado puede mantener el recorrido global durante todo el dÃ­a mientras los servicios permanezcan operativos.",
+        "Las fuentes institucionales aportan los eventos y el sistema organiza, relaciona y presenta la informaciÃ³n disponible.",
+        "La audiencia conserva siempre la posibilidad de abrir el reporte original y contrastar cada actualizaciÃ³n."
+      ],
+      "outputPath": "E:\\Proyecto\\Grabaciones\\pautas-informativas\\mx_liam\\pauta_mx_liam_20.wav",
+      "bytes": 985038,
+      "elapsedMs": 44693.1,
+      "skipped": false,
+      "generatedAtUtc": "2026-07-04T19:32:07.5182513Z"
+    }
+  ]
+}

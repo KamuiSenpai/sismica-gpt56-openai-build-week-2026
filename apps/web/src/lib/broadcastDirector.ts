@@ -2,7 +2,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 
 import { type SeismicEvent } from "@sismica/shared";
 
-import { fetchDirectorDecision, fetchHandoffSegment, fetchSegmentText } from "./api";
+import { fetchDirectorDecision, fetchSegmentText } from "./api";
 import { getRecentEditorialLines, rememberEditorialLine } from "./editorialHistory";
 import { broadcastPlace } from "./broadcastPlace";
 import {
@@ -16,32 +16,38 @@ import {
   getActiveBroadcastHost,
   getNextBroadcastHost,
   isSeismicNarrationActive,
-  prefetchDialogue,
   prefetchText,
   resolveEventNarration,
   setActiveBroadcastHost,
-  speakDialogue,
-  speakText,
-  type BroadcastDialogueTurn
+  speakText
 } from "./seismicVoice";
 import { normalizeSpanishText } from "./spanishText";
 
 export type DirectorMode = "off" | "rules" | "ai";
-export type BroadcastSegmentKind = DirectorSegmentKind | "en-vivo" | "relevo";
+export type BroadcastSegmentKind = DirectorSegmentKind | "en-vivo";
 export type BroadcastSegment = {
   kind: BroadcastSegmentKind;
   text: string;
   cue?: EditorialCue;
 };
 
-const HANDOFF_DUE_MIN = 10;
+export const HOST_ROTATION_INTERVAL_MS = 5 * 60_000;
+export const HOST_ROTATION_POLL_MS = 500;
 const RECAP_DUE_MIN = 60;
 const EDUCATION_DUE_MIN = 8;
 const EDUCATION_REPEAT_WINDOW_MS = 60 * 60_000;
 const EVENT_REPEAT_WINDOW_MS = 10 * 60_000;
 const BULLETIN_WINDOWS: Array<60 | 30 | 15> = [60, 30, 15];
-const HANDOFF_CUE: EditorialCue = { urgency: "media", rhythm: "fluido", tone: "directo" };
 const DIRECTOR_DEBUG = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
+
+export function rotateBroadcastHostSilently(): void {
+  const currentHost = getActiveBroadcastHost();
+  setActiveBroadcastHost(getNextBroadcastHost(currentHost.id).id);
+}
+
+export function canRotateBroadcastHost(now: number, dueAt: number, narrationActive: boolean): boolean {
+  return now >= dueAt && !narrationActive;
+}
 
 const EDUCATIVO_TOPICS: Array<{ topic: string; fallback: string }> = [
   {
@@ -130,80 +136,6 @@ function normalizeAiKind(
   return kind;
 }
 
-// Variantes calidas y respetuosas para cuando el API no responde. Rotan para no sonar identico.
-const FALLBACK_HANDOFF_VARIANTS: Array<
-  (currentHost: string, nextHost: string) => { currentHostLine: string; nextHostLine: string }
-> = [
-  (currentHost, nextHost) => ({
-    currentHostLine: `Termina mi bloque. Quedan con ${nextHost}.`,
-    nextHostLine: `Gracias, ${currentHost}. Seguimos monitoreando la red sismica.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Concluye mi turno. Cedo la palabra a ${nextHost}.`,
-    nextHostLine: `Asumo la conduccion. Gracias, ${currentHost}.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Cambio de turno en cabina. Adelante, ${nextHost}.`,
-    nextHostLine: `Un saludo, ${currentHost}. Continuamos con el reporte sismico.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Me despido por ahora. Tu turno, ${nextHost}.`,
-    nextHostLine: `Recibo el pase, ${currentHost}. Vamos con los datos actualizados.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Cierro mi guardia. Te escuchamos, ${nextHost}.`,
-    nextHostLine: `Gracias, ${currentHost}. Seguimos al aire con mas reportes.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Finalizo este segmento. Adelante, ${nextHost}.`,
-    nextHostLine: `Tomo el control de la cabina. Un abrazo, ${currentHost}.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Paso el relevo a ${nextHost}.`,
-    nextHostLine: `Recibido, ${currentHost}. Vamos con la actividad reciente.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Hasta aqui mi reporte. Todo tuyo, ${nextHost}.`,
-    nextHostLine: `Gracias por el pase, ${currentHost}. Seguimos informando.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Termino mi turno. Sigue ${nextHost}.`,
-    nextHostLine: `Gracias, ${currentHost}. Empezamos la revision de datos.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Cierro transmision por ahora. Adelante, ${nextHost}.`,
-    nextHostLine: `Asumo el turno. Gracias, ${currentHost}.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Momento del relevo. Te toca, ${nextHost}.`,
-    nextHostLine: `Tomando la palabra. Gracias, ${currentHost}.`
-  }),
-  (currentHost, nextHost) => ({
-    currentHostLine: `Me retiro de cabina. Sigue la cobertura con ${nextHost}.`,
-    nextHostLine: `Acepto el pase, ${currentHost}. Seguimos vigilando.`
-  })
-];
-let fallbackHandoffIndex = 0;
-
-function fallbackHandoff(
-  currentHost: string,
-  nextHost: string
-): {
-  currentHostLine: string;
-  nextHostLine: string;
-} {
-  const variant = FALLBACK_HANDOFF_VARIANTS[fallbackHandoffIndex % FALLBACK_HANDOFF_VARIANTS.length];
-  fallbackHandoffIndex += 1;
-  return variant(currentHost, nextHost);
-}
-
-export function dialogueDisplayText(turns: BroadcastDialogueTurn[]): string {
-  return turns
-    .map((turn) => normalizeSpanishText(turn.text.trim()))
-    .filter(Boolean)
-    .join(" ");
-}
-
 function eventTimeMs(event: SeismicEvent): number {
   return new Date(event.eventTimeUtc).getTime();
 }
@@ -278,7 +210,6 @@ function fallbackBulletinPacket(
 
 function segmentCue(kind: BroadcastSegmentKind, cue?: EditorialCue): EditorialCue {
   if (cue) return cue;
-  if (kind === "relevo") return HANDOFF_CUE;
   if (kind === "en-vivo") return { urgency: "alta", rhythm: "agil", tone: "directo" };
   return fallbackSegmentCue(kind);
 }
@@ -350,7 +281,6 @@ export function useBroadcastDirector(params: {
 
   const busyRef = useRef(false);
   const airingUntilRef = useRef(0);
-  const lastHandoffAtRef = useRef(0);
   const lastRecapAtRef = useRef(0);
   const lastEducativoAtRef = useRef(0);
   const lastBulletinAtRef = useRef<Record<15 | 30 | 60, number>>({ 15: 0, 30: 0, 60: 0 });
@@ -359,10 +289,20 @@ export function useBroadcastDirector(params: {
   const recentAiredEventsRef = useRef(new Map<string, number>());
 
   useEffect(() => {
+    let rotationDueAt = Date.now() + HOST_ROTATION_INTERVAL_MS;
+    const intervalId = window.setInterval(() => {
+      const now = Date.now();
+      if (!canRotateBroadcastHost(now, rotationDueAt, isSeismicNarrationActive())) return;
+      rotateBroadcastHostSilently();
+      rotationDueAt = now + HOST_ROTATION_INTERVAL_MS;
+    }, HOST_ROTATION_POLL_MS);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
     if (mode === "off") return;
 
     const startedAt = Date.now();
-    if (lastHandoffAtRef.current === 0) lastHandoffAtRef.current = startedAt;
     if (lastRecapAtRef.current === 0) lastRecapAtRef.current = startedAt;
     if (lastEducativoAtRef.current === 0) lastEducativoAtRef.current = startedAt;
     for (const windowMinutes of BULLETIN_WINDOWS) {
@@ -402,7 +342,7 @@ export function useBroadcastDirector(params: {
       return next.event;
     };
 
-    const air = (segment: BroadcastSegment) => {
+    const air = (segment: BroadcastSegment, eventId?: string) => {
       const text = normalizeSpanishText(segment.text);
       const cue = segmentCue(segment.kind, segment.cue);
       const delivery = cueToVoiceDelivery(cue, { text, kind: segment.kind });
@@ -412,7 +352,7 @@ export function useBroadcastDirector(params: {
       airingUntilRef.current = Date.now() + delivery.minDurationMs;
       if (voiceEnabledRef.current) {
         prefetchText(payload.text);
-        speakText(payload.text, { cue, kind: payload.kind });
+        speakText(payload.text, { cue, kind: payload.kind, eventId });
       }
     };
 
@@ -429,43 +369,14 @@ export function useBroadcastDirector(params: {
         text: narration.text
       });
       onFocusRef.current(event.eventId);
-      air({
-        kind,
-        text: narration.text,
-        cue: narration.cue
-      });
-    };
-
-    const airHandoff = async () => {
-      const currentHost = getActiveBroadcastHost();
-      const nextHost = getNextBroadcastHost(currentHost.id);
-      const script =
-        (await fetchHandoffSegment(currentHost.name, nextHost.name, getRecentEditorialLines())) ??
-        fallbackHandoff(currentHost.name, nextHost.name);
-      const turns: BroadcastDialogueTurn[] = [
+      air(
         {
-          hostId: currentHost.id,
-          speakerName: currentHost.name,
-          text: script.currentHostLine
+          kind,
+          text: narration.text,
+          cue: narration.cue
         },
-        {
-          hostId: nextHost.id,
-          speakerName: nextHost.name,
-          text: script.nextHostLine
-        }
-      ];
-      const dialogueText = dialogueDisplayText(turns);
-
-      setActiveBroadcastHost(nextHost.id);
-      lastHandoffAtRef.current = Date.now();
-      onSegmentRef.current({ kind: "relevo", text: dialogueText, cue: HANDOFF_CUE });
-      rememberEditorialLine(dialogueText);
-      airingUntilRef.current =
-        Date.now() + cueToVoiceDelivery(HANDOFF_CUE, { text: dialogueText, kind: "relevo" }).minDurationMs;
-      if (voiceEnabledRef.current) {
-        prefetchDialogue(turns);
-        speakDialogue(turns);
-      }
+        event.eventId
+      );
     };
 
     const airResumen = async () => {
@@ -572,11 +483,6 @@ export function useBroadcastDirector(params: {
       const live = queue && queue.length > 0 ? queue.shift() : null;
       if (live) {
         await airEvent(live, "en-vivo", "Nuevo sismo detectado");
-        return;
-      }
-
-      if ((Date.now() - lastHandoffAtRef.current) / 60_000 >= HANDOFF_DUE_MIN) {
-        await airHandoff();
         return;
       }
 

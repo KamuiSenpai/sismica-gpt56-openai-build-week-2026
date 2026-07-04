@@ -5,8 +5,11 @@
 import { type SeismicEvent } from "@sismica/shared";
 
 import {
+  claimVoiceOutput,
   fetchNarrationEditorial,
   fetchSeismicBridgeManifest,
+  releaseVoiceOutput,
+  reportVoiceTelemetry,
   type SeismicBridgeLibrary,
   type SeismicBridgeManifest,
   type SeismicBridgeManifestItem
@@ -29,9 +32,7 @@ import {
   isNeuralNarrationActive,
   prefetchNeural,
   speakNeural,
-  speakNeuralSequence,
   type NeuralEngine,
-  type NeuralSpeechRequest,
   type TtsHealth
 } from "./seismicNeuralSpeech";
 import {
@@ -53,11 +54,6 @@ export type BroadcastVoiceHost = {
   name: string;
   xttsSpeaker: string;
   xttsProfile?: string;
-};
-export type BroadcastDialogueTurn = {
-  hostId: BroadcastVoiceHostId;
-  speakerName: string;
-  text: string;
 };
 export type ResolvedNarrationPacket = {
   text: string;
@@ -151,11 +147,12 @@ const STORAGE_KEY = "sismica.voiceEngine";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
 const NARRATION_CACHE_LIMIT = 24;
 const BRIDGE_START_DELAY_MS = 350;
-const BRIDGE_EXTENDED_DELAY_MS = 3_200;
 const BRIDGE_FADE_OUT_MS = 180;
 const BRIDGE_FALLBACK_GROUP = "continuidad_neutra";
+const STATION_GUIDE_GROUP = "station_identity";
 const BRIDGE_SHORT_LIBRARY: SeismicBridgeLibrary = "short";
 const BRIDGE_EXTENDED_LIBRARY: SeismicBridgeLibrary = "extended";
+const STATION_GUIDE_LIBRARY: SeismicBridgeLibrary = "station";
 const BRIDGE_AVAILABLE_VOICES = new Set(["mx_carolina", "mx_liam"]);
 const SUBDUCTION_BRIDGE_KEYWORDS = [
   "alaska",
@@ -238,6 +235,99 @@ const narrationCache = new Map<string, ResolvedNarrationPacket>();
 const inFlightNarrations = new Map<string, Promise<ResolvedNarrationPacket>>();
 const bridgeManifestCache = new Map<SeismicBridgeLibrary, Promise<SeismicBridgeManifest | null>>();
 const lastBridgeVariantByPool = new Map<string, string>();
+const VOICE_TELEMETRY_CLIENT_ID =
+  globalThis.crypto?.randomUUID?.() ?? `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const VOICE_OWNER_KEY = "sismica.voiceOwner";
+const VOICE_OWNER_LEASE_MS = 12_000;
+const VOICE_OWNER_HEARTBEAT_MS = 4_000;
+type VoiceOwnerLease = { tabId: string; expiresAt: number };
+type VoiceLeaseWindow = Window & {
+  __sismicaVoiceLeaseRuntime?: { tabId: string; intervalId: number };
+};
+const voiceLeaseWindow = typeof window === "undefined" ? null : (window as VoiceLeaseWindow);
+const VOICE_TAB_ID =
+  voiceLeaseWindow?.__sismicaVoiceLeaseRuntime?.tabId ??
+  globalThis.crypto?.randomUUID?.() ??
+  `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+let ownsVoiceLease = false;
+let ownsRemoteVoiceLease = false;
+
+function emitVoiceTelemetry(
+  kind: string,
+  details: Omit<Parameters<typeof reportVoiceTelemetry>[0], "clientId" | "kind"> = {}
+): void {
+  reportVoiceTelemetry({ clientId: VOICE_TELEMETRY_CLIENT_ID, kind, ...details });
+}
+
+function readVoiceLease(): VoiceOwnerLease | null {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(VOICE_OWNER_KEY) ?? "null"
+    ) as Partial<VoiceOwnerLease> | null;
+    if (!parsed || typeof parsed.tabId !== "string" || typeof parsed.expiresAt !== "number") return null;
+    return { tabId: parsed.tabId, expiresAt: parsed.expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+function writeVoiceLease(expiresAt: number): boolean {
+  try {
+    localStorage.setItem(VOICE_OWNER_KEY, JSON.stringify({ tabId: VOICE_TAB_ID, expiresAt }));
+    const verified = readVoiceLease();
+    ownsVoiceLease = verified?.tabId === VOICE_TAB_ID;
+    return ownsVoiceLease;
+  } catch {
+    ownsVoiceLease = true;
+    return true;
+  }
+}
+
+function claimVoiceLease(): boolean {
+  if (!voiceLeaseWindow) return true;
+  const now = Date.now();
+  const lease = readVoiceLease();
+  if (lease?.tabId === VOICE_TAB_ID) return writeVoiceLease(now + VOICE_OWNER_LEASE_MS);
+  if (lease && lease.expiresAt > now) {
+    ownsVoiceLease = false;
+    return false;
+  }
+  return writeVoiceLease(now + VOICE_OWNER_LEASE_MS);
+}
+
+async function claimRemoteVoiceLease(): Promise<void> {
+  if (!ownsVoiceLease) {
+    ownsRemoteVoiceLease = false;
+    return;
+  }
+  ownsRemoteVoiceLease = await claimVoiceOutput(VOICE_TELEMETRY_CLIENT_ID);
+}
+
+function releaseVoiceLease(): void {
+  if (!voiceLeaseWindow || !ownsVoiceLease) return;
+  try {
+    if (readVoiceLease()?.tabId === VOICE_TAB_ID) localStorage.removeItem(VOICE_OWNER_KEY);
+  } catch {
+    // localStorage no disponible: la concesion vive solo en esta pestana.
+  }
+  ownsVoiceLease = false;
+  if (ownsRemoteVoiceLease) releaseVoiceOutput(VOICE_TELEMETRY_CLIENT_ID);
+  ownsRemoteVoiceLease = false;
+}
+
+function isVoiceOutputOwner(): boolean {
+  return claimVoiceLease() && ownsRemoteVoiceLease;
+}
+
+if (voiceLeaseWindow) {
+  const previousRuntime = voiceLeaseWindow.__sismicaVoiceLeaseRuntime;
+  if (previousRuntime) window.clearInterval(previousRuntime.intervalId);
+  const intervalId = window.setInterval(() => {
+    if (voiceEnabled && claimVoiceLease()) void claimRemoteVoiceLease();
+  }, VOICE_OWNER_HEARTBEAT_MS);
+  voiceLeaseWindow.__sismicaVoiceLeaseRuntime = { tabId: VOICE_TAB_ID, intervalId };
+  window.addEventListener("pagehide", releaseVoiceLease);
+}
 
 function canonicalizeEditorialText(value: string): string {
   return value
@@ -328,14 +418,14 @@ function containsBridgeKeyword(text: string, keywords: readonly string[]): boole
   return keywords.some((keyword) => normalized.includes(keyword));
 }
 
-function classifyBridgeGroup(event: SeismicEvent): string {
+export function classifyBridgeGroup(event: SeismicEvent): string {
   const place = canonicalizeEditorialText(broadcastPlace(event));
   const country = canonicalizeEditorialText(broadcastCountryName(countryCode(event)) ?? "");
   const combined = `${place} ${country}`.trim();
   const depth = event.depthKm ?? null;
-  const shallow = typeof depth === "number" && depth <= 35;
-  const intermediate = typeof depth === "number" && depth > 35 && depth < 120;
-  const deep = typeof depth === "number" && depth >= 120;
+  const shallow = typeof depth === "number" && depth <= 70;
+  const intermediate = typeof depth === "number" && depth > 70 && depth <= 300;
+  const deep = typeof depth === "number" && depth > 300;
 
   if (containsBridgeKeyword(combined, SUBDUCTION_BRIDGE_KEYWORDS)) {
     if (deep) return "subduccion_pacifico_profundo";
@@ -462,6 +552,14 @@ function resolveBridgeVoiceProfile(
   return BRIDGE_PROFILE_BY_HOST[hostId] ?? "mx_carolina";
 }
 
+function resolveStationGuideVoiceProfile(
+  hostId: BroadcastVoiceHostId = activeBroadcastHostId,
+  speaker?: string
+): string {
+  if (speaker?.startsWith("mx_")) return speaker;
+  return findBroadcastHost(hostId).xttsProfile ?? "mx_carolina";
+}
+
 async function loadBridgeManifest(library: SeismicBridgeLibrary): Promise<SeismicBridgeManifest | null> {
   const cached = bridgeManifestCache.get(library);
   if (cached) return cached;
@@ -499,11 +597,23 @@ function pickBridgeCandidate(
 async function selectBridgeClip(
   library: SeismicBridgeLibrary,
   voice: string,
-  groupId: string
+  groupId: string,
+  allowAnyVoice = false
 ): Promise<SeismicBridgeManifestItem | null> {
   const manifest = await loadBridgeManifest(library);
   if (!manifest) return null;
-  return pickBridgeCandidate(manifest, voice, groupId);
+  const selected = pickBridgeCandidate(manifest, voice, groupId);
+  if (selected || !allowAnyVoice) return selected;
+
+  const candidates = manifest.items.filter((item) => item.groupId === groupId);
+  if (candidates.length === 0) return null;
+  const poolKey = `${manifest.library}|all|${groupId}`;
+  const previousVariant = lastBridgeVariantByPool.get(poolKey);
+  const filtered = candidates.filter((item) => item.variant !== previousVariant);
+  const pool = filtered.length > 0 ? filtered : candidates;
+  const fallback = pool[Math.floor(Math.random() * pool.length)] ?? pool[0] ?? null;
+  if (fallback) lastBridgeVariantByPool.set(poolKey, fallback.variant);
+  return fallback;
 }
 
 type BridgeHandle = {
@@ -511,9 +621,18 @@ type BridgeHandle = {
   stop(mode?: "fade" | "immediate"): Promise<void>;
 };
 
+let activeBridgeHandle: BridgeHandle | null = null;
+
+function stopActiveBridge(mode: "fade" | "immediate" = "fade"): void {
+  const bridge = activeBridgeHandle;
+  activeBridgeHandle = null;
+  if (bridge) void bridge.stop(mode);
+}
+
 function createBridgeHandle(options: {
   engine: NeuralEngine;
   text: string;
+  eventId?: string;
   hostId?: BroadcastVoiceHostId;
   speaker?: string;
   groupId: string;
@@ -529,7 +648,8 @@ function createBridgeHandle(options: {
     };
   }
 
-  const voice = resolveBridgeVoiceProfile(options.hostId, options.speaker);
+  const bridgeVoice = resolveBridgeVoiceProfile(options.hostId, options.speaker);
+  const stationVoice = resolveStationGuideVoiceProfile(options.hostId, options.speaker);
   const blobState = getNeuralBlobState(options.text, options.engine, {
     voice: resolveNeuralSpeaker(options.engine, options.hostId, options.speaker)
   });
@@ -545,9 +665,19 @@ function createBridgeHandle(options: {
   }
 
   let audio: HTMLAudioElement | null = null;
-  let pendingExtended = false;
+  let activeClip: SeismicBridgeManifestItem | null = null;
+  let activeLibrary: SeismicBridgeLibrary | null = null;
+  let activeClipStartedAt: number | null = null;
+  const libraries: SeismicBridgeLibrary[] = [
+    BRIDGE_SHORT_LIBRARY,
+    BRIDGE_EXTENDED_LIBRARY,
+    BRIDGE_EXTENDED_LIBRARY,
+    STATION_GUIDE_LIBRARY
+  ];
+  let nextLibraryIndex = 0;
   let stopped = false;
   let stopPromise: Promise<void> | null = null;
+  let stationCompletionResolve: (() => void) | null = null;
   const timers: number[] = [];
 
   const clearTimers = () => {
@@ -556,11 +686,29 @@ function createBridgeHandle(options: {
     }
   };
 
-  const detachAudio = (candidate: HTMLAudioElement | null = audio) => {
+  const detachAudio = (
+    candidate: HTMLAudioElement | null = audio,
+    reason: "ended" | "error" | "fade" | "immediate" = "immediate"
+  ) => {
     if (!candidate) return;
     if (audio === candidate) {
       audio = null;
       activeBridgePlaybackCount = Math.max(0, activeBridgePlaybackCount - 1);
+      if (activeClip && activeLibrary) {
+        emitVoiceTelemetry("bridge_ended", {
+          eventId: options.eventId,
+          hostId: options.hostId,
+          library: activeLibrary,
+          variant: activeClip.variant,
+          reason,
+          durationMs: activeClipStartedAt === null ? undefined : performance.now() - activeClipStartedAt
+        });
+      }
+      activeClip = null;
+      activeLibrary = null;
+      activeClipStartedAt = null;
+      stationCompletionResolve?.();
+      stationCompletionResolve = null;
     }
     candidate.pause();
     candidate.src = "";
@@ -568,62 +716,94 @@ function createBridgeHandle(options: {
 
   const playLibrary = async (library: SeismicBridgeLibrary): Promise<void> => {
     if (stopped || audio) return;
-    const clip = await selectBridgeClip(library, voice, options.groupId);
-    if (!clip || stopped || audio) return;
+    const stationGuide = library === STATION_GUIDE_LIBRARY;
+    const clip = await selectBridgeClip(
+      library,
+      stationGuide ? stationVoice : bridgeVoice,
+      stationGuide ? STATION_GUIDE_GROUP : options.groupId,
+      stationGuide
+    );
+    if (!clip || stopped || audio) {
+      if (!stopped && !audio) void playNextLibrary();
+      return;
+    }
 
     const candidate = new Audio(clip.url);
     candidate.preload = "auto";
     candidate.volume = 1;
     audio = candidate;
+    activeClip = clip;
+    activeLibrary = library;
     activeBridgePlaybackCount += 1;
 
-    const continueIfNeeded = () => {
-      if (stopped || !pendingExtended) return;
-      pendingExtended = false;
-      void playLibrary(BRIDGE_EXTENDED_LIBRARY);
+    let settled = false;
+    const cleanup = (reason: "ended" | "error") => {
+      if (settled) return;
+      settled = true;
+      candidate.removeEventListener("ended", onEnded);
+      candidate.removeEventListener("error", onError);
+      detachAudio(candidate, reason);
+      void playNextLibrary();
     };
+    const onEnded = () => cleanup("ended");
+    const onError = () => cleanup("error");
 
-    const cleanup = () => {
-      detachAudio(candidate);
-      continueIfNeeded();
-    };
+    candidate.addEventListener("ended", onEnded, { once: true });
+    candidate.addEventListener("error", onError, { once: true });
+    void candidate
+      .play()
+      .then(() => {
+        if (audio !== candidate) return;
+        activeClipStartedAt = performance.now();
+        emitVoiceTelemetry("bridge_started", {
+          eventId: options.eventId,
+          hostId: options.hostId,
+          library,
+          variant: clip.variant
+        });
+      })
+      .catch(() => cleanup("error"));
+  };
 
-    candidate.addEventListener("ended", cleanup, { once: true });
-    candidate.addEventListener("error", cleanup, { once: true });
-    void candidate.play().catch(() => {
-      cleanup();
-    });
+  const playNextLibrary = async (): Promise<void> => {
+    if (stopped || audio || nextLibraryIndex >= libraries.length) return;
+    const library = libraries[nextLibraryIndex];
+    nextLibraryIndex += 1;
+    await playLibrary(library);
   };
 
   return {
     arm() {
       timers.push(
         window.setTimeout(() => {
-          void playLibrary(BRIDGE_SHORT_LIBRARY);
+          void playNextLibrary();
         }, BRIDGE_START_DELAY_MS)
-      );
-      timers.push(
-        window.setTimeout(() => {
-          if (stopped) return;
-          if (audio) {
-            pendingExtended = true;
-            return;
-          }
-          void playLibrary(BRIDGE_EXTENDED_LIBRARY);
-        }, BRIDGE_EXTENDED_DELAY_MS)
       );
     },
     async stop(mode = "fade") {
-      if (stopPromise) return stopPromise;
+      if (stopPromise) {
+        if (mode === "immediate" && audio) detachAudio(audio, "immediate");
+        return stopPromise;
+      }
       stopped = true;
-      pendingExtended = false;
       clearTimers();
       if (!audio) return;
 
       const candidate = audio;
+      if (mode === "fade" && activeLibrary === STATION_GUIDE_LIBRARY) {
+        stopPromise = new Promise<void>((resolve) => {
+          stationCompletionResolve = resolve;
+          if (audio !== candidate) resolve();
+        }).finally(() => {
+          stationCompletionResolve = null;
+          stopPromise = null;
+        });
+        return stopPromise;
+      }
+
       stopPromise = (async () => {
         if (mode === "immediate") {
-          detachAudio(candidate);
+          detachAudio(candidate, "immediate");
           return;
         }
 
@@ -639,7 +819,7 @@ function createBridgeHandle(options: {
             const progress = Math.min(1, elapsed / BRIDGE_FADE_OUT_MS);
             candidate.volume = initialVolume * (1 - progress);
             if (progress >= 1) {
-              detachAudio(candidate);
+              detachAudio(candidate, "fade");
               resolve();
               return;
             }
@@ -671,22 +851,6 @@ function resolveNeuralSpeaker(
     return host.xttsProfile ?? host.xttsSpeaker;
   }
   return host.xttsSpeaker;
-}
-
-function dialogueFallback(turns: BroadcastDialogueTurn[]): string {
-  return turns.map((turn) => `${turn.speakerName}: ${turn.text}`).join(" ");
-}
-
-function neuralDialogue(
-  turns: BroadcastDialogueTurn[],
-  engine: NeuralEngine,
-  playbackRate = 1.04
-): Array<NeuralSpeechRequest & { playbackRate?: number }> {
-  return turns.map((turn) => ({
-    text: normalizeSpokenText(turn.text),
-    voice: resolveNeuralSpeaker(engine, turn.hostId),
-    playbackRate
-  }));
 }
 
 export function getBroadcastVoiceHosts(): readonly BroadcastVoiceHost[] {
@@ -760,8 +924,13 @@ export function setSeismicVoiceEnabled(enabled: boolean): boolean {
   voiceEnabled = enabled;
   // Mantiene el respaldo del navegador sincronizado y listo.
   const browserReady = setBrowserVoiceEnabled(enabled);
-  if (!enabled) cancelNeuralNarration();
+  if (!enabled) {
+    releaseVoiceLease();
+    stopActiveBridge("immediate");
+    cancelNeuralNarration();
+  }
   if (!enabled) return false;
+  if (claimVoiceLease()) void claimRemoteVoiceLease();
   return browserReady || (voiceEngine !== "browser" && isEngineAvailable(voiceEngine));
 }
 
@@ -837,13 +1006,14 @@ export function prefetchSeismicNarration(
     speaker?: string;
   } = {}
 ): void {
-  if (!enabled || !voiceEnabled || voiceEngine === "browser") return;
+  if (!enabled || !voiceEnabled || !isVoiceOutputOwner() || voiceEngine === "browser") return;
 
   const engine = voiceEngine as NeuralEngine;
   if (!isEngineAvailable(engine)) return;
   if (engine === "chatterbox") {
     void loadBridgeManifest(BRIDGE_SHORT_LIBRARY);
     void loadBridgeManifest(BRIDGE_EXTENDED_LIBRARY);
+    void loadBridgeManifest(STATION_GUIDE_LIBRARY);
   }
 
   void resolveEventNarration(event, options).then(({ text }) =>
@@ -896,6 +1066,7 @@ async function runNeuralCascade(
     }
   }
   // Respaldo del navegador: corta cualquier audio neural para no solaparse.
+  await options.beforePlayback?.();
   cancelNeuralNarration();
   speakBrowserNarration(event, true, {
     force: true,
@@ -920,10 +1091,24 @@ async function dispatchNarration(
   },
   seq: number
 ): Promise<void> {
+  const narrationStartedAt = performance.now();
+  let outcome = "started";
+  emitVoiceTelemetry("narration_requested", {
+    eventId: event.eventId,
+    hostId: options.hostId ?? activeBroadcastHostId
+  });
   const releaseSession = beginVoiceSession();
   try {
     const { text, cue } = await resolveEventNarration(event, options);
-    if (seq !== narrationSeq) return;
+    if (seq !== narrationSeq) {
+      outcome = "superseded";
+      return;
+    }
+    emitVoiceTelemetry("narration_resolved", {
+      eventId: event.eventId,
+      hostId: options.hostId ?? activeBroadcastHostId,
+      durationMs: performance.now() - narrationStartedAt
+    });
     const delivery = deliveryForCue(text, cue, "evento");
     rememberEditorialLine(text);
 
@@ -945,9 +1130,12 @@ async function dispatchNarration(
       text: normalizeSpokenText(text),
       hostId: options.hostId,
       speaker: options.speaker,
+      eventId: event.eventId,
       groupId: classifyBridgeGroup(event)
     });
+    activeBridgeHandle = bridge;
     bridge.arm();
+    let neuralPlaybackStartedAt: number | null = null;
     try {
       // Corta cualquier locucion del navegador (respaldo previo) antes de la voz neural.
       cancelBrowserNarration();
@@ -955,12 +1143,34 @@ async function dispatchNarration(
         ...options,
         cue,
         kind: "evento",
-        beforePlayback: () => bridge.stop("fade")
+        beforePlayback: async () => {
+          await bridge.stop("fade");
+          neuralPlaybackStartedAt = performance.now();
+          emitVoiceTelemetry("neural_started", {
+            eventId: event.eventId,
+            hostId: options.hostId ?? activeBroadcastHostId
+          });
+        }
       });
+      outcome = "played";
+      if (neuralPlaybackStartedAt !== null) {
+        emitVoiceTelemetry("neural_ended", {
+          eventId: event.eventId,
+          hostId: options.hostId ?? activeBroadcastHostId,
+          durationMs: performance.now() - neuralPlaybackStartedAt
+        });
+      }
     } finally {
       await bridge.stop("immediate");
+      if (activeBridgeHandle === bridge) activeBridgeHandle = null;
     }
   } finally {
+    emitVoiceTelemetry("narration_finished", {
+      eventId: event.eventId,
+      hostId: options.hostId ?? activeBroadcastHostId,
+      outcome,
+      durationMs: performance.now() - narrationStartedAt
+    });
     releaseSession();
   }
 }
@@ -977,7 +1187,9 @@ export function speakSeismicNarration(
     speaker?: string;
   } = {}
 ): boolean {
-  if (!enabled || !voiceEnabled) return false;
+  if (!enabled || !voiceEnabled || !isVoiceOutputOwner()) return false;
+
+  stopActiveBridge();
 
   // Dedup para ambos motores (equivalente al de seismicSpeech.ts).
   const key = `${event.eventId}:${event.updatedAtUtc ?? event.eventTimeUtc}`;
@@ -998,11 +1210,22 @@ export function speakSeismicNarration(
 async function dispatchText(
   text: string,
   seq: number,
-  options: { cue?: EditorialCue; kind?: CueContextKind } = {}
+  options: { cue?: EditorialCue; kind?: CueContextKind; eventId?: string } = {}
 ): Promise<void> {
+  const narrationStartedAt = performance.now();
+  let outcome = "started";
+  if (options.eventId) {
+    emitVoiceTelemetry("narration_requested", {
+      eventId: options.eventId,
+      hostId: activeBroadcastHostId
+    });
+  }
   const releaseSession = beginVoiceSession();
   try {
-    if (seq !== narrationSeq) return;
+    if (seq !== narrationSeq) {
+      outcome = "superseded";
+      return;
+    }
     const spokenText = normalizeSpokenText(text);
     const cue = options.cue ?? { urgency: "media", rhythm: "fluido", tone: "sobrio" };
     const delivery = deliveryForCue(spokenText, cue, options.kind ?? "recorrido");
@@ -1014,10 +1237,13 @@ async function dispatchText(
     const bridge = createBridgeHandle({
       engine: voiceEngine as NeuralEngine,
       text: spokenText,
+      eventId: options.eventId,
       hostId: activeBroadcastHostId,
       groupId: BRIDGE_FALLBACK_GROUP
     });
+    activeBridgeHandle = bridge;
     bridge.arm();
+    let neuralPlaybackStartedAt: number | null = null;
     try {
       cancelBrowserNarration();
       for (const engine of neuralFallbackOrder(voiceEngine as NeuralEngine)) {
@@ -1026,8 +1252,25 @@ async function dispatchText(
           await speakNeural(spokenText, engine, {
             voice: resolveNeuralSpeaker(engine),
             playbackRate: delivery.playbackRate,
-            beforePlayback: () => bridge.stop("fade")
+            beforePlayback: async () => {
+              await bridge.stop("fade");
+              neuralPlaybackStartedAt = performance.now();
+              if (options.eventId) {
+                emitVoiceTelemetry("neural_started", {
+                  eventId: options.eventId,
+                  hostId: activeBroadcastHostId
+                });
+              }
+            }
           });
+          outcome = "played";
+          if (options.eventId && neuralPlaybackStartedAt !== null) {
+            emitVoiceTelemetry("neural_ended", {
+              eventId: options.eventId,
+              hostId: activeBroadcastHostId,
+              durationMs: performance.now() - neuralPlaybackStartedAt
+            });
+          }
           return;
         } catch (error) {
           console.warn(`Voz neural (${engine}) fallo; probando el siguiente motor.`, error);
@@ -1035,10 +1278,19 @@ async function dispatchText(
       }
     } finally {
       await bridge.stop("immediate");
+      if (activeBridgeHandle === bridge) activeBridgeHandle = null;
     }
     cancelNeuralNarration();
     speakBrowserText(spokenText, { rate: delivery.rate });
   } finally {
+    if (options.eventId) {
+      emitVoiceTelemetry("narration_finished", {
+        eventId: options.eventId,
+        hostId: activeBroadcastHostId,
+        outcome,
+        durationMs: performance.now() - narrationStartedAt
+      });
+    }
     releaseSession();
   }
 }
@@ -1046,7 +1298,13 @@ async function dispatchText(
 async function dispatchTextWithSpeaker(
   text: string,
   seq: number,
-  options: { hostId?: BroadcastVoiceHostId; speaker?: string; cue?: EditorialCue; kind?: CueContextKind }
+  options: {
+    hostId?: BroadcastVoiceHostId;
+    speaker?: string;
+    cue?: EditorialCue;
+    kind?: CueContextKind;
+    eventId?: string;
+  }
 ): Promise<void> {
   const releaseSession = beginVoiceSession();
   try {
@@ -1062,10 +1320,12 @@ async function dispatchTextWithSpeaker(
     const bridge = createBridgeHandle({
       engine: voiceEngine as NeuralEngine,
       text: spokenText,
+      eventId: options.eventId,
       hostId: options.hostId,
       speaker: options.speaker,
       groupId: BRIDGE_FALLBACK_GROUP
     });
+    activeBridgeHandle = bridge;
     bridge.arm();
     try {
       cancelBrowserNarration();
@@ -1084,6 +1344,7 @@ async function dispatchTextWithSpeaker(
       }
     } finally {
       await bridge.stop("immediate");
+      if (activeBridgeHandle === bridge) activeBridgeHandle = null;
     }
     cancelNeuralNarration();
     speakBrowserText(spokenText, { rate: delivery.rate });
@@ -1099,11 +1360,13 @@ export function speakText(
     speaker?: string;
     cue?: EditorialCue;
     kind?: CueContextKind;
+    eventId?: string;
   } = {}
 ): boolean {
-  if (!voiceEnabled) return false;
+  if (!voiceEnabled || !isVoiceOutputOwner()) return false;
   const value = text.trim();
   if (!value) return false;
+  stopActiveBridge();
   const seq = ++narrationSeq;
   if (!options.hostId && !options.speaker) {
     void dispatchText(value, seq, options);
@@ -1117,7 +1380,7 @@ export function prefetchText(
   text: string,
   options: { hostId?: BroadcastVoiceHostId; speaker?: string } = {}
 ): void {
-  if (!voiceEnabled || voiceEngine === "browser") return;
+  if (!voiceEnabled || !isVoiceOutputOwner() || voiceEngine === "browser") return;
   const engine = voiceEngine as NeuralEngine;
   if (!isEngineAvailable(engine)) return;
   const value = normalizeSpokenText(text.trim());
@@ -1126,51 +1389,4 @@ export function prefetchText(
       voice: resolveNeuralSpeaker(engine, options.hostId, options.speaker)
     });
   }
-}
-
-async function dispatchDialogue(turns: BroadcastDialogueTurn[], seq: number): Promise<void> {
-  const releaseSession = beginVoiceSession();
-  try {
-    if (seq !== narrationSeq) return;
-    const delivery = deliveryForCue(
-      dialogueFallback(turns),
-      { urgency: "media", rhythm: "fluido", tone: "directo" },
-      "relevo"
-    );
-
-    if (voiceEngine === "browser" || !isEngineAvailable(voiceEngine)) {
-      cancelNeuralNarration();
-      speakBrowserText(dialogueFallback(turns), { rate: delivery.rate });
-      return;
-    }
-
-    const engine = voiceEngine as NeuralEngine;
-    cancelBrowserNarration();
-    try {
-      await speakNeuralSequence(neuralDialogue(turns, engine, delivery.playbackRate), engine);
-    } catch (error) {
-      console.warn(`Dialogo ${engine} fallo; usando respaldo del navegador.`, error);
-      cancelNeuralNarration();
-      speakBrowserText(dialogueFallback(turns), { rate: delivery.rate });
-    }
-  } finally {
-    releaseSession();
-  }
-}
-
-export function prefetchDialogue(turns: BroadcastDialogueTurn[]): void {
-  if (!voiceEnabled || voiceEngine === "browser" || !isEngineAvailable(voiceEngine)) return;
-  const engine = voiceEngine as NeuralEngine;
-  for (const turn of turns) {
-    void prefetchNeural(normalizeSpokenText(turn.text), engine, {
-      voice: resolveNeuralSpeaker(engine, turn.hostId)
-    });
-  }
-}
-
-export function speakDialogue(turns: BroadcastDialogueTurn[]): boolean {
-  if (!voiceEnabled || turns.length === 0) return false;
-  const seq = ++narrationSeq;
-  void dispatchDialogue(turns, seq);
-  return true;
 }

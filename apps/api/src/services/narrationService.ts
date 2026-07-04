@@ -388,9 +388,9 @@ function inferTectonicHint(request: NarrationRequest): TectonicHint {
   const combined = `${place} ${country}`;
   const depth = request.depthKm ?? null;
   const isMarine = OFFSHORE_PATTERN.test(request.normalizedPlace);
-  const shallow = typeof depth === "number" && depth <= 35;
-  const intermediate = typeof depth === "number" && depth > 35 && depth < 120;
-  const deep = typeof depth === "number" && depth >= 120;
+  const shallow = typeof depth === "number" && depth <= 70;
+  const intermediate = typeof depth === "number" && depth > 70 && depth <= 300;
+  const deep = typeof depth === "number" && depth > 300;
   const regional = inferRegionalTectonicHint(combined);
 
   if (regional) {

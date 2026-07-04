@@ -3,7 +3,14 @@ import test from "node:test";
 
 import { type SeismicEvent } from "@sismica/shared";
 
-import { dialogueDisplayText, pickNextTourEvent } from "../src/lib/broadcastDirector";
+import {
+  canRotateBroadcastHost,
+  HOST_ROTATION_INTERVAL_MS,
+  HOST_ROTATION_POLL_MS,
+  pickNextTourEvent,
+  rotateBroadcastHostSilently
+} from "../src/lib/broadcastDirector";
+import { getActiveBroadcastHost, setActiveBroadcastHost } from "../src/lib/seismicVoice";
 
 function makeEvent(eventId: string, title: string): SeismicEvent {
   return {
@@ -67,22 +74,22 @@ test("pickNextTourEvent returns null when every candidate was aired recently", (
   assert.deepEqual(next.skippedEventIds, ["live-1", "tour-2"]);
 });
 
-test("dialogueDisplayText contains exactly the lines spoken during a handoff", () => {
-  const turns = [
-    {
-      hostId: "carolina" as const,
-      speakerName: "Carolina",
-      text: "Liam, te cedo la posta del monitoreo."
-    },
-    {
-      hostId: "liam" as const,
-      speakerName: "Liam",
-      text: "Con gusto, Carolina. Seguimos monitoreando."
-    }
-  ];
+test("host rotation is silent and scheduled every five minutes", () => {
+  assert.equal(HOST_ROTATION_INTERVAL_MS, 5 * 60_000);
+  assert.equal(HOST_ROTATION_POLL_MS, 500);
+  setActiveBroadcastHost("carolina");
+  rotateBroadcastHostSilently();
+  assert.equal(getActiveBroadcastHost().id, "liam");
+  rotateBroadcastHostSilently();
+  assert.equal(getActiveBroadcastHost().id, "valentina");
+  setActiveBroadcastHost("carolina");
+});
 
-  assert.equal(
-    dialogueDisplayText(turns),
-    "Liam, te cedo la posta del monitoreo. Con gusto, Carolina. Seguimos monitoreando."
-  );
+test("host rotation waits until the complete voice message has finished", () => {
+  const dueAt = 1_000;
+
+  assert.equal(canRotateBroadcastHost(999, dueAt, false), false);
+  assert.equal(canRotateBroadcastHost(1_000, dueAt, true), false);
+  assert.equal(canRotateBroadcastHost(1_500, dueAt, true), false);
+  assert.equal(canRotateBroadcastHost(1_500, dueAt, false), true);
 });

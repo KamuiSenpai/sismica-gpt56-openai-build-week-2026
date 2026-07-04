@@ -227,7 +227,7 @@ function styleEntity(
   }
 
   if (entity.billboard) {
-    if (halo) {
+    if (halo && selected) {
       entity.billboard.image = new ConstantProperty(priorityGlowSymbol(halo.color, selected, halo.strong));
       entity.billboard.scale = new ConstantProperty(1);
       entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
@@ -696,6 +696,7 @@ export function MapPanel({
   const selectedIdRef = useRef<string | null>(selectedEventId);
   const stopSpinRef = useRef<(() => void) | null>(null);
   const selectionWaveTimerRef = useRef<number | null>(null);
+  const cameraFlightSequenceRef = useRef(0);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -900,6 +901,7 @@ export function MapPanel({
     void loadVolcanoes(viewer);
 
     return () => {
+      cameraFlightSequenceRef.current += 1;
       if (selectionWaveTimerRef.current !== null) {
         window.clearInterval(selectionWaveTimerRef.current);
         selectionWaveTimerRef.current = null;
@@ -1398,12 +1400,35 @@ export function MapPanel({
       .surfaceDistance;
     const maximumHeight = CesiumMath.clamp(surfaceDistance * 0.5, 500_000, 9_000_000);
 
+    const flightSequence = ++cameraFlightSequenceRef.current;
+    for (const entity of viewer.entities.values) {
+      if (typeof entity.id !== "string" || !eventMapRef.current.has(entity.id)) continue;
+      if (entity.billboard) entity.billboard.show = new ConstantProperty(false);
+    }
+    const restoreSelectedHalo = () => {
+      if (cameraFlightSequenceRef.current !== flightSequence || viewer.isDestroyed()) return;
+      for (const entity of viewer.entities.values) {
+        if (typeof entity.id !== "string") continue;
+        const candidate = eventMapRef.current.get(entity.id);
+        if (candidate) {
+          styleEntity(
+            entity,
+            candidate,
+            entity.id === selectedIdRef.current,
+            eventHaloMapRef.current.get(entity.id) ?? null
+          );
+        }
+      }
+    };
+
     void viewer.camera.flyTo({
       destination: Cartesian3.fromDegrees(event.longitude, event.latitude, 450_000),
       orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
       duration: 3.2,
       maximumHeight,
-      easingFunction: EasingFunction.QUADRATIC_IN_OUT
+      easingFunction: EasingFunction.QUADRATIC_IN_OUT,
+      complete: restoreSelectedHalo,
+      cancel: restoreSelectedHalo
     });
 
     spawnWavefront(viewer, event, soundEnabled);

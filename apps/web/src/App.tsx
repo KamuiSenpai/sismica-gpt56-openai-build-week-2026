@@ -77,16 +77,14 @@ const SEGMENT_LABELS: Record<BroadcastSegment["kind"], string> = {
   recorrido: "RECORRIDO",
   boletin: "BOLETIN",
   resumen: "RESUMEN",
-  educativo: "CONTEXTO",
-  relevo: "CABINA"
+  educativo: "CONTEXTO"
 };
 const SEGMENT_TITLES: Record<BroadcastSegment["kind"], string> = {
   "en-vivo": "Actualizacion sismica",
   recorrido: "Evento en seguimiento",
   boletin: "Boletin automatico",
   resumen: "Resumen operativo",
-  educativo: "Contexto sismico",
-  relevo: "Cambio de locutor"
+  educativo: "Contexto sismico"
 };
 type OverlayPhase = "enter" | "hold" | "exit";
 type OverlayCard = {
@@ -120,8 +118,7 @@ const DIRECTOR_VISUAL_PRESETS: Record<BroadcastSegment["kind"], DirectorVisualPr
   recorrido: { priority: "medium", entryMs: 320, exitMs: 210, scanMs: 2900, glow: 0.2, compactBias: 4 },
   boletin: { priority: "medium", entryMs: 340, exitMs: 220, scanMs: 3300, glow: 0.18, compactBias: 0 },
   resumen: { priority: "medium", entryMs: 360, exitMs: 230, scanMs: 3600, glow: 0.16, compactBias: 2 },
-  educativo: { priority: "low", entryMs: 380, exitMs: 240, scanMs: 4100, glow: 0.12, compactBias: -2 },
-  relevo: { priority: "low", entryMs: 340, exitMs: 230, scanMs: 3200, glow: 0.14, compactBias: 0 }
+  educativo: { priority: "low", entryMs: 380, exitMs: 240, scanMs: 4100, glow: 0.12, compactBias: -2 }
 };
 
 function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | null): SeismicEvent | null {
@@ -131,7 +128,6 @@ function findSelectedEvent(events: SeismicEvent[], selectedEventId: string | nul
 function cueForSegment(segment: BroadcastSegment): EditorialCue {
   if (segment.cue) return segment.cue;
   if (segment.kind === "en-vivo") return { urgency: "alta", rhythm: "agil", tone: "directo" };
-  if (segment.kind === "relevo") return { urgency: "media", rhythm: "fluido", tone: "directo" };
   return fallbackSegmentCue(segment.kind);
 }
 
@@ -215,6 +211,8 @@ const MAGNITUDE_SCALE_LEVELS = [9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
 // cola, para que un lote grande ingresado de golpe no salte erraticamente ni tape la voz.
 const MIN_LIVE_DISPLAY_MS = 8_000;
 const MAX_LIVE_QUEUE = 5;
+const TOUR_DWELL_MS = 16_000;
+const TOUR_ACTIVITY_POLL_MS = 400;
 
 function MagnitudeScale({ magnitude }: { magnitude: number | null }) {
   const normalizedMagnitude = clampNumber(magnitude ?? 0, 0, 9);
@@ -262,12 +260,13 @@ function MagnitudeScale({ magnitude }: { magnitude: number | null }) {
 export default function App() {
   const queryClient = useQueryClient();
   useCountryGeocoder();
+  const monitorSession = new URLSearchParams(window.location.search).get("monitor") === "1";
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [utcNow, setUtcNow] = useState(() => new Date());
   const [tourPaused, setTourPaused] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [musicEnabled, setMusicEnabled] = useState(true);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(!monitorSession);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(() => getVoiceEngine());
   const [engineSwitching, setEngineSwitching] = useState<VoiceEngine | null>(null);
@@ -278,7 +277,7 @@ export default function App() {
     xtts: false,
     browser: isEngineAvailable("browser")
   }));
-  const [directorMode, setDirectorMode] = useState<DirectorMode>("off");
+  const [directorMode, setDirectorMode] = useState<DirectorMode>("ai");
   const [overlaySegment, setOverlaySegment] = useState<BroadcastSegment | null>(null);
   const [overlayCard, setOverlayCard] = useState<OverlayCard | null>(null);
   const overlayTimersRef = useRef<{ settle: number | null; exit: number | null }>({
@@ -298,6 +297,7 @@ export default function App() {
   const promotedLiveAtRef = useRef<number | null>(null);
   // Hasta cuando un sismo EN VIVO retiene el foco (el recorrido cede el turno mientras tanto).
   const liveHoldUntilRef = useRef(0);
+  const tourAdvanceAtRef = useRef(Date.now() + TOUR_DWELL_MS);
   const statuses = useSourceStatusesQuery().data ?? [];
   const disasters = useDisastersQuery().data ?? [];
   const tsunamiProducts = useTsunamiQuery().data ?? [];
@@ -336,7 +336,6 @@ export default function App() {
   const ambientMode: AmbientMode = useMemo(() => {
     const kind = overlaySegment?.kind;
     if (kind === "en-vivo") return "vivo";
-    if (kind === "relevo") return "relevo";
     if (kind === "boletin" || kind === "resumen") return "boletin";
     return "monitoreo";
   }, [overlaySegment]);
@@ -589,6 +588,10 @@ export default function App() {
   }, [events, ambientMode]);
 
   useEffect(() => {
+    setSeismicVoiceEnabled(!monitorSession);
+  }, [monitorSession]);
+
+  useEffect(() => {
     const primeVoices = () => {
       setVoiceSupported(isSeismicVoiceSupported());
       primeSeismicVoices();
@@ -669,12 +672,19 @@ export default function App() {
     if (!voiceEnabled || tourPaused || voiceEngine === "browser" || !event || directorMode !== "off") return;
     // Cachea la narracion del sismo actual y del siguiente para que suene sincronizada.
     prefetchSeismicNarration(event, true);
+    // En Chatterbox la siguiente locucion puede tardar mas que el recorrido y bloquear a la
+    // visible. Solo se precarga el evento actual; otros motores conservan la anticipacion.
+    if (voiceEngine === "chatterbox") return;
     const tour = eventsRef.current.slice(0, 15);
     if (tour.length < 2) return;
     const index = tour.findIndex((item) => item.eventId === event.eventId);
     const nextEvent = tour[(index + 1) % tour.length] ?? tour[0];
     if (nextEvent && nextEvent.eventId !== event.eventId) prefetchSeismicNarration(nextEvent, true);
   }, [focusEventId, tourPaused, voiceEnabled, voiceEngine, directorMode]);
+
+  useEffect(() => {
+    tourAdvanceAtRef.current = Date.now() + TOUR_DWELL_MS;
+  }, [focusEventId, tourPaused]);
 
   // Arranca el recorrido: selecciona el primer sismo en cuanto hay datos.
   useEffect(() => {
@@ -683,23 +693,25 @@ export default function App() {
     }
   }, [events, selectedEventId]);
 
-  // Auto-recorrido: cada ~16 s (13 s de visualizacion + ~3 s de vuelo) pasa al siguiente
-  // de los ultimos 15 sismos. El timer es estable (no se reinicia con cada refresco de
-  // datos); lee la lista vigente desde una ref.
+  // Auto-recorrido: conserva un minimo de 16 s por evento y, si la voz sigue generando o
+  // reproduciendo, espera su final. Al terminar avanza en el siguiente pulso corto.
   useEffect(() => {
     if (tourPaused || directorMode !== "off") return;
     const intervalId = window.setInterval(() => {
       // Cede el turno mientras se presentan sismos EN VIVO (cola o hold vigente).
       if (pendingLiveQueueRef.current.length > 0 || Date.now() < liveHoldUntilRef.current) return;
+      if (Date.now() < tourAdvanceAtRef.current) return;
+      if (voiceEnabled && isSeismicNarrationActive()) return;
       const tour = eventsRef.current.slice(0, 15);
       if (tour.length === 0) return;
+      tourAdvanceAtRef.current = Date.now() + TOUR_DWELL_MS;
       setSelectedEventId((current) => {
         const index = tour.findIndex((event) => event.eventId === current);
         return tour[(index + 1) % tour.length].eventId;
       });
-    }, 16_000);
+    }, TOUR_ACTIVITY_POLL_MS);
     return () => window.clearInterval(intervalId);
-  }, [tourPaused, directorMode]);
+  }, [tourPaused, voiceEnabled, directorMode]);
 
   return (
     <main className={activeTsunami ? "monitor-shell has-tsunami" : "monitor-shell"}>

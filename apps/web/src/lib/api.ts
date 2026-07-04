@@ -50,7 +50,7 @@ type ExperimentalOriginsResponse = {
   items: ExperimentalOrigin[];
 };
 
-export type SeismicBridgeLibrary = "short" | "extended";
+export type SeismicBridgeLibrary = "short" | "extended" | "station";
 export type SeismicBridgeManifestItem = {
   voice: string;
   groupId: string;
@@ -73,6 +73,17 @@ export type SeismicBridgeManifest = {
   voices: string[];
   groups: SeismicBridgeManifestGroup[];
   items: SeismicBridgeManifestItem[];
+};
+export type VoiceTelemetryEvent = {
+  clientId: string;
+  kind: string;
+  eventId?: string;
+  hostId?: string;
+  library?: SeismicBridgeLibrary;
+  variant?: string;
+  reason?: string;
+  outcome?: string;
+  durationMs?: number;
 };
 
 type EventsInput = {
@@ -167,6 +178,38 @@ export async function fetchSeismicBridgeManifest(
   } catch {
     return null;
   }
+}
+
+export function reportVoiceTelemetry(event: VoiceTelemetryEvent): void {
+  void fetch(`${API_BASE_URL}/api/tts/telemetry`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(event),
+    keepalive: true
+  }).catch(() => undefined);
+}
+
+export async function claimVoiceOutput(clientId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/tts/owner`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId }),
+      keepalive: true
+    });
+    if (!response.ok) return false;
+    const payload = (await response.json()) as { granted?: boolean };
+    return payload.granted === true;
+  } catch {
+    return false;
+  }
+}
+
+export function releaseVoiceOutput(clientId: string): void {
+  void fetch(`${API_BASE_URL}/api/tts/owner/${encodeURIComponent(clientId)}`, {
+    method: "DELETE",
+    keepalive: true
+  }).catch(() => undefined);
 }
 
 export async function fetchActiveDisasters(): Promise<DisasterContext[]> {
@@ -342,11 +385,6 @@ type SegmentInput = {
   recentLines?: string[];
 };
 
-export type HandoffSegmentPayload = {
-  currentHostLine: string;
-  nextHostLine: string;
-};
-
 // Texto editorial de un segmento del director. null solo ante fallo de red; el director
 // usa fallback local para texto y cue.
 export async function fetchSegmentText(input: SegmentInput): Promise<SegmentPacket | null> {
@@ -358,24 +396,6 @@ export async function fetchSegmentText(input: SegmentInput): Promise<SegmentPack
     });
     if (!response.ok) return null;
     return (await response.json()) as SegmentPacket;
-  } catch {
-    return null;
-  }
-}
-
-export async function fetchHandoffSegment(
-  currentHost: string,
-  nextHost: string,
-  recentLines: string[] = []
-): Promise<HandoffSegmentPayload | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/segment/handoff`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ currentHost, nextHost, recentLines })
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as HandoffSegmentPayload;
   } catch {
     return null;
   }

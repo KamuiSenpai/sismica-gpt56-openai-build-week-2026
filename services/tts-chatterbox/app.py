@@ -97,10 +97,20 @@ def _bool_env(name: str, default: bool) -> bool:
     return default
 
 
+def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int((os.environ.get(name) or "").strip())
+    except ValueError:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
 EXAGGERATION = _float_env("CHATTERBOX_EXAGGERATION", 0.5)
 CFG_WEIGHT = _float_env("CHATTERBOX_CFG_WEIGHT", 0.5)
 EAGER_LOAD = _bool_env("CHATTERBOX_EAGER_LOAD", False)
 CONDITIONING_CACHE_ENABLED = _bool_env("CHATTERBOX_CACHE_CONDITIONING", True)
+CONDITIONING_CACHE_LIMIT = _int_env("CHATTERBOX_CONDITIONING_CACHE_LIMIT", 2, 1, 6)
+MAX_NEW_TOKENS = _int_env("CHATTERBOX_MAX_NEW_TOKENS", 280, 120, 1000)
 
 
 def _env_choice(name: str, default: str, allowed: set[str]) -> str:
@@ -152,6 +162,7 @@ class _State:
     default_profile: str | None = None
     voice_profiles: dict[str, VoiceProfile] = {}
     conditionals_cache: dict[tuple[str, float], object] = {}
+    request_max_new_tokens = MAX_NEW_TOKENS
 
 
 state = _State()
@@ -318,6 +329,21 @@ def _maybe_compile_model() -> None:
         print(f"[chatterbox] torch.compile fallo y se desactivo: {error}")
 
 
+def _cap_generation_tokens() -> None:
+    """La libreria fija 1000 tokens y algunas semillas no emiten fin, bloqueando la GPU."""
+    inference = state.model.t3.inference
+    if getattr(inference, "_sismica_token_cap", False):
+        return
+
+    def capped_inference(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        requested = int(kwargs.get("max_new_tokens", MAX_NEW_TOKENS))
+        kwargs["max_new_tokens"] = min(requested, state.request_max_new_tokens)
+        return inference(*args, **kwargs)
+
+    capped_inference._sismica_token_cap = True
+    state.model.t3.inference = capped_inference
+
+
 def _prime_profile_conditionals(profile_id: str, exaggeration: float) -> bool:
     if not CONDITIONING_CACHE_ENABLED or state.model is None:
         return False
@@ -330,6 +356,9 @@ def _prime_profile_conditionals(profile_id: str, exaggeration: float) -> bool:
         return True
 
     state.model.prepare_conditionals(profile.speaker_wav, exaggeration=exaggeration)
+    while len(state.conditionals_cache) >= CONDITIONING_CACHE_LIMIT:
+        oldest_key = next(iter(state.conditionals_cache))
+        del state.conditionals_cache[oldest_key]
     state.conditionals_cache[cache_key] = _clone_conditionals(state.model.conds)
     return True
 
@@ -383,6 +412,7 @@ def _load_model() -> None:
     _configure_torch_runtime(state.device)
     state.model = ChatterboxMultilingualTTS.from_pretrained(**load_kwargs)
     state.sample_rate = int(getattr(state.model, "sr", 24000))
+    _cap_generation_tokens()
     _maybe_compile_model()
     _warmup_conditioning_profiles(EXAGGERATION)
     print(
@@ -452,12 +482,14 @@ def health() -> dict:
         "device": state.device,
         "precision": state.precision,
         "compileMode": state.compile_mode,
+        "maxNewTokens": MAX_NEW_TOKENS,
         "sampleRate": state.sample_rate,
         "speaker": None,
         "defaultProfile": state.default_profile,
         "profiles": _profile_summary(),
         "cachedProfiles": sorted({profile_id for profile_id, _ in state.conditionals_cache.keys()}),
         "conditioningCacheEntries": len(state.conditionals_cache),
+        "conditioningCacheLimit": CONDITIONING_CACHE_LIMIT,
     }
 
 
@@ -513,6 +545,8 @@ def synthesize(request: SynthesizeRequest) -> Response:
         with synthesis_lock:
             request_started_at = time.perf_counter()
             _load_model()  # carga perezosa / recarga bajo demanda.
+            word_count = len(request.text.split())
+            state.request_max_new_tokens = min(MAX_NEW_TOKENS, max(180, word_count * 14 + 60))
             cache_status = "hit" if _try_use_conditionals_cache(profile_id, exaggeration) else "miss"
             if cache_status == "miss" and profile_id:
                 _prime_profile_conditionals(profile_id, exaggeration)
@@ -530,6 +564,7 @@ def synthesize(request: SynthesizeRequest) -> Response:
             print(
                 f"[chatterbox] synth voice={resolved_voice or 'default'} lang={language} "
                 f"cache={cache_status} precision={state.precision} "
+                f"token_cap={state.request_max_new_tokens} "
                 f"infer={infer_ms:.1f} ms total={total_ms:.1f} ms"
             )
     except Exception as error:  # noqa: BLE001

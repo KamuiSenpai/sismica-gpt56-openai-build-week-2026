@@ -119,6 +119,13 @@ function releaseBlobConsumer(key: string, pending: PendingBlobRequest, token: sy
   }
 }
 
+function abortPendingBlobRequestsExcept(key?: string): void {
+  for (const [pendingKey, pending] of inFlightBlobRequests) {
+    if (pendingKey === key) continue;
+    pending.controller.abort();
+  }
+}
+
 async function awaitBlobRequest(key: string, pending: PendingBlobRequest): Promise<Blob> {
   const token = Symbol(key);
   pending.consumers.add(token);
@@ -189,6 +196,7 @@ function stopCurrent(): void {
 export function cancelNeuralNarration(): void {
   requestSeq += 1;
   activeController?.abort();
+  abortPendingBlobRequestsExcept();
   activeController = null;
   activeRequestKey = null;
   activePlaybackPromise = null;
@@ -334,6 +342,8 @@ export async function speakNeural(
   const key = cacheKey(engine, request.text, request.voice);
   if (activeRequestKey === key && activePlaybackPromise) return activePlaybackPromise;
 
+  // La locucion visible tiene prioridad sobre cualquier precarga especulativa anterior.
+  abortPendingBlobRequestsExcept(key);
   const seq = ++requestSeq;
   activeController?.abort(); // cancela la peticion anterior en vuelo
   const controller = new AbortController();
@@ -368,6 +378,7 @@ export async function speakNeuralSequence(
 ): Promise<void> {
   const seq = ++requestSeq;
   activeController?.abort();
+  abortPendingBlobRequestsExcept();
   const controller = new AbortController();
   activeController = controller;
   activeRequestKey = null;

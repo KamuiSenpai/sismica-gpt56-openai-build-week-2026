@@ -49,12 +49,32 @@ export type TtsHealth = {
 };
 
 export type TtsResult = { audio: Buffer; contentType: "audio/wav"; cached: boolean };
+export type TtsRuntimeStats = {
+  active: boolean;
+  activeForMs: number | null;
+  activeVoice: string | null;
+  started: number;
+  completed: number;
+  failed: number;
+  busyRejected: number;
+  cacheHits: number;
+  sharedRequests: number;
+  lastDurationMs: number | null;
+  lastCompletedAt: string | null;
+};
 
 // Error de "motor no disponible" -> el endpoint responde 503 y el front cae al respaldo.
 export class TtsUnavailableError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TtsUnavailableError";
+  }
+}
+
+export class TtsBusyError extends Error {
+  constructor(message = "Chatterbox ya esta generando otra locucion") {
+    super(message);
+    this.name = "TtsBusyError";
   }
 }
 
@@ -65,7 +85,30 @@ const XTTS_HEALTH_TTL_MS = 10_000;
 
 // Cache en memoria de audios sintetizados (las narraciones repiten frases).
 const audioCache = new LRUCache<string, Buffer>({ max: 200 });
+const inFlightSynthesis = new Map<string, Promise<Buffer>>();
+let activeChatterboxKey: string | null = null;
+let activeChatterboxStartedAt: number | null = null;
+const chatterboxRuntime = {
+  activeVoice: null as string | null,
+  started: 0,
+  completed: 0,
+  failed: 0,
+  busyRejected: 0,
+  cacheHits: 0,
+  sharedRequests: 0,
+  lastDurationMs: null as number | null,
+  lastCompletedAt: null as string | null
+};
 let cacheDirReady: Promise<void> | null = null;
+
+export function getTtsRuntimeStats(): TtsRuntimeStats {
+  return {
+    active: activeChatterboxKey !== null,
+    activeForMs:
+      activeChatterboxStartedAt === null ? null : Math.max(0, Date.now() - activeChatterboxStartedAt),
+    ...chatterboxRuntime
+  };
+}
 
 function piperVoiceLabel(): string | undefined {
   return resolvedPiperVoice ? basename(resolvedPiperVoice).replace(/\.onnx$/i, "") : undefined;
@@ -294,29 +337,79 @@ export async function synthesize(engine: TtsEngine, request: TtsRequest): Promis
   const key = cacheKey(engine, voice, spokenText);
 
   const memoryHit = audioCache.get(key);
-  if (memoryHit) return { audio: memoryHit, contentType: "audio/wav", cached: true };
+  if (memoryHit) {
+    if (engine === "chatterbox") chatterboxRuntime.cacheHits += 1;
+    return { audio: memoryHit, contentType: "audio/wav", cached: true };
+  }
 
   const diskHit = await readDiskCache(key);
   if (diskHit) {
     audioCache.set(key, diskHit);
+    if (engine === "chatterbox") chatterboxRuntime.cacheHits += 1;
     return { audio: diskHit, contentType: "audio/wav", cached: true };
   }
 
-  // Libera la VRAM del otro motor neural antes de cargar/usar este.
-  if (engine === "xtts" || engine === "chatterbox") {
-    await unloadOtherNeuralEngines(engine);
+  const sharedSynthesis = inFlightSynthesis.get(key);
+  if (sharedSynthesis) {
+    if (engine === "chatterbox") chatterboxRuntime.sharedRequests += 1;
+    return {
+      audio: await sharedSynthesis,
+      contentType: "audio/wav",
+      cached: false
+    };
   }
 
-  const audio =
-    engine === "piper"
-      ? await synthesizePiper(spokenText)
-      : engine === "chatterbox"
-        ? await synthesizeChatterbox(spokenText, request.voice)
-        : await synthesizeXtts(spokenText, request.voice);
+  // Chatterbox genera de forma serial. Rechazar otra locucion distinta evita que varias
+  // peticiones HTTP queden esperando el mismo lock de Python durante minutos.
+  if (engine === "chatterbox" && activeChatterboxKey && activeChatterboxKey !== key) {
+    chatterboxRuntime.busyRejected += 1;
+    throw new TtsBusyError();
+  }
 
-  audioCache.set(key, audio);
-  await writeDiskCache(key, audio);
-  return { audio, contentType: "audio/wav", cached: false };
+  const pending = (async () => {
+    if (engine === "xtts" || engine === "chatterbox") {
+      await unloadOtherNeuralEngines(engine);
+    }
+
+    const audio =
+      engine === "piper"
+        ? await synthesizePiper(spokenText)
+        : engine === "chatterbox"
+          ? await synthesizeChatterbox(spokenText, request.voice)
+          : await synthesizeXtts(spokenText, request.voice);
+
+    audioCache.set(key, audio);
+    await writeDiskCache(key, audio);
+    return audio;
+  })();
+
+  inFlightSynthesis.set(key, pending);
+  if (engine === "chatterbox") {
+    activeChatterboxKey = key;
+    activeChatterboxStartedAt = Date.now();
+    chatterboxRuntime.activeVoice = voice;
+    chatterboxRuntime.started += 1;
+  }
+  try {
+    const audio = await pending;
+    if (engine === "chatterbox") {
+      chatterboxRuntime.completed += 1;
+      chatterboxRuntime.lastCompletedAt = new Date().toISOString();
+    }
+    return { audio, contentType: "audio/wav", cached: false };
+  } catch (error) {
+    if (engine === "chatterbox") chatterboxRuntime.failed += 1;
+    throw error;
+  } finally {
+    if (inFlightSynthesis.get(key) === pending) inFlightSynthesis.delete(key);
+    if (activeChatterboxKey === key) {
+      chatterboxRuntime.lastDurationMs =
+        activeChatterboxStartedAt === null ? null : Date.now() - activeChatterboxStartedAt;
+      activeChatterboxKey = null;
+      activeChatterboxStartedAt = null;
+      chatterboxRuntime.activeVoice = null;
+    }
+  }
 }
 
 function piperHealth(): EngineHealth {

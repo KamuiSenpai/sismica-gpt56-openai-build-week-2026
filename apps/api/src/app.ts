@@ -30,7 +30,9 @@ import {
 import {
   activateVoiceEngine,
   getHealth as getTtsHealth,
+  getTtsRuntimeStats,
   synthesize as synthesizeTts,
+  TtsBusyError,
   ttsEngineSchema,
   ttsRequestSchema,
   TtsUnavailableError,
@@ -59,7 +61,11 @@ function hasValidEngineToken(candidate: string | undefined): boolean {
 
 export function createApp(streamBroker: StreamBroker) {
   const app = express();
-  const bridgeLibraries = new Set<TtsBridgeLibrary>(["short", "extended"]);
+  const bridgeLibraries = new Set<TtsBridgeLibrary>(["short", "extended", "station"]);
+  const voiceTelemetry: Array<Record<string, string | number | null>> = [];
+  let voiceTelemetrySequence = 0;
+  let voiceOwner: { clientId: string; expiresAt: number } | null = null;
+  const voiceOwnerLeaseMs = 12_000;
 
   const eventsCache = new LRUCache<
     string,
@@ -180,6 +186,78 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
+  app.get("/api/tts/runtime", (_request, response) => {
+    response.json(getTtsRuntimeStats());
+  });
+
+  app.put("/api/tts/owner", (request, response) => {
+    const body =
+      request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {};
+    const clientId = typeof body.clientId === "string" ? body.clientId.slice(0, 80) : "";
+    if (!clientId) {
+      response.status(400).json({ error: "Cliente de voz invalido" });
+      return;
+    }
+    const now = Date.now();
+    if (voiceOwner && voiceOwner.clientId !== clientId && voiceOwner.expiresAt > now) {
+      response.json({ granted: false, expiresAt: new Date(voiceOwner.expiresAt).toISOString() });
+      return;
+    }
+    voiceOwner = { clientId, expiresAt: now + voiceOwnerLeaseMs };
+    response.json({ granted: true, expiresAt: new Date(voiceOwner.expiresAt).toISOString() });
+  });
+
+  app.delete("/api/tts/owner/:clientId", (request, response) => {
+    if (voiceOwner?.clientId === request.params.clientId) voiceOwner = null;
+    response.json({ ok: true });
+  });
+
+  app.get("/api/tts/telemetry", (request, response) => {
+    const rawSince = typeof request.query.since === "string" ? Number(request.query.since) : 0;
+    const since = Number.isFinite(rawSince) ? Math.max(0, Math.trunc(rawSince)) : 0;
+    response.json({
+      latestSequence: voiceTelemetrySequence,
+      items: voiceTelemetry.filter((item) => Number(item.sequence) > since)
+    });
+  });
+
+  app.delete("/api/tts/telemetry", (_request, response) => {
+    voiceTelemetry.length = 0;
+    voiceTelemetrySequence = 0;
+    response.json({ ok: true });
+  });
+
+  app.post("/api/tts/telemetry", (request, response) => {
+    const body =
+      request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {};
+    const kind = typeof body.kind === "string" ? body.kind.slice(0, 40) : "";
+    const clientId = typeof body.clientId === "string" ? body.clientId.slice(0, 80) : "";
+    if (!kind || !clientId) {
+      response.status(400).json({ error: "Telemetria de voz invalida" });
+      return;
+    }
+
+    const record: Record<string, string | number | null> = {
+      sequence: ++voiceTelemetrySequence,
+      receivedAtUtc: new Date().toISOString(),
+      clientId,
+      kind
+    };
+    for (const key of ["eventId", "hostId", "library", "variant", "reason", "outcome"] as const) {
+      const value = body[key];
+      record[key] = typeof value === "string" ? value.slice(0, 160) : null;
+    }
+    record.durationMs =
+      typeof body.durationMs === "number" && Number.isFinite(body.durationMs)
+        ? Math.max(0, Math.round(body.durationMs))
+        : null;
+    voiceTelemetry.push(record);
+    if (voiceTelemetry.length > 1000) {
+      voiceTelemetry.splice(0, voiceTelemetry.length - 1000);
+    }
+    response.status(202).json({ ok: true, sequence: record.sequence });
+  });
+
   app.get("/api/tts/bridges/:library/manifest", async (request, response) => {
     const library = request.params.library;
     if (!bridgeLibraries.has(library as TtsBridgeLibrary)) {
@@ -259,6 +337,11 @@ export function createApp(streamBroker: StreamBroker) {
       response.setHeader("X-TTS-Cache", result.cached ? "hit" : "miss");
       response.send(result.audio);
     } catch (error) {
+      if (error instanceof TtsBusyError) {
+        response.setHeader("Retry-After", "1");
+        response.status(429).json({ error: error.message });
+        return;
+      }
       if (error instanceof TtsUnavailableError) {
         response.status(503).json({ error: error.message });
         return;
