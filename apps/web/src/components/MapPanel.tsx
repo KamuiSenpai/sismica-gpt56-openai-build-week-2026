@@ -530,39 +530,6 @@ function SeaLevelStationDetail({ station, onClose }: { station: SeaLevelStation;
   );
 }
 
-function SeaLevelActivityPanel({ moves }: { moves: SeaLevelRecentMove[] }) {
-  return (
-    <div className="map-legend legend-sea-level-activity">
-      <span className="legend-title">Cambios Recientes IOC/UNESCO</span>
-      <span className="sea-level-activity-note">
-        {moves.length > 0
-          ? "Comparativo puntual entre lecturas recientes publicadas por estaciones IOC/UNESCO."
-          : "Esperando una segunda lectura IOC/UNESCO comparable para mostrar variaciones recientes."}
-      </span>
-      {moves.length > 0 ? (
-        moves.slice(0, 5).map((move) => (
-          <span className="sea-level-activity-row" key={`${move.stationCode}-${move.observedAtUtc ?? "na"}`}>
-            <i
-              className="legend-point"
-              style={{
-                background: seaLevelTrendColor(move.trend),
-                borderColor: seaLevelTrendColor(move.trend)
-              }}
-            />
-            <em title={`${move.name}${move.countryName ? `, ${move.countryName}` : ""}`}>
-              {move.name}
-              {move.countryName ? `, ${move.countryName}` : ""}
-            </em>
-            <strong>{formatSeaLevelSignedDelta(move.deltaValue, move.unit)}</strong>
-          </span>
-        ))
-      ) : (
-        <span className="sea-level-activity-empty">Sin cambios visibles todavia.</span>
-      )}
-    </div>
-  );
-}
-
 function formatPresenceCount(count: number): string {
   return new Intl.NumberFormat("es-PE").format(count);
 }
@@ -1742,9 +1709,7 @@ export function MapPanel({
         />
       ) : null}
 
-      <SeaLevelActivityPanel moves={seaLevelRecentMoves} />
-
-      <div className="map-legend">
+      <div className="map-legend legend-map-layers">
         <span className="legend-title">Limites de placa</span>
         <span className="legend-row">
           <i style={{ background: PLATE_COLORS.subduction }} />
@@ -1834,22 +1799,6 @@ export function MapPanel({
             }}
           />
           Corredor tectonico
-        </span>
-      </div>
-
-      <div className="map-legend legend-sea-level">
-        <span className="legend-title">Nivel Del Mar IOC/UNESCO</span>
-        <span className="legend-row">
-          <i className="legend-point" style={{ background: SEA_LEVEL_STATION_COLORS.online }} />
-          Estacion activa
-        </span>
-        <span className="legend-row">
-          <i className="legend-point" style={{ background: SEA_LEVEL_STATION_COLORS.delayed }} />
-          Estacion con retraso
-        </span>
-        <span className="legend-row">
-          <i className="legend-point" style={{ background: SEA_LEVEL_STATION_COLORS.offline }} />
-          Sin datos recientes
         </span>
       </div>
 

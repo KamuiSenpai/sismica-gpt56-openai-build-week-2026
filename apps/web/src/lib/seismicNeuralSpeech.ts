@@ -5,7 +5,14 @@ export type NeuralEngine = "piper" | "xtts" | "chatterbox";
 export type NeuralSpeechOptions = { voice?: string; playbackRate?: number };
 export type NeuralSpeechRequest = { text: string; voice?: string };
 
-export type TtsEngineHealth = { ok: boolean; voice?: string; detail?: string; profiles?: string[] };
+export type TtsEngineHealth = {
+  ok: boolean;
+  loaded?: boolean;
+  device?: string;
+  voice?: string;
+  detail?: string;
+  profiles?: string[];
+};
 export type TtsHealth = {
   enabled: boolean;
   engines: Record<NeuralEngine, TtsEngineHealth>;
@@ -15,6 +22,7 @@ const API_BASE_URL =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL ??
   "http://localhost:3000";
 const SYNTH_TIMEOUT_MS = 120_000;
+const ENGINE_SWITCH_TIMEOUT_MS = 300_000;
 const PREFETCH_CACHE_LIMIT = 8;
 
 // Cache de audios ya sintetizados (Blob) para reproducir sin ida y vuelta a la red.
@@ -90,6 +98,24 @@ export async function fetchTtsHealth(signal?: AbortSignal): Promise<TtsHealth | 
   } catch {
     return null;
   }
+}
+
+export async function activateTtsEngine(
+  engine: NeuralEngine | "browser",
+  signal?: AbortSignal
+): Promise<TtsHealth> {
+  const timeoutSignal = AbortSignal.timeout(ENGINE_SWITCH_TIMEOUT_MS);
+  const response = await fetch(`${API_BASE_URL}/api/tts/engine`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ engine }),
+    signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+  });
+  const payload = (await response.json().catch(() => null)) as { error?: string; health?: TtsHealth } | null;
+  if (!response.ok || !payload?.health) {
+    throw new Error(payload?.error ?? `No se pudo activar ${engine}`);
+  }
+  return payload.health;
 }
 
 async function obtainBlob(

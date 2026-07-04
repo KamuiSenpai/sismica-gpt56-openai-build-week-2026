@@ -44,6 +44,7 @@ import { resolveCountryCode, useCountryGeocoder } from "./lib/countryGeocoder";
 import { setSeismicAudioEnabled } from "./lib/seismicAudio";
 import { resumeAmbient, setAmbientEnabled, updateAmbientDrivers, type AmbientMode } from "./lib/ambientBed";
 import {
+  activateVoiceEngine,
   getVoiceEngine,
   isEngineAvailable,
   isSeismicNarrationActive,
@@ -52,7 +53,6 @@ import {
   primeSeismicVoices,
   refreshTtsHealth,
   setSeismicVoiceEnabled,
-  setVoiceEngine,
   speakSeismicNarration,
   speakText,
   VOICE_ENGINE_LABELS,
@@ -269,6 +269,8 @@ export default function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceEngine, setVoiceEngineState] = useState<VoiceEngine>(() => getVoiceEngine());
+  const [engineSwitching, setEngineSwitching] = useState<VoiceEngine | null>(null);
+  const [engineSwitchError, setEngineSwitchError] = useState<string | null>(null);
   const [engineAvailability, setEngineAvailability] = useState<Record<VoiceEngine, boolean>>(() => ({
     chatterbox: false,
     piper: false,
@@ -517,10 +519,26 @@ export default function App() {
     speakVisibleContent(voiceEnabled);
   }, [speakVisibleContent, voiceEnabled]);
   const handleVoiceEngineChange = useCallback(
-    (engine: VoiceEngine) => {
-      setVoiceEngine(engine);
+    async (engine: VoiceEngine) => {
+      const previousEngine = getVoiceEngine();
+      setEngineSwitchError(null);
+      setEngineSwitching(engine);
       setVoiceEngineState(engine);
-      speakVisibleContent(voiceEnabled);
+      try {
+        await activateVoiceEngine(engine);
+        setEngineAvailability({
+          chatterbox: isEngineAvailable("chatterbox"),
+          piper: isEngineAvailable("piper"),
+          xtts: isEngineAvailable("xtts"),
+          browser: isEngineAvailable("browser")
+        });
+        if (voiceEnabled) speakVisibleContent(true);
+      } catch (error) {
+        setVoiceEngineState(previousEngine);
+        setEngineSwitchError(error instanceof Error ? error.message : "No se pudo cambiar el motor");
+      } finally {
+        setEngineSwitching(null);
+      }
     },
     [speakVisibleContent, voiceEnabled]
   );
@@ -586,7 +604,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void refreshTtsHealth().then(() => {
+    void refreshTtsHealth().then(async (health) => {
       if (cancelled) return;
       setEngineAvailability({
         chatterbox: isEngineAvailable("chatterbox"),
@@ -594,9 +612,36 @@ export default function App() {
         xtts: isEngineAvailable("xtts"),
         browser: isEngineAvailable("browser")
       });
-      // refreshTtsHealth puede autoseleccionar un motor neural disponible.
-      setVoiceEngineState(getVoiceEngine());
+      const selectedEngine = getVoiceEngine();
+      setVoiceEngineState(selectedEngine);
       setVoiceSupported(isSeismicVoiceSupported());
+
+      if (!health) return;
+      const neuralLoaded = Boolean(health.engines.xtts?.loaded) || Boolean(health.engines.chatterbox?.loaded);
+      const selectedLoaded =
+        selectedEngine === "xtts" || selectedEngine === "chatterbox"
+          ? Boolean(health.engines[selectedEngine]?.loaded)
+          : !neuralLoaded;
+      if (selectedLoaded) return;
+
+      setEngineSwitchError(null);
+      setEngineSwitching(selectedEngine);
+      try {
+        await activateVoiceEngine(selectedEngine);
+        if (cancelled) return;
+        setEngineAvailability({
+          chatterbox: isEngineAvailable("chatterbox"),
+          piper: isEngineAvailable("piper"),
+          xtts: isEngineAvailable("xtts"),
+          browser: isEngineAvailable("browser")
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setEngineSwitchError(error instanceof Error ? error.message : "No se pudo activar el motor");
+        }
+      } finally {
+        if (!cancelled) setEngineSwitching(null);
+      }
     });
     return () => {
       cancelled = true;
@@ -701,12 +746,27 @@ export default function App() {
           >
             VOZ {voiceEnabled ? "ON" : "OFF"}
           </button>
-          <label className="voice-engine" title="Motor de sintesis de voz para la narracion">
-            <span className="voice-engine-label">MOTOR</span>
+          <label
+            className="voice-engine"
+            title={
+              engineSwitchError ??
+              (engineSwitching
+                ? `Liberando GPU y cargando ${VOICE_ENGINE_LABELS[engineSwitching]}`
+                : "Motor de sintesis de voz para la narracion")
+            }
+          >
+            <span className={engineSwitchError ? "voice-engine-label has-error" : "voice-engine-label"}>
+              {engineSwitchError
+                ? "ERROR MOTOR"
+                : engineSwitching
+                  ? `CARGANDO ${VOICE_ENGINE_LABELS[engineSwitching]}`
+                  : "MOTOR"}
+            </span>
             <select
               className="voice-engine-select"
               value={voiceEngine}
-              onChange={(event) => handleVoiceEngineChange(event.target.value as VoiceEngine)}
+              disabled={engineSwitching !== null}
+              onChange={(event) => void handleVoiceEngineChange(event.target.value as VoiceEngine)}
             >
               {VOICE_ENGINES.map((engine) => (
                 <option key={engine} value={engine} disabled={!engineAvailability[engine]}>

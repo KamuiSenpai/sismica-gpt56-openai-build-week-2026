@@ -28,11 +28,13 @@ import {
   stationSnapshotSchema
 } from "./services/seismicEngineRepository.js";
 import {
+  activateVoiceEngine,
   getHealth as getTtsHealth,
   synthesize as synthesizeTts,
   ttsEngineSchema,
   ttsRequestSchema,
-  TtsUnavailableError
+  TtsUnavailableError,
+  voiceEngineSchema
 } from "./services/ttsService.js";
 import { generateNarration, narrationRequestSchema } from "./services/narrationService.js";
 import {
@@ -172,10 +174,28 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
+  app.post("/api/tts/engine", async (request, response) => {
+    const engine = voiceEngineSchema.safeParse(request.body?.engine);
+    if (!engine.success) {
+      response.status(400).json({ error: "Motor de voz invalido" });
+      return;
+    }
+    try {
+      const health = await activateVoiceEngine(engine.data);
+      response.json({ ok: true, engine: engine.data, health });
+    } catch (error) {
+      if (error instanceof TtsUnavailableError) {
+        response.status(503).json({ error: error.message });
+        return;
+      }
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   app.post("/api/tts", async (request, response) => {
     const engine = ttsEngineSchema.safeParse(request.query.engine);
     if (!engine.success) {
-      response.status(400).json({ error: "El parametro 'engine' debe ser 'piper' o 'xtts'" });
+      response.status(400).json({ error: "El parametro 'engine' debe ser 'piper', 'xtts' o 'chatterbox'" });
       return;
     }
     const body = ttsRequestSchema.safeParse(request.body);

@@ -24,6 +24,8 @@ const resolvedCacheDir = env.ttsCacheDir ? resolveAsset(env.ttsCacheDir) : undef
 // Motores de sintesis disponibles: Piper (binario local) y XTTS-v2 (microservicio Python).
 export const ttsEngineSchema = z.enum(["piper", "xtts", "chatterbox"]);
 export type TtsEngine = z.infer<typeof ttsEngineSchema>;
+export const voiceEngineSchema = z.enum(["browser", "piper", "xtts", "chatterbox"]);
+export type VoiceEngine = z.infer<typeof voiceEngineSchema>;
 
 export const ttsRequestSchema = z.object({
   text: z.string().trim().min(1).max(env.ttsMaxTextLength),
@@ -33,7 +35,14 @@ export const ttsRequestSchema = z.object({
 });
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 
-export type EngineHealth = { ok: boolean; voice?: string; detail?: string; profiles?: string[] };
+export type EngineHealth = {
+  ok: boolean;
+  loaded?: boolean;
+  device?: string;
+  voice?: string;
+  detail?: string;
+  profiles?: string[];
+};
 export type TtsHealth = {
   enabled: boolean;
   engines: Record<TtsEngine, EngineHealth>;
@@ -147,6 +156,9 @@ async function synthesizePiper(text: string): Promise<Buffer> {
 }
 
 async function synthesizeXtts(text: string, voice?: string): Promise<Buffer> {
+  if (!env.xttsEnabled) {
+    throw new TtsUnavailableError("XTTS-v2 esta deshabilitado");
+  }
   if (!env.xttsServiceUrl) {
     throw new TtsUnavailableError("XTTS no esta configurado (XTTS_SERVICE_URL)");
   }
@@ -193,9 +205,10 @@ async function synthesizeChatterbox(text: string, voice?: string): Promise<Buffe
 }
 
 const UNLOAD_TIMEOUT_MS = 15_000;
+const LOAD_TIMEOUT_MS = 300_000;
 
 function neuralServiceUrl(engine: TtsEngine): string | undefined {
-  if (engine === "xtts") return env.xttsServiceUrl;
+  if (engine === "xtts") return env.xttsEnabled ? env.xttsServiceUrl : undefined;
   if (engine === "chatterbox") return env.chatterboxServiceUrl;
   return undefined;
 }
@@ -217,11 +230,68 @@ async function unloadOtherNeuralEngines(active: TtsEngine): Promise<void> {
   );
 }
 
+function clearNeuralHealthCache(): void {
+  xttsHealthCache = null;
+  chatterboxHealthCache = null;
+}
+
+async function requestNeuralState(engine: "xtts" | "chatterbox", action: "load" | "unload"): Promise<void> {
+  const url = neuralServiceUrl(engine);
+  if (!url) {
+    throw new TtsUnavailableError(`${engine} no esta configurado`);
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${url}/${action}`, {
+      method: "POST",
+      signal: AbortSignal.timeout(action === "load" ? LOAD_TIMEOUT_MS : UNLOAD_TIMEOUT_MS)
+    });
+  } catch (error) {
+    throw new TtsUnavailableError(
+      `No se pudo ${action === "load" ? "cargar" : "descargar"} ${engine}: ${
+        error instanceof Error ? error.message : "error"
+      }`
+    );
+  }
+  if (!response.ok) {
+    throw new TtsUnavailableError(`${engine} respondio ${response.status} al intentar ${action}`);
+  }
+}
+
+export async function activateVoiceEngine(engine: VoiceEngine): Promise<TtsHealth> {
+  if (!env.ttsEnabled && engine !== "browser") {
+    throw new TtsUnavailableError("TTS neural deshabilitado (TTS_ENABLED=false)");
+  }
+  if (engine === "xtts" && !env.xttsEnabled) {
+    throw new TtsUnavailableError("XTTS-v2 esta deshabilitado; use Chatterbox");
+  }
+
+  if (engine === "xtts" || engine === "chatterbox") {
+    await requestNeuralState(engine === "xtts" ? "chatterbox" : "xtts", "unload").catch(() => undefined);
+    await requestNeuralState(engine, "load");
+  } else {
+    await Promise.allSettled([
+      requestNeuralState("xtts", "unload"),
+      requestNeuralState("chatterbox", "unload")
+    ]);
+  }
+
+  clearNeuralHealthCache();
+  return getHealth();
+}
+
 export async function synthesize(engine: TtsEngine, request: TtsRequest): Promise<TtsResult> {
   if (!env.ttsEnabled) throw new TtsUnavailableError("TTS neural deshabilitado (TTS_ENABLED=false)");
+  if (engine === "xtts" && !env.xttsEnabled) {
+    throw new TtsUnavailableError("XTTS-v2 esta deshabilitado; use Chatterbox");
+  }
 
   const voice = effectiveVoice(engine, request.voice);
-  const key = cacheKey(engine, voice, request.text);
+
+  // Normalizar números decimales para que el locutor no los lea como años (ej: 2.6 -> 2 punto 6)
+  const spokenText = request.text.replace(/(\d)\.(\d)/g, "$1 punto $2");
+
+  const key = cacheKey(engine, voice, spokenText);
 
   const memoryHit = audioCache.get(key);
   if (memoryHit) return { audio: memoryHit, contentType: "audio/wav", cached: true };
@@ -239,10 +309,10 @@ export async function synthesize(engine: TtsEngine, request: TtsRequest): Promis
 
   const audio =
     engine === "piper"
-      ? await synthesizePiper(request.text)
+      ? await synthesizePiper(spokenText)
       : engine === "chatterbox"
-        ? await synthesizeChatterbox(request.text, request.voice)
-        : await synthesizeXtts(request.text, request.voice);
+        ? await synthesizeChatterbox(spokenText, request.voice)
+        : await synthesizeXtts(spokenText, request.voice);
 
   audioCache.set(key, audio);
   await writeDiskCache(key, audio);
@@ -262,6 +332,9 @@ function piperHealth(): EngineHealth {
 let xttsHealthCache: { at: number; value: EngineHealth } | null = null;
 
 async function xttsHealth(): Promise<EngineHealth> {
+  if (!env.xttsEnabled) {
+    return { ok: false, loaded: false, detail: "deshabilitado por configuracion" };
+  }
   if (!env.xttsServiceUrl) return { ok: false, detail: "XTTS_SERVICE_URL sin configurar" };
   if (xttsHealthCache && Date.now() - xttsHealthCache.at < XTTS_HEALTH_TTL_MS) {
     return xttsHealthCache.value;
@@ -275,12 +348,16 @@ async function xttsHealth(): Promise<EngineHealth> {
       value = { ok: false, detail: `health ${response.status}` };
     } else {
       const payload = (await response.json()) as {
+        loaded?: boolean;
+        device?: string;
         speaker?: string | null;
         defaultProfile?: string | null;
         profiles?: string[] | null;
       };
       value = {
         ok: true,
+        loaded: payload.loaded === true,
+        device: payload.device,
         voice: payload.defaultProfile ?? payload.speaker ?? "xtts-v2",
         profiles: Array.isArray(payload.profiles)
           ? payload.profiles.filter((item) => typeof item === "string")
@@ -310,12 +387,16 @@ async function chatterboxHealth(): Promise<EngineHealth> {
       value = { ok: false, detail: `health ${response.status}` };
     } else {
       const payload = (await response.json()) as {
+        loaded?: boolean;
+        device?: string;
         speaker?: string | null;
         defaultProfile?: string | null;
         profiles?: string[] | null;
       };
       value = {
         ok: true,
+        loaded: payload.loaded === true,
+        device: payload.device,
         voice: payload.defaultProfile ?? payload.speaker ?? "chatterbox",
         profiles: Array.isArray(payload.profiles)
           ? payload.profiles.filter((item) => typeof item === "string")

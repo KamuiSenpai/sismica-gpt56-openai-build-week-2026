@@ -16,6 +16,7 @@ import {
 } from "./editorial";
 import { countryCode } from "./presentation";
 import {
+  activateTtsEngine,
   cancelNeuralNarration,
   fetchTtsHealth,
   isNeuralNarrationActive,
@@ -57,7 +58,7 @@ export type ResolvedNarrationPacket = {
   tectonicContext: string | null;
 };
 
-export const VOICE_ENGINES: readonly VoiceEngine[] = ["chatterbox", "xtts", "piper", "browser"] as const;
+export const VOICE_ENGINES: readonly VoiceEngine[] = ["chatterbox", "piper", "browser"] as const;
 export const VOICE_ENGINE_LABELS: Record<VoiceEngine, string> = {
   chatterbox: "Chatterbox",
   xtts: "XTTS-v2",
@@ -77,7 +78,7 @@ export const BROADCAST_VOICE_HOSTS: readonly BroadcastVoiceHost[] = [
 
 // Orden de preferencia neural (autoseleccion y cascada de fallback): XTTS-v2 primero,
 // luego Piper y, si todos fallan, la voz del navegador.
-const NEURAL_PRIORITY: readonly NeuralEngine[] = ["chatterbox", "xtts", "piper"] as const;
+const NEURAL_PRIORITY: readonly NeuralEngine[] = ["chatterbox", "piper"] as const;
 // Incluye frases de "continuidad" de TV que no aplican a un directo 24/7 continuo:
 // pausas, cortes comerciales, publicidad y despedidas del tipo "volvemos/regresamos".
 const UNSUPPORTED_EDITORIAL_CLAIM_PATTERN =
@@ -214,7 +215,7 @@ function containsUnsupportedEditorialText(value: string): boolean {
 function loadEngine(): VoiceEngine {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "piper" || stored === "xtts" || stored === "browser") {
+    if (stored === "chatterbox" || stored === "piper" || stored === "xtts" || stored === "browser") {
       engineExplicit = true;
       return stored;
     }
@@ -222,6 +223,19 @@ function loadEngine(): VoiceEngine {
     // localStorage no disponible: usa el respaldo.
   }
   return "browser";
+}
+
+function bestAvailableVoiceEngine(): VoiceEngine {
+  const loaded = NEURAL_PRIORITY.find(
+    (engine) =>
+      healthSnapshot?.enabled && healthSnapshot.engines[engine]?.ok && healthSnapshot.engines[engine]?.loaded
+  );
+  if (loaded) return loaded;
+  const preferred = NEURAL_PRIORITY.find(
+    (engine) => healthSnapshot?.enabled && healthSnapshot.engines[engine]?.ok
+  );
+  if (preferred) return preferred;
+  return isBrowserVoiceSupported() ? "browser" : "piper";
 }
 
 // --- Selector de motor ---
@@ -242,6 +256,12 @@ export function setVoiceEngine(engine: VoiceEngine): void {
   cancelNeuralNarration();
 }
 
+export async function activateVoiceEngine(engine: VoiceEngine, signal?: AbortSignal): Promise<void> {
+  cancelNeuralNarration();
+  healthSnapshot = await activateTtsEngine(engine, signal);
+  setVoiceEngine(engine);
+}
+
 export function getTtsHealthSnapshot(): TtsHealth | null {
   return healthSnapshot;
 }
@@ -250,12 +270,23 @@ function findBroadcastHost(id: BroadcastVoiceHostId): BroadcastVoiceHost {
   return BROADCAST_VOICE_HOSTS.find((host) => host.id === id) ?? BROADCAST_VOICE_HOSTS[0];
 }
 
-function resolveXttsSpeaker(hostId?: BroadcastVoiceHostId, speaker?: string): string | undefined {
+function neuralProfilesForEngine(engine: NeuralEngine): string[] {
+  return healthSnapshot?.engines[engine]?.profiles ?? [];
+}
+
+function resolveNeuralSpeaker(
+  engine: NeuralEngine,
+  hostId?: BroadcastVoiceHostId,
+  speaker?: string
+): string | undefined {
   if (speaker) return speaker;
   const host = findBroadcastHost(hostId ?? activeBroadcastHostId);
-  const availableProfiles = healthSnapshot?.engines.xtts.profiles ?? [];
+  const availableProfiles = neuralProfilesForEngine(engine);
   if (host.xttsProfile && availableProfiles.includes(host.xttsProfile)) {
     return host.xttsProfile;
+  }
+  if (engine === "chatterbox") {
+    return host.xttsProfile ?? host.xttsSpeaker;
   }
   return host.xttsSpeaker;
 }
@@ -266,11 +297,12 @@ function dialogueFallback(turns: BroadcastDialogueTurn[]): string {
 
 function neuralDialogue(
   turns: BroadcastDialogueTurn[],
+  engine: NeuralEngine,
   playbackRate = 1.04
 ): Array<NeuralSpeechRequest & { playbackRate?: number }> {
   return turns.map((turn) => ({
     text: normalizeSpokenText(turn.text),
-    voice: resolveXttsSpeaker(turn.hostId),
+    voice: resolveNeuralSpeaker(engine, turn.hostId),
     playbackRate
   }));
 }
@@ -302,11 +334,14 @@ export function isEngineAvailable(engine: VoiceEngine): boolean {
 
 export async function refreshTtsHealth(signal?: AbortSignal): Promise<TtsHealth | null> {
   healthSnapshot = await fetchTtsHealth(signal);
-  // Si el usuario no eligio motor y hay uno neural disponible, seleccionarlo por defecto
-  // segun la prioridad (XTTS-v2 primero, luego Piper).
-  if (!engineExplicit && healthSnapshot?.enabled) {
-    const preferred = NEURAL_PRIORITY.find((engine) => healthSnapshot?.engines[engine]?.ok);
-    if (preferred) voiceEngine = preferred;
+  const engineOk =
+    voiceEngine === "browser"
+      ? isBrowserVoiceSupported()
+      : Boolean(healthSnapshot?.enabled && healthSnapshot.engines[voiceEngine]?.ok);
+  // Si no hay eleccion explicita, o el motor guardado hoy no existe/esta caido, cambia al
+  // mejor motor disponible para que el selector y el prefetch queden coherentes con el arranque.
+  if ((!engineExplicit && healthSnapshot) || !engineOk) {
+    voiceEngine = bestAvailableVoiceEngine();
   }
   return healthSnapshot;
 }
@@ -316,7 +351,12 @@ export async function refreshTtsHealth(signal?: AbortSignal): Promise<TtsHealth 
 export function isSeismicVoiceSupported(): boolean {
   return (
     isBrowserVoiceSupported() ||
-    Boolean(healthSnapshot?.enabled && (healthSnapshot.engines.piper?.ok || healthSnapshot.engines.xtts?.ok))
+    Boolean(
+      healthSnapshot?.enabled &&
+      (healthSnapshot.engines.chatterbox?.ok ||
+        healthSnapshot.engines.piper?.ok ||
+        healthSnapshot.engines.xtts?.ok)
+    )
   );
 }
 
@@ -399,7 +439,7 @@ export function prefetchSeismicNarration(
 
   void resolveEventNarration(event, options).then(({ text }) =>
     prefetchNeural(normalizeSpokenText(text), engine, {
-      voice: resolveXttsSpeaker(options.hostId, options.speaker)
+      voice: resolveNeuralSpeaker(engine, options.hostId, options.speaker)
     })
   );
 }
@@ -436,7 +476,7 @@ async function runNeuralCascade(
     if (!isEngineAvailable(engine)) continue;
     try {
       await speakNeural(spokenText, engine, {
-        voice: resolveXttsSpeaker(options.hostId, options.speaker),
+        voice: resolveNeuralSpeaker(engine, options.hostId, options.speaker),
         playbackRate: delivery.playbackRate
       });
       return;
@@ -544,7 +584,7 @@ async function dispatchText(
     if (!isEngineAvailable(engine)) continue;
     try {
       await speakNeural(spokenText, engine, {
-        voice: resolveXttsSpeaker(),
+        voice: resolveNeuralSpeaker(engine),
         playbackRate: delivery.playbackRate
       });
       return;
@@ -575,7 +615,7 @@ async function dispatchTextWithSpeaker(
     if (!isEngineAvailable(engine)) continue;
     try {
       await speakNeural(spokenText, engine, {
-        voice: resolveXttsSpeaker(options.hostId, options.speaker),
+        voice: resolveNeuralSpeaker(engine, options.hostId, options.speaker),
         playbackRate: delivery.playbackRate
       });
       return;
@@ -618,7 +658,7 @@ export function prefetchText(
   const value = normalizeSpokenText(text.trim());
   if (value) {
     void prefetchNeural(value, engine, {
-      voice: resolveXttsSpeaker(options.hostId, options.speaker)
+      voice: resolveNeuralSpeaker(engine, options.hostId, options.speaker)
     });
   }
 }
@@ -631,27 +671,29 @@ async function dispatchDialogue(turns: BroadcastDialogueTurn[], seq: number): Pr
     "relevo"
   );
 
-  if (voiceEngine !== "xtts" || !isEngineAvailable("xtts")) {
+  if (voiceEngine === "browser" || !isEngineAvailable(voiceEngine)) {
     cancelNeuralNarration();
     speakBrowserText(dialogueFallback(turns), { rate: delivery.rate });
     return;
   }
 
+  const engine = voiceEngine as NeuralEngine;
   cancelBrowserNarration();
   try {
-    await speakNeuralSequence(neuralDialogue(turns, delivery.playbackRate), "xtts");
+    await speakNeuralSequence(neuralDialogue(turns, engine, delivery.playbackRate), engine);
   } catch (error) {
-    console.warn("Dialogo XTTS fallo; usando respaldo del navegador.", error);
+    console.warn(`Dialogo ${engine} fallo; usando respaldo del navegador.`, error);
     cancelNeuralNarration();
     speakBrowserText(dialogueFallback(turns), { rate: delivery.rate });
   }
 }
 
 export function prefetchDialogue(turns: BroadcastDialogueTurn[]): void {
-  if (!voiceEnabled || voiceEngine !== "xtts" || !isEngineAvailable("xtts")) return;
+  if (!voiceEnabled || voiceEngine === "browser" || !isEngineAvailable(voiceEngine)) return;
+  const engine = voiceEngine as NeuralEngine;
   for (const turn of turns) {
-    void prefetchNeural(normalizeSpokenText(turn.text), "xtts", {
-      voice: resolveXttsSpeaker(turn.hostId)
+    void prefetchNeural(normalizeSpokenText(turn.text), engine, {
+      voice: resolveNeuralSpeaker(engine, turn.hostId)
     });
   }
 }

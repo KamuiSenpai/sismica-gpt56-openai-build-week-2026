@@ -1,11 +1,13 @@
 """Microservicio de TTS neural con XTTS-v2 (Coqui) para la plataforma sismica.
 
-Expone dos endpoints:
+Expone cuatro endpoints:
   - GET  /health       -> estado del modelo y dispositivo.
+  - POST /load         -> carga el modelo en el dispositivo configurado.
+  - POST /unload       -> descarga el modelo y libera VRAM.
   - POST /synthesize   -> { text, speaker?, language? } -> audio/wav (PCM 16 bits).
 
-El modelo se carga UNA sola vez al arrancar. Pensado para correr en la RTX 4060 Ti
-(~4 GB VRAM). El API de Node le hace proxy en /api/tts?engine=xtts.
+El modelo puede cargarse al arrancar o bajo demanda. Pensado para correr en la RTX 4060 Ti
+(~4 GB VRAM) y alternar con otro motor sin mantener ambos modelos en memoria.
 
 Config por variables de entorno:
   XTTS_MODEL        modelo Coqui (default: tts_models/multilingual/multi-dataset/xtts_v2)
@@ -13,6 +15,7 @@ Config por variables de entorno:
   XTTS_SPEAKER      nombre de locutor incorporado (opcional)
   XTTS_SPEAKER_WAV  ruta a un wav de referencia para clonar voz (opcional)
   XTTS_DEVICE       cuda | cpu (default: auto)
+  XTTS_LAZY_LOAD    true | false (default: false)
   XTTS_HOST/PORT    bind del servidor (default: 127.0.0.1:8090)
 
 Licencia: XTTS-v2 se distribuye bajo la Coqui Public Model License (CPML), de uso
@@ -89,6 +92,9 @@ def _bool_env(name: str, default: bool) -> bool:
     if raw in ("0", "false", "no", "off"):
         return False
     return default
+
+
+LAZY_LOAD = _bool_env("XTTS_LAZY_LOAD", False)
 
 
 # Parametros de inferencia de XTTS (antes se usaban los defaults del modelo). Ajustan naturalidad
@@ -273,9 +279,12 @@ async def lifespan(_app: FastAPI):
         state.default_profile = DEFAULT_PROFILE
     elif state.voice_profiles:
         state.default_profile = next(iter(state.voice_profiles.keys()))
-    # XTTS es el motor por defecto: se carga al arrancar (queda listo).
-    _load_model()
-    print(f"[xtts] listo (default_profile={state.default_profile}, profiles={_profile_summary()})")
+    if not LAZY_LOAD:
+        _load_model()
+    print(
+        f"[xtts] listo (default_profile={state.default_profile}, profiles={_profile_summary()}, "
+        f"lazy={LAZY_LOAD})"
+    )
     yield
     _unload_model()
 
@@ -330,6 +339,14 @@ def unload() -> dict:
     with synthesis_lock:
         _unload_model()
     return {"ok": True, "loaded": state.tts is not None}
+
+
+@app.post("/load")
+def load() -> dict:
+    """Carga el modelo y solo responde cuando esta listo para sintetizar."""
+    with synthesis_lock:
+        _load_model()
+    return {"ok": True, "loaded": state.tts is not None, "device": state.device}
 
 
 @app.get("/voices")

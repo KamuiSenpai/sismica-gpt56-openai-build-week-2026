@@ -131,6 +131,10 @@ button {
   letter-spacing: 0.05em;
 }
 
+.voice-engine-label.has-error {
+  color: #ff6b76;
+}
+
 .voice-engine-select {
   padding: 2px 4px;
   border: 1px solid #64748b;
@@ -141,6 +145,11 @@ button {
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
+}
+
+.voice-engine-select:disabled {
+  cursor: wait;
+  opacity: 0.68;
 }
 
 .voice-engine-select:focus-visible {
@@ -509,7 +518,7 @@ button {
 .overlay-right {
   right: 4px;
   width: min(288px, calc(100vw - 8px));
-  bottom: 138px;
+  bottom: 34px;
   align-content: stretch;
   grid-template-rows: minmax(0, 1fr);
 }
@@ -1142,56 +1151,10 @@ button {
   font-size: 0.64rem;
 }
 
-.legend-sea-level {
+.legend-map-layers {
   right: 1376px;
   bottom: 34px;
-  width: 212px;
-  grid-template-columns: 1fr;
-  gap: 4px;
-  align-content: start;
-  padding: 7px 9px 8px;
-  font-size: 0.62rem;
-}
-
-.legend-sea-level-activity {
-  right: 1596px;
-  bottom: 34px;
   width: 252px;
-  grid-template-columns: 1fr;
-  gap: 5px;
-  align-content: start;
-  padding: 7px 9px 8px;
-  font-size: 0.62rem;
-}
-
-.sea-level-activity-note {
-  color: #93a7ba;
-  line-height: 1.32;
-}
-
-.sea-level-activity-row {
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  color: #dce7ef;
-}
-
-.sea-level-activity-row em {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-style: normal;
-}
-
-.sea-level-activity-row strong {
-  font-variant-numeric: tabular-nums;
-}
-
-.sea-level-activity-empty {
-  color: #9cb0c2;
-  line-height: 1.34;
 }
 
 /* Top 10 mayor magnitud: al lado (izquierda) de "Paises con mas sismos". */
@@ -1774,17 +1737,14 @@ button {
 /* La tabla va al lado (izquierda) de presencia; solo cabe sin chocar con el
    console izquierdo en pantallas anchas. En mas angostas se oculta. */
 @media (max-width: 1700px) {
-  .legend-top-mag,
-  .legend-sea-level,
-  .legend-sea-level-activity {
+  .legend-top-mag {
     display: none;
   }
-}
 
-@media (max-width: 2200px) {
-  .legend-sea-level-activity {
-    right: 1376px;
-    bottom: 126px;
+  .legend-map-layers {
+    right: 4px;
+    bottom: 34px;
+    width: 288px;
   }
 }
 

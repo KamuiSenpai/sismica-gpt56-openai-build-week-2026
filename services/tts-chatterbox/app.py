@@ -7,6 +7,8 @@ voces clonadas (Carolina, Liam, Valentina, Martin, Sofia, Ninoska) funcionan sin
 
 Endpoints:
   - GET  /health      -> estado del modelo y perfiles.
+  - POST /load        -> carga el modelo en el dispositivo configurado.
+  - POST /unload      -> descarga el modelo y libera VRAM.
   - POST /synthesize  -> { text, speaker?, language?, exaggeration?, cfg_weight?, temperature? } -> audio/wav
 
 El API de Node le hace proxy en /api/tts?engine=chatterbox. Corre en 127.0.0.1:8091 por defecto.
@@ -19,6 +21,7 @@ Config por env:
   CHATTERBOX_LANGUAGE        idioma por defecto (default: es)
   CHATTERBOX_EXAGGERATION    expresividad 0..1 (default: 0.5)
   CHATTERBOX_CFG_WEIGHT      guia de estilo 0..1 (default: 0.5)
+  CHATTERBOX_EAGER_LOAD      true | false (default: false)
 """
 
 from __future__ import annotations
@@ -76,8 +79,18 @@ def _float_env(name: str, default: float) -> float:
         return default
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
 EXAGGERATION = _float_env("CHATTERBOX_EXAGGERATION", 0.5)
 CFG_WEIGHT = _float_env("CHATTERBOX_CFG_WEIGHT", 0.5)
+EAGER_LOAD = _bool_env("CHATTERBOX_EAGER_LOAD", False)
 
 
 def _resolve_device() -> str:
@@ -209,10 +222,11 @@ async def lifespan(_app: FastAPI):
         state.default_profile = DEFAULT_PROFILE
     elif state.voice_profiles:
         state.default_profile = next(iter(state.voice_profiles.keys()))
-    # Carga perezosa: el modelo se carga en el primer /synthesize (o /load), no al arrancar.
+    if EAGER_LOAD:
+        _load_model()
     print(
         f"[chatterbox] servicio listo (device={state.device}, "
-        f"default_profile={state.default_profile}, profiles={_profile_summary()}) - modelo lazy"
+        f"default_profile={state.default_profile}, profiles={_profile_summary()}, eager={EAGER_LOAD})"
     )
     yield
     _unload_model()
@@ -251,6 +265,14 @@ def unload() -> dict:
     with synthesis_lock:
         _unload_model()
     return {"ok": True, "loaded": state.model is not None}
+
+
+@app.post("/load")
+def load() -> dict:
+    """Carga el modelo y solo responde cuando esta listo para sintetizar."""
+    with synthesis_lock:
+        _load_model()
+    return {"ok": True, "loaded": state.model is not None, "device": state.device}
 
 
 def _resolve_reference(requested_voice: str | None) -> tuple[str | None, str, str | None]:

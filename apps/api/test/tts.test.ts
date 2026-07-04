@@ -7,14 +7,22 @@ delete process.env.PIPER_BINARY_PATH;
 delete process.env.PIPER_VOICE_MODEL;
 delete process.env.XTTS_SERVICE_URL;
 
-const { getHealth, synthesize, ttsEngineSchema, ttsRequestSchema, TtsUnavailableError } =
+const { getHealth, synthesize, ttsEngineSchema, ttsRequestSchema, TtsUnavailableError, voiceEngineSchema } =
   await import("../src/services/ttsService.js");
 
-test("ttsEngineSchema solo acepta piper o xtts", () => {
+test("ttsEngineSchema acepta los tres motores locales", () => {
   assert.equal(ttsEngineSchema.safeParse("piper").success, true);
   assert.equal(ttsEngineSchema.safeParse("xtts").success, true);
+  assert.equal(ttsEngineSchema.safeParse("chatterbox").success, true);
   assert.equal(ttsEngineSchema.safeParse("browser").success, false);
   assert.equal(ttsEngineSchema.safeParse(undefined).success, false);
+});
+
+test("voiceEngineSchema acepta los motores seleccionables por la interfaz", () => {
+  for (const engine of ["browser", "piper", "xtts", "chatterbox"]) {
+    assert.equal(voiceEngineSchema.safeParse(engine).success, true);
+  }
+  assert.equal(voiceEngineSchema.safeParse("cuda").success, false);
 });
 
 test("ttsRequestSchema exige texto no vacio", () => {
