@@ -1,7 +1,7 @@
 ﻿{
   "version": "2026-07-04",
-  "generatedAtUtc": "2026-07-04T17:02:11.2705055Z",
-  "runStartedUtc": "2026-07-04T16:52:24.9818611Z",
+  "generatedAtUtc": "2026-07-05T00:08:01.7127617Z",
+  "runStartedUtc": "2026-07-04T23:52:14.7494168Z",
   "statusFilter": "current",
   "requestedVoices": ["mx_carolina", "mx_liam"],
   "service": {
@@ -71,9 +71,8 @@
       "text": "Zona de subduccion activa del Pacifico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_superficial_01.wav",
       "bytes": 174764,
-      "elapsedMs": 7010.6,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:52:32.0270353Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:52:31.9944819Z"
     },
     {
       "voice": "mx_carolina",
@@ -82,9 +81,8 @@
       "text": "Tramo costero con acople entre placas",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_superficial_02.wav",
       "bytes": 113324,
-      "elapsedMs": 4526.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:52:36.5619186Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:52:36.5609183Z"
     },
     {
       "voice": "mx_carolina",
@@ -93,9 +91,8 @@
       "text": "Margen convergente de alta sismicidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_superficial_03.wav",
       "bytes": 109484,
-      "elapsedMs": 4404.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:52:40.9660570Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:52:40.9610572Z"
     },
     {
       "voice": "mx_carolina",
@@ -104,9 +101,8 @@
       "text": "Segmento superficial del cinturon del Pacifico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_superficial_04.wav",
       "bytes": 132524,
-      "elapsedMs": 5127.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:52:46.0958319Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:52:46.0948316Z"
     },
     {
       "voice": "mx_carolina",
@@ -115,9 +111,8 @@
       "text": "Franja de subduccion cercana a la costa",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_superficial_05.wav",
       "bytes": 149804,
-      "elapsedMs": 5662.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:52:51.7594859Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:52:51.7534455Z"
     },
     {
       "voice": "mx_carolina",
@@ -126,9 +121,8 @@
       "text": "Foco intermedio en margen de subduccion",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_intermedio_01.wav",
       "bytes": 126764,
-      "elapsedMs": 4867.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:52:56.6278366Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:52:56.6208364Z"
     },
     {
       "voice": "mx_carolina",
@@ -137,9 +131,8 @@
       "text": "Evento intermedio dentro de la placa descendente",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_intermedio_02.wav",
       "bytes": 126764,
-      "elapsedMs": 4733.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:01.3626125Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:01.3561045Z"
     },
     {
       "voice": "mx_carolina",
@@ -148,9 +141,8 @@
       "text": "Sismo de transicion bajo el arco del Pacifico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_intermedio_03.wav",
       "bytes": 128684,
-      "elapsedMs": 4993.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:06.3581057Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:06.3511057Z"
     },
     {
       "voice": "mx_carolina",
@@ -159,9 +151,8 @@
       "text": "Energia liberada a profundidad intermedia",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_intermedio_04.wav",
       "bytes": 155564,
-      "elapsedMs": 5780.4,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:12.1389649Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:12.1324592Z"
     },
     {
       "voice": "mx_carolina",
@@ -170,9 +161,8 @@
       "text": "Tramo de subduccion con foco intermedio",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_intermedio_05.wav",
       "bytes": 147884,
-      "elapsedMs": 5799.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:17.9395288Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:17.9334858Z"
     },
     {
       "voice": "mx_carolina",
@@ -181,9 +171,8 @@
       "text": "Foco profundo dentro de la placa subducida",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_profundo_01.wav",
       "bytes": 128684,
-      "elapsedMs": 4666.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:22.6058756Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:22.5988721Z"
     },
     {
       "voice": "mx_carolina",
@@ -192,9 +181,8 @@
       "text": "Sismo profundo bajo el sistema de subduccion",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_profundo_02.wav",
       "bytes": 155564,
-      "elapsedMs": 5672.8,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:28.2796415Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:28.2731346Z"
     },
     {
       "voice": "mx_carolina",
@@ -203,9 +191,8 @@
       "text": "Liberacion de energia a gran profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_profundo_03.wav",
       "bytes": 151724,
-      "elapsedMs": 6229.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:34.5099140Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:34.5088710Z"
     },
     {
       "voice": "mx_carolina",
@@ -214,9 +201,8 @@
       "text": "Evento profundo en el interior de la placa",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_profundo_04.wav",
       "bytes": 126764,
-      "elapsedMs": 4682.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:39.1943948Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:39.1868888Z"
     },
     {
       "voice": "mx_carolina",
@@ -225,8 +211,7 @@
       "text": "Tramo profundo del margen convergente",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_subduccion_pacifico_profundo_05.wav",
       "bytes": 121004,
-      "elapsedMs": 4826.8,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:53:44.0221847Z"
     },
     {
@@ -236,8 +221,7 @@
       "text": "Franja de colision entre bloques continentales",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_colision_mediterraneo_asiatica_01.wav",
       "bytes": 170924,
-      "elapsedMs": 6363.2,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:53:50.3863546Z"
     },
     {
@@ -247,9 +231,8 @@
       "text": "Zona compresiva del Mediterraneo oriental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_colision_mediterraneo_asiatica_02.wav",
       "bytes": 140204,
-      "elapsedMs": 5744.4,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:53:56.1317281Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:53:56.1307274Z"
     },
     {
       "voice": "mx_carolina",
@@ -258,9 +241,8 @@
       "text": "Regimen tectonico de colision regional",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_colision_mediterraneo_asiatica_03.wav",
       "bytes": 117164,
-      "elapsedMs": 4702.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:00.8352020Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:00.8276896Z"
     },
     {
       "voice": "mx_carolina",
@@ -269,9 +251,8 @@
       "text": "Ajuste cortical en el corredor mediterraneo asiatico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_colision_mediterraneo_asiatica_04.wav",
       "bytes": 176684,
-      "elapsedMs": 6665.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:07.5016673Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:07.4946038Z"
     },
     {
       "voice": "mx_carolina",
@@ -280,9 +261,8 @@
       "text": "Sismo cortical en bloque continental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continental_superficial_01.wav",
       "bytes": 157484,
-      "elapsedMs": 6195.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:13.6979998Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:13.6909938Z"
     },
     {
       "voice": "mx_carolina",
@@ -291,9 +271,8 @@
       "text": "Ajuste superficial dentro de la corteza continental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continental_superficial_02.wav",
       "bytes": 147884,
-      "elapsedMs": 5476.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:19.1756675Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:19.1681582Z"
     },
     {
       "voice": "mx_carolina",
@@ -302,9 +281,8 @@
       "text": "Ruptura somera lejos del borde oceanico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continental_superficial_03.wav",
       "bytes": 169004,
-      "elapsedMs": 6534,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:25.7107156Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:25.7041995Z"
     },
     {
       "voice": "mx_carolina",
@@ -313,9 +291,8 @@
       "text": "Evento cortical de poca profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continental_superficial_04.wav",
       "bytes": 142124,
-      "elapsedMs": 5590.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:31.3010655Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:31.3000584Z"
     },
     {
       "voice": "mx_carolina",
@@ -324,9 +301,8 @@
       "text": "Actividad superficial en interior continental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continental_superficial_05.wav",
       "bytes": 144044,
-      "elapsedMs": 5963.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:37.2651163Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:37.2641162Z"
     },
     {
       "voice": "mx_carolina",
@@ -335,9 +311,8 @@
       "text": "Evento marino de poca profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_marino_superficial_01.wav",
       "bytes": 140204,
-      "elapsedMs": 5559.2,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:42.8263140Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:42.8253134Z"
     },
     {
       "voice": "mx_carolina",
@@ -345,10 +320,9 @@
       "variant": "02",
       "text": "Sismo superficial bajo el fondo oceanico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_marino_superficial_02.wav",
-      "bytes": 205484,
-      "elapsedMs": 7618.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:50.4457698Z"
+      "bytes": 101034,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T22:15:09.1830771Z"
     },
     {
       "voice": "mx_carolina",
@@ -357,9 +331,8 @@
       "text": "Ajuste somero en sector costa afuera",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_marino_superficial_03.wav",
       "bytes": 157484,
-      "elapsedMs": 5894.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:54:56.3414930Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:54:56.3349861Z"
     },
     {
       "voice": "mx_carolina",
@@ -368,9 +341,8 @@
       "text": "Energia liberada en plataforma o talud marino",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_marino_superficial_04.wav",
       "bytes": 178604,
-      "elapsedMs": 6802.6,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:03.1451225Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:03.1379893Z"
     },
     {
       "voice": "mx_carolina",
@@ -379,9 +351,8 @@
       "text": "Sismo de foco intermedio",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_intermedio_generico_01.wav",
       "bytes": 88364,
-      "elapsedMs": 3919.6,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:07.0657580Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:07.0592480Z"
     },
     {
       "voice": "mx_carolina",
@@ -390,9 +361,8 @@
       "text": "Profundidad media dentro del sistema tectonico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_intermedio_generico_02.wav",
       "bytes": 176684,
-      "elapsedMs": 6533.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:13.5994113Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:13.5934103Z"
     },
     {
       "voice": "mx_carolina",
@@ -401,9 +371,8 @@
       "text": "Evento a profundidad intermedia",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_intermedio_generico_03.wav",
       "bytes": 140204,
-      "elapsedMs": 5371.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:18.9718442Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:18.9703368Z"
     },
     {
       "voice": "mx_carolina",
@@ -412,8 +381,7 @@
       "text": "Liberacion sismica fuera del rango superficial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_intermedio_generico_04.wav",
       "bytes": 130604,
-      "elapsedMs": 5303.3,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:55:24.2751045Z"
     },
     {
@@ -423,9 +391,8 @@
       "text": "Sismo profundo",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_profundo_generico_01.wav",
       "bytes": 65324,
-      "elapsedMs": 3318,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:27.5951330Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:27.5886360Z"
     },
     {
       "voice": "mx_carolina",
@@ -434,9 +401,8 @@
       "text": "Evento originado a gran profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_profundo_generico_02.wav",
       "bytes": 103724,
-      "elapsedMs": 4396.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:31.9937216Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:31.9927186Z"
     },
     {
       "voice": "mx_carolina",
@@ -445,9 +411,8 @@
       "text": "Liberacion sismica en niveles profundos",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_profundo_generico_03.wav",
       "bytes": 126764,
-      "elapsedMs": 4880.6,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:36.8752791Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:36.8687709Z"
     },
     {
       "voice": "mx_carolina",
@@ -456,8 +421,7 @@
       "text": "Foco profundo bajo la region",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_foco_profundo_generico_04.wav",
       "bytes": 140204,
-      "elapsedMs": 5852.4,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:55:42.7276487Z"
     },
     {
@@ -467,8 +431,7 @@
       "text": "Sismo superficial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_superficial_generico_01.wav",
       "bytes": 73004,
-      "elapsedMs": 3747.9,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:55:46.4765875Z"
     },
     {
@@ -478,9 +441,8 @@
       "text": "Evento de poca profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_superficial_generico_02.wav",
       "bytes": 121004,
-      "elapsedMs": 4901.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:51.3797360Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:51.3777351Z"
     },
     {
       "voice": "mx_carolina",
@@ -489,9 +451,8 @@
       "text": "Foco somero con energia cercana a superficie",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_superficial_generico_03.wav",
       "bytes": 176684,
-      "elapsedMs": 6862.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:55:58.2450474Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:55:58.2375324Z"
     },
     {
       "voice": "mx_carolina",
@@ -500,9 +461,8 @@
       "text": "Ajuste cortical superficial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_superficial_generico_04.wav",
       "bytes": 132524,
-      "elapsedMs": 5158,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:03.4050814Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:03.4040781Z"
     },
     {
       "voice": "mx_carolina",
@@ -511,9 +471,8 @@
       "text": "Liberacion sismica en niveles someros",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_superficial_generico_05.wav",
       "bytes": 117164,
-      "elapsedMs": 4649.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:08.0544123Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:08.0479051Z"
     },
     {
       "voice": "mx_carolina",
@@ -522,9 +481,8 @@
       "text": "Seguimos el recorrido sismico global",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continuidad_neutra_01.wav",
       "bytes": 130604,
-      "elapsedMs": 5225,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:13.2814373Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:13.2804383Z"
     },
     {
       "voice": "mx_carolina",
@@ -533,9 +491,8 @@
       "text": "Continuamos sobre el mapa activo",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continuidad_neutra_02.wav",
       "bytes": 94124,
-      "elapsedMs": 4648,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:17.9299364Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:17.9239293Z"
     },
     {
       "voice": "mx_carolina",
@@ -544,9 +501,8 @@
       "text": "Pasamos al siguiente registro del planeta",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continuidad_neutra_03.wav",
       "bytes": 130604,
-      "elapsedMs": 5586.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:23.5197164Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:23.5187145Z"
     },
     {
       "voice": "mx_carolina",
@@ -555,9 +511,8 @@
       "text": "Recorremos otra zona del tablero sismico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continuidad_neutra_04.wav",
       "bytes": 155564,
-      "elapsedMs": 6113.2,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:29.6340426Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:29.6269494Z"
     },
     {
       "voice": "mx_carolina",
@@ -566,9 +521,8 @@
       "text": "La secuencia continua sobre el mapa mundial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continuidad_neutra_05.wav",
       "bytes": 147884,
-      "elapsedMs": 5773.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:35.4091656Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:35.4011444Z"
     },
     {
       "voice": "mx_carolina",
@@ -577,9 +531,8 @@
       "text": "Vamos al siguiente punto del recorrido",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_carolina\\bridge_mx_carolina_continuidad_neutra_06.wav",
       "bytes": 109484,
-      "elapsedMs": 4470.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:39.8816765Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:39.8756534Z"
     },
     {
       "voice": "mx_liam",
@@ -588,9 +541,8 @@
       "text": "Zona de subduccion activa del Pacifico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_superficial_01.wav",
       "bytes": 134444,
-      "elapsedMs": 5634.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:45.5182557Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:45.5117432Z"
     },
     {
       "voice": "mx_liam",
@@ -599,9 +551,8 @@
       "text": "Tramo costero con acople entre placas",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_superficial_02.wav",
       "bytes": 134444,
-      "elapsedMs": 5530.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:51.0498968Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:51.0413842Z"
     },
     {
       "voice": "mx_liam",
@@ -610,9 +561,8 @@
       "text": "Margen convergente de alta sismicidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_superficial_03.wav",
       "bytes": 124844,
-      "elapsedMs": 5275.2,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:56:56.3260628Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:56:56.3195467Z"
     },
     {
       "voice": "mx_liam",
@@ -621,9 +571,8 @@
       "text": "Segmento superficial del cinturon del Pacifico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_superficial_04.wav",
       "bytes": 155564,
-      "elapsedMs": 6322,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:02.6500283Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:57:02.6425112Z"
     },
     {
       "voice": "mx_liam",
@@ -632,9 +581,8 @@
       "text": "Franja de subduccion cercana a la costa",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_superficial_05.wav",
       "bytes": 184364,
-      "elapsedMs": 7358.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:10.0095645Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:57:10.0030555Z"
     },
     {
       "voice": "mx_liam",
@@ -643,9 +591,8 @@
       "text": "Foco intermedio en margen de subduccion",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_intermedio_01.wav",
       "bytes": 182444,
-      "elapsedMs": 7355.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:17.3664594Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:57:17.3654626Z"
     },
     {
       "voice": "mx_liam",
@@ -654,9 +601,8 @@
       "text": "Evento intermedio dentro de la placa descendente",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_intermedio_02.wav",
       "bytes": 199724,
-      "elapsedMs": 7920.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:25.2889962Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:57:25.2824867Z"
     },
     {
       "voice": "mx_liam",
@@ -665,9 +611,8 @@
       "text": "Sismo de transicion bajo el arco del Pacifico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_intermedio_03.wav",
       "bytes": 217004,
-      "elapsedMs": 8452.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:33.7427319Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:57:33.7367334Z"
     },
     {
       "voice": "mx_liam",
@@ -675,10 +620,9 @@
       "variant": "04",
       "text": "Energia liberada a profundidad intermedia",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_intermedio_04.wav",
-      "bytes": 213164,
-      "elapsedMs": 8329,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:42.0716905Z"
+      "bytes": 115612,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T22:15:18.0730310Z"
     },
     {
       "voice": "mx_liam",
@@ -687,8 +631,7 @@
       "text": "Tramo de subduccion con foco intermedio",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_intermedio_05.wav",
       "bytes": 144044,
-      "elapsedMs": 5695.3,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:57:47.7680008Z"
     },
     {
@@ -698,9 +641,8 @@
       "text": "Foco profundo dentro de la placa subducida",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_profundo_01.wav",
       "bytes": 165164,
-      "elapsedMs": 6657.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:54.4260925Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:57:54.4195814Z"
     },
     {
       "voice": "mx_liam",
@@ -709,9 +651,8 @@
       "text": "Sismo profundo bajo el sistema de subduccion",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_profundo_02.wav",
       "bytes": 128684,
-      "elapsedMs": 5417.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:57:59.8441453Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:57:59.8381459Z"
     },
     {
       "voice": "mx_liam",
@@ -720,8 +661,7 @@
       "text": "Liberacion de energia a gran profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_profundo_03.wav",
       "bytes": 121004,
-      "elapsedMs": 4898.9,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:58:04.7440093Z"
     },
     {
@@ -731,9 +671,8 @@
       "text": "Evento profundo en el interior de la placa",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_profundo_04.wav",
       "bytes": 199724,
-      "elapsedMs": 7867.8,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:12.6143194Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:12.6068111Z"
     },
     {
       "voice": "mx_liam",
@@ -742,9 +681,8 @@
       "text": "Tramo profundo del margen convergente",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_subduccion_pacifico_profundo_05.wav",
       "bytes": 217004,
-      "elapsedMs": 8542.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:21.1572532Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:21.1497393Z"
     },
     {
       "voice": "mx_liam",
@@ -753,9 +691,8 @@
       "text": "Franja de colision entre bloques continentales",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_colision_mediterraneo_asiatica_01.wav",
       "bytes": 195884,
-      "elapsedMs": 7840.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:29.0001693Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:28.9946531Z"
     },
     {
       "voice": "mx_liam",
@@ -764,9 +701,8 @@
       "text": "Zona compresiva del Mediterraneo oriental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_colision_mediterraneo_asiatica_02.wav",
       "bytes": 155564,
-      "elapsedMs": 6177.8,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:35.1780173Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:35.1705043Z"
     },
     {
       "voice": "mx_liam",
@@ -775,9 +711,8 @@
       "text": "Regimen tectonico de colision regional",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_colision_mediterraneo_asiatica_03.wav",
       "bytes": 126764,
-      "elapsedMs": 5112.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:40.2919446Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:40.2854332Z"
     },
     {
       "voice": "mx_liam",
@@ -786,9 +721,8 @@
       "text": "Ajuste cortical en el corredor mediterraneo asiatico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_colision_mediterraneo_asiatica_04.wav",
       "bytes": 161324,
-      "elapsedMs": 6527.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:46.8202217Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:46.8192228Z"
     },
     {
       "voice": "mx_liam",
@@ -797,9 +731,8 @@
       "text": "Sismo cortical en bloque continental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continental_superficial_01.wav",
       "bytes": 165164,
-      "elapsedMs": 6976.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:53.7967078Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:53.7902048Z"
     },
     {
       "voice": "mx_liam",
@@ -808,9 +741,8 @@
       "text": "Ajuste superficial dentro de la corteza continental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continental_superficial_02.wav",
       "bytes": 144044,
-      "elapsedMs": 5990.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:58:59.7886260Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:58:59.7876251Z"
     },
     {
       "voice": "mx_liam",
@@ -819,8 +751,7 @@
       "text": "Ruptura somera lejos del borde oceanico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continental_superficial_03.wav",
       "bytes": 213164,
-      "elapsedMs": 8917.1,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:59:08.7067643Z"
     },
     {
@@ -830,9 +761,8 @@
       "text": "Evento cortical de poca profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continental_superficial_04.wav",
       "bytes": 117164,
-      "elapsedMs": 5112.2,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:59:13.8210171Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:59:13.8135056Z"
     },
     {
       "voice": "mx_liam",
@@ -841,9 +771,8 @@
       "text": "Actividad superficial en interior continental",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continental_superficial_05.wav",
       "bytes": 163244,
-      "elapsedMs": 7083.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:59:20.9051027Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:59:20.9041018Z"
     },
     {
       "voice": "mx_liam",
@@ -852,9 +781,8 @@
       "text": "Evento marino de poca profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_marino_superficial_01.wav",
       "bytes": 207404,
-      "elapsedMs": 8659.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:59:29.5647749Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:59:29.5587709Z"
     },
     {
       "voice": "mx_liam",
@@ -863,9 +791,8 @@
       "text": "Sismo superficial bajo el fondo oceanico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_marino_superficial_02.wav",
       "bytes": 149804,
-      "elapsedMs": 6012.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:59:35.5782370Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:59:35.5717322Z"
     },
     {
       "voice": "mx_liam",
@@ -874,8 +801,7 @@
       "text": "Ajuste somero en sector costa afuera",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_marino_superficial_03.wav",
       "bytes": 163244,
-      "elapsedMs": 6628.6,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T16:59:42.2078565Z"
     },
     {
@@ -885,9 +811,8 @@
       "text": "Energia liberada en plataforma o talud marino",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_marino_superficial_04.wav",
       "bytes": 144044,
-      "elapsedMs": 5908.8,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:59:48.1182254Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:59:48.1167218Z"
     },
     {
       "voice": "mx_liam",
@@ -896,9 +821,8 @@
       "text": "Sismo de foco intermedio",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_intermedio_generico_01.wav",
       "bytes": 161324,
-      "elapsedMs": 6738.2,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T16:59:54.8579438Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T16:59:54.8564408Z"
     },
     {
       "voice": "mx_liam",
@@ -907,8 +831,7 @@
       "text": "Profundidad media dentro del sistema tectonico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_intermedio_generico_02.wav",
       "bytes": 151724,
-      "elapsedMs": 6153.3,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T17:00:01.0112147Z"
     },
     {
@@ -918,8 +841,7 @@
       "text": "Evento a profundidad intermedia",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_intermedio_generico_03.wav",
       "bytes": 163244,
-      "elapsedMs": 6852.8,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T17:00:07.8650031Z"
     },
     {
@@ -929,9 +851,8 @@
       "text": "Liberacion sismica fuera del rango superficial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_intermedio_generico_04.wav",
       "bytes": 159404,
-      "elapsedMs": 7098.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:00:14.9645439Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:00:14.9583601Z"
     },
     {
       "voice": "mx_liam",
@@ -940,9 +861,8 @@
       "text": "Sismo profundo",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_profundo_generico_01.wav",
       "bytes": 73004,
-      "elapsedMs": 3523.6,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:00:18.4901748Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:00:18.4891676Z"
     },
     {
       "voice": "mx_liam",
@@ -951,9 +871,8 @@
       "text": "Evento originado a gran profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_profundo_generico_02.wav",
       "bytes": 174764,
-      "elapsedMs": 7760,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:00:26.2501281Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:00:26.2430871Z"
     },
     {
       "voice": "mx_liam",
@@ -962,9 +881,8 @@
       "text": "Liberacion sismica en niveles profundos",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_profundo_generico_03.wav",
       "bytes": 199724,
-      "elapsedMs": 9341.6,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:00:35.5937281Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:00:35.5862195Z"
     },
     {
       "voice": "mx_liam",
@@ -973,9 +891,8 @@
       "text": "Foco profundo bajo la region",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_foco_profundo_generico_04.wav",
       "bytes": 155564,
-      "elapsedMs": 6933.7,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:00:42.5284264Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:00:42.5224271Z"
     },
     {
       "voice": "mx_liam",
@@ -984,9 +901,8 @@
       "text": "Sismo superficial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_superficial_generico_01.wav",
       "bytes": 138284,
-      "elapsedMs": 6638.5,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:00:49.1669395Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:00:49.1609362Z"
     },
     {
       "voice": "mx_liam",
@@ -995,9 +911,8 @@
       "text": "Evento de poca profundidad",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_superficial_generico_02.wav",
       "bytes": 153644,
-      "elapsedMs": 7791.2,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:00:56.9581720Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:00:56.9571708Z"
     },
     {
       "voice": "mx_liam",
@@ -1006,9 +921,8 @@
       "text": "Foco somero con energia cercana a superficie",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_superficial_generico_03.wav",
       "bytes": 169004,
-      "elapsedMs": 9831.8,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:01:06.7905242Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:01:06.7820116Z"
     },
     {
       "voice": "mx_liam",
@@ -1017,9 +931,8 @@
       "text": "Ajuste cortical superficial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_superficial_generico_04.wav",
       "bytes": 165164,
-      "elapsedMs": 7150.6,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:01:13.9411733Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:01:13.9329985Z"
     },
     {
       "voice": "mx_liam",
@@ -1028,9 +941,8 @@
       "text": "Liberacion sismica en niveles someros",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_superficial_generico_05.wav",
       "bytes": 138284,
-      "elapsedMs": 6001.8,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:01:19.9449978Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:01:19.9374872Z"
     },
     {
       "voice": "mx_liam",
@@ -1039,8 +951,7 @@
       "text": "Seguimos el recorrido sismico global",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continuidad_neutra_01.wav",
       "bytes": 151724,
-      "elapsedMs": 6570.3,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T17:01:26.5153232Z"
     },
     {
@@ -1050,9 +961,8 @@
       "text": "Continuamos sobre el mapa activo",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continuidad_neutra_02.wav",
       "bytes": 138284,
-      "elapsedMs": 7188.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:01:33.7052335Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:01:33.6977203Z"
     },
     {
       "voice": "mx_liam",
@@ -1061,8 +971,7 @@
       "text": "Pasamos al siguiente registro del planeta",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continuidad_neutra_03.wav",
       "bytes": 153644,
-      "elapsedMs": 8765,
-      "skipped": false,
+      "skipped": true,
       "generatedAtUtc": "2026-07-04T17:01:42.4711891Z"
     },
     {
@@ -1071,10 +980,9 @@
       "variant": "04",
       "text": "Recorremos otra zona del tablero sismico",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continuidad_neutra_04.wav",
-      "bytes": 193964,
-      "elapsedMs": 11023.1,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:01:53.4992903Z"
+      "bytes": 102698,
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T22:15:25.1768289Z"
     },
     {
       "voice": "mx_liam",
@@ -1083,9 +991,8 @@
       "text": "La secuencia continua sobre el mapa mundial",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continuidad_neutra_05.wav",
       "bytes": 163244,
-      "elapsedMs": 9469.9,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:02:02.9692388Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:02:02.9682346Z"
     },
     {
       "voice": "mx_liam",
@@ -1094,9 +1001,8 @@
       "text": "Vamos al siguiente punto del recorrido",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-pregabado\\mx_liam\\bridge_mx_liam_continuidad_neutra_06.wav",
       "bytes": 122924,
-      "elapsedMs": 8294.3,
-      "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:02:11.2655032Z"
+      "skipped": true,
+      "generatedAtUtc": "2026-07-04T17:02:11.2645023Z"
     }
   ]
 }

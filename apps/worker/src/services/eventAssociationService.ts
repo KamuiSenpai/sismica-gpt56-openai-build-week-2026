@@ -3,6 +3,7 @@ import { type PoolClient } from "pg";
 
 import { type SeismicRecord } from "../providers/types.js";
 import { normalizeSeismicEventText } from "./locationTextNormalizer.js";
+import { enqueueNewEventYoutubeChatMessage } from "./youtubeChatQueueService.js";
 
 export type SeismicIngestionStats = {
   inserted: number;
@@ -607,10 +608,12 @@ export async function ingestSeismicRecords(
   streamChannel: string,
   options?: {
     notify?: boolean;
+    enqueueYoutubeChat?: boolean;
   }
 ): Promise<SeismicIngestionStats> {
   const stats: SeismicIngestionStats = { inserted: 0, updated: 0, associated: 0 };
   const notify = options?.notify ?? true;
+  const enqueueYoutubeChat = options?.enqueueYoutubeChat ?? false;
 
   for (const record of records) {
     const normalizedRecord = {
@@ -721,6 +724,17 @@ export async function ingestSeismicRecords(
 
     await insertCanonical(client, event, normalizedRecord.rawPayload, priority);
     await upsertReference(client, event.eventId, normalizedRecord);
+    if (enqueueYoutubeChat) {
+      await client.query("SAVEPOINT youtube_chat_enqueue");
+      try {
+        await enqueueNewEventYoutubeChatMessage(client, event);
+        await client.query("RELEASE SAVEPOINT youtube_chat_enqueue");
+      } catch (error) {
+        await client.query("ROLLBACK TO SAVEPOINT youtube_chat_enqueue");
+        await client.query("RELEASE SAVEPOINT youtube_chat_enqueue");
+        console.error(`YouTube chat enqueue failed for ${event.eventId}`, error);
+      }
+    }
     if (notify) {
       await notifyEvent(client, streamChannel, "event.created", event.eventId);
     }

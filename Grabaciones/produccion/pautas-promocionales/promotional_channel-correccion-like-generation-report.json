@@ -1,0 +1,13 @@
+{
+  "generatedAtUtc": "2026-07-05T18:47:39.1450048Z",
+  "generatedCount": 1,
+  "target": "Correccion pronunciacion like mx_valentina 08",
+  "voice": "mx_valentina",
+  "variant": "08",
+  "durationMs": 8856,
+  "status": "ok",
+  "attempt": 1,
+  "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-promocionales\\promotional_channel\\mx_valentina\\promotional_channel_mx_valentina_08.wav",
+  "text": "Tu like ayuda a que más personas encuentren Sísmica veinticuatro y sigan esta transmisión en vivo.",
+  "spokenText": "Tu laik ayuda a que más personas encuentren Sísmica veinticuatro y sigan esta transmisión en vivo con calma, durante todo el día."
+}

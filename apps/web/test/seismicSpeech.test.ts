@@ -5,7 +5,11 @@ import { type SeismicEvent } from "@sismica/shared";
 
 import { broadcastPlace } from "../src/lib/broadcastPlace";
 import { getEventPlace } from "../src/lib/presentation";
-import { buildSeismicNarration, normalizeSpokenText } from "../src/lib/seismicSpeech";
+import {
+  buildSeismicNarration,
+  normalizeChatterboxText,
+  normalizeSpokenText
+} from "../src/lib/seismicSpeech";
 import { normalizeSpanishText } from "../src/lib/spanishText";
 
 function makeEvent(overrides: Partial<SeismicEvent> = {}): SeismicEvent {
@@ -224,8 +228,11 @@ test("normalizeSpokenText no pronuncia puntos de fin de frase ni de abreviatura 
   // Fin de frase seguido de minuscula (caso que se colaba antes).
   assert.equal(normalizeSpokenText("frase uno. frase dos."), "frase uno, frase dos");
 
-  // El decimal de la magnitud se conserva (no es puntuacion).
-  assert.equal(normalizeSpokenText("de magnitud 3.5, a 9 kilometros."), "de magnitud 3.5, a 9 kilometros");
+  // El decimal de la magnitud se deletrea con "punto" (no se convierte en pausa de puntuacion).
+  assert.equal(
+    normalizeSpokenText("de magnitud 3.5, a 9 kilometros."),
+    "de magnitud tres punto cinco, a nueve kilometros"
+  );
 });
 
 test("buildSeismicNarration expande direcciones abreviadas con punto a palabra completa", () => {
@@ -236,8 +243,45 @@ test("buildSeismicNarration expande direcciones abreviadas con punto a palabra c
   assert.equal(/suroeste/iu.test(narration), true);
 });
 
+test("normalizeSpokenText deletrea numeros en espanol (fix Chatterbox: 148 no es 'catorce ocho')", () => {
+  assert.equal(
+    normalizeSpokenText("a una profundidad de 148 kilometros."),
+    "a una profundidad de ciento cuarenta y ocho kilometros"
+  );
+  // El decimal de la magnitud se conserva como "punto".
+  assert.equal(
+    normalizeSpokenText("de magnitud 3.5, a 20 kilometros"),
+    "de magnitud tres punto cinco, a veinte kilometros"
+  );
+  // Apocope ante sustantivo masculino "kilometro(s)".
+  assert.equal(normalizeSpokenText("a 1 kilometro"), "a un kilometro");
+  assert.equal(normalizeSpokenText("a 21 kilometros"), "a veintiun kilometros");
+  // No debe quedar ningun digito suelto para el TTS.
+  assert.equal(/\d/u.test(normalizeSpokenText("Sismo de magnitud 5.2 a 148 kilometros.")), false);
+});
+
+test("normalizeChatterboxText conserva puntuacion, tildes y punto final", () => {
+  const spoken = normalizeChatterboxText(
+    "Actualizacion sismica en 6 kilometros al Noroeste de Puerto Escondido, Oaxaca, Mexico, de magnitud 4.0. Se mantiene la informacion a disposicion de la audiencia"
+  );
+
+  assert.equal(
+    spoken,
+    "Actualizaci\u00f3n s\u00edsmica en seis kil\u00f3metros al Noroeste de Puerto Escondido, Oaxaca, M\u00e9xico, de magnitud cuatro punto cero. Se mantiene la informaci\u00f3n a disposici\u00f3n de la audiencia."
+  );
+  assert.equal(/\d/u.test(spoken), false);
+  assert.equal(/[.!?]$/u.test(spoken), true);
+});
+
 test("normalizeSpanishText restores common accents for overlay and voice copy", () => {
   assert.equal(normalizeSpanishText("Contexto sismico"), "Contexto sísmico");
   assert.equal(normalizeSpanishText("BOLETIN"), "BOLETÍN");
   assert.equal(normalizeSpanishText("Informacion tectonica"), "Información tectónica");
+});
+
+test("normalizeSpanishText restores tectonic region accents returned by editorial AI", () => {
+  assert.equal(
+    normalizeSpanishText("Japon, Turquia, Pacifico y Sudamerica"),
+    "Japón, Turquía, Pacífico y Sudamérica"
+  );
 });

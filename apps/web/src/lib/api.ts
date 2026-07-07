@@ -50,13 +50,25 @@ type ExperimentalOriginsResponse = {
   items: ExperimentalOrigin[];
 };
 
-export type SeismicBridgeLibrary = "short" | "extended" | "station";
+export type SeismicBridgeLibrary =
+  | "short"
+  | "extended"
+  | "informative"
+  | "educational"
+  | "official-informative"
+  | "official-educational"
+  | "official-promotional";
+export type SeismicBridgeApprovalStatus = "pending" | "approved" | "rejected";
 export type SeismicBridgeManifestItem = {
   voice: string;
+  classId?: string | null;
+  playbackRole?: string | null;
   groupId: string;
   variant: string;
   text: string;
   bytes: number | null;
+  durationMs: number | null;
+  approvalStatus: SeismicBridgeApprovalStatus | null;
   path: string;
   url: string;
   keywords: string[];

@@ -1,0 +1,224 @@
+{
+  "generatedAtUtc": "2026-07-05T21:26:08.834Z",
+  "classId": "continuity_transition",
+  "generated": 18,
+  "approvalStatus": "approved",
+  "approvedAtUtc": "2026-07-05T21:26:08.834Z",
+  "targetDurationMs": {
+    "min": 3000,
+    "max": 5000
+  },
+  "status": [
+    {
+      "status": "ok",
+      "count": 18
+    }
+  ],
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "durationMs": 2280,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_carolina\\continuity_transition_mx_carolina_01.wav",
+      "text": "Seguimos con el recorrido por el planeta.",
+      "bytes": 109484,
+      "tailSilenceSec": 0.384,
+      "elapsedMs": 23260
+    },
+    {
+      "voice": "mx_carolina",
+      "variant": "02",
+      "durationMs": 2880,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_carolina\\continuity_transition_mx_carolina_02.wav",
+      "text": "Seguimos observando la actividad del planeta.",
+      "bytes": 138284,
+      "tailSilenceSec": 0.632,
+      "elapsedMs": 4657
+    },
+    {
+      "voice": "mx_carolina",
+      "variant": "03",
+      "durationMs": 2840,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_carolina\\continuity_transition_mx_carolina_03.wav",
+      "text": "Retomamos la mirada sobre la Tierra.",
+      "bytes": 136364,
+      "tailSilenceSec": 0.584,
+      "elapsedMs": 4856
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "04",
+      "durationMs": 2960,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_liam\\continuity_transition_mx_liam_04.wav",
+      "text": "Continuamos monitoreando la actividad s\u00edsmica.",
+      "bytes": 142124,
+      "tailSilenceSec": 0.54,
+      "elapsedMs": 4809
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "05",
+      "durationMs": 4160,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_liam\\continuity_transition_mx_liam_05.wav",
+      "text": "El monitoreo s\u00edsmico contin\u00faa en tiempo real.",
+      "bytes": 199724,
+      "tailSilenceSec": 0,
+      "elapsedMs": 6301
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "06",
+      "durationMs": 3440,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_liam\\continuity_transition_mx_liam_06.wav",
+      "text": "Seguimos atentos al movimiento del planeta.",
+      "bytes": 165164,
+      "tailSilenceSec": 0.206,
+      "elapsedMs": 5444
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "07",
+      "durationMs": 3720,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_valentina\\continuity_transition_mx_valentina_07.wav",
+      "text": "Volvemos al mapa en tiempo real.",
+      "bytes": 178604,
+      "tailSilenceSec": 0.542,
+      "elapsedMs": 5954
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "08",
+      "durationMs": 3760,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_valentina\\continuity_transition_mx_valentina_08.wav",
+      "text": "Regresamos al seguimiento global en vivo.",
+      "bytes": 180524,
+      "tailSilenceSec": 0.239,
+      "elapsedMs": 5854
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "09",
+      "durationMs": 3880,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_valentina\\continuity_transition_mx_valentina_09.wav",
+      "text": "Retomamos el mapa para seguir la se\u00f1al.",
+      "bytes": 186284,
+      "tailSilenceSec": 0.361,
+      "elapsedMs": 6038
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "10",
+      "durationMs": 3600,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_martin\\continuity_transition_mx_martin_10.wav",
+      "text": "La vigilancia s\u00edsmica sigue activa.",
+      "bytes": 172844,
+      "tailSilenceSec": 0.34,
+      "elapsedMs": 5703
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "11",
+      "durationMs": 3560,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_martin\\continuity_transition_mx_martin_11.wav",
+      "text": "La observaci\u00f3n s\u00edsmica permanece en curso.",
+      "bytes": 170924,
+      "tailSilenceSec": 0.358,
+      "elapsedMs": 5590
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "12",
+      "durationMs": 3280,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_martin\\continuity_transition_mx_martin_12.wav",
+      "text": "El seguimiento s\u00edsmico contin\u00faa sin pausa.",
+      "bytes": 157484,
+      "tailSilenceSec": 0.342,
+      "elapsedMs": 5123
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "13",
+      "durationMs": 2760,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_sofia\\continuity_transition_mx_sofia_13.wav",
+      "text": "Retomamos el monitoreo global.",
+      "bytes": 132524,
+      "tailSilenceSec": 0.614,
+      "elapsedMs": 4649
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "14",
+      "durationMs": 3560,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_sofia\\continuity_transition_mx_sofia_14.wav",
+      "text": "Retornamos al mapa para seguir la actividad global.",
+      "bytes": 170924,
+      "tailSilenceSec": 0,
+      "elapsedMs": 5231
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "15",
+      "durationMs": 3080,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_sofia\\continuity_transition_mx_sofia_15.wav",
+      "text": "Volvemos al seguimiento del planeta.",
+      "bytes": 147884,
+      "tailSilenceSec": 0.217,
+      "elapsedMs": 5328
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "16",
+      "durationMs": 2360,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_ninoska\\continuity_transition_mx_ninoska_16.wav",
+      "text": "Seguimos atentos a la Tierra.",
+      "bytes": 113324,
+      "tailSilenceSec": 0.564,
+      "elapsedMs": 4137
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "17",
+      "durationMs": 4000,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_ninoska\\continuity_transition_mx_ninoska_17.wav",
+      "text": "Seguimos acompa\u00f1ando el pulso de la Tierra.",
+      "bytes": 192044,
+      "tailSilenceSec": 1.403,
+      "elapsedMs": 6188
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "18",
+      "durationMs": 3520,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\continuity_transition\\mx_ninoska\\continuity_transition_mx_ninoska_18.wav",
+      "text": "Continuamos atentos al ritmo del planeta.",
+      "bytes": 169004,
+      "tailSilenceSec": 0.345,
+      "elapsedMs": 5667
+    }
+  ],
+  "updatedAtUtc": "2026-07-05T21:26:08.834Z",
+  "lastRegeneration": {
+    "classId": "continuity_transition",
+    "reason": "generacion inicial oficial aprobada por usuario",
+    "policy": "salida directa de Chatterbox sin trimming ni limpieza de cola",
+    "backupRoot": "E:\\Proyecto\\Grabaciones\\_repair-backups\\continuity_transition-raw-2026-07-05T21-26-08-834Z"
+  }
+}

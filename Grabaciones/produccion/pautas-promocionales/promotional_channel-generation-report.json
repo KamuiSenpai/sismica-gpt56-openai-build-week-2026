@@ -1,0 +1,82 @@
+{
+  "generatedAtUtc": "2026-07-05T18:26:23.0217723Z",
+  "service": {
+    "url": "http://127.0.0.1:8091",
+    "device": "cuda",
+    "precision": "bf16",
+    "compileMode": "off",
+    "expressiveProfile": "spanish-mx-voiceover-off",
+    "reference": ".runtime-logs/xtts-voices/mx_ninoska_promotional_mx_ref.wav",
+    "language": "es",
+    "targetDialect": "es-MX",
+    "exaggeration": 0.34,
+    "cfgWeight": 0.65,
+    "temperature": 0.52
+  },
+  "targetDurationMs": {
+    "min": 6000,
+    "max": 9000
+  },
+  "items": [
+    {
+      "voice": "mx_ninoska",
+      "variant": "01",
+      "durationSec": 6.01,
+      "trailingSec": 0,
+      "status": "ok",
+      "attempt": 1,
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-promocionales\\promotional_channel\\mx_ninoska\\promotional_channel_mx_ninoska_01.wav",
+      "text": "Si este monitoreo te resulta útil, suscríbete a Sísmica veinticuatro y acompaña esta señal en vivo."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "02",
+      "durationSec": 6.54,
+      "trailingSec": 0,
+      "status": "ok",
+      "attempt": 1,
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-promocionales\\promotional_channel\\mx_ninoska\\promotional_channel_mx_ninoska_02.wav",
+      "text": "Activa las notificaciones para volver a esta señal en vivo, cuando quieras seguir la actividad sísmica con calma."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "03",
+      "durationSec": 6.07,
+      "trailingSec": 0,
+      "status": "ok",
+      "attempt": 1,
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-promocionales\\promotional_channel\\mx_ninoska\\promotional_channel_mx_ninoska_03.wav",
+      "text": "Comparte esta transmisión con quienes buscan datos sísmicos claros, en una señal continua y serena."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "04",
+      "durationSec": 6.34,
+      "trailingSec": 0,
+      "status": "ok",
+      "attempt": 1,
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-promocionales\\promotional_channel\\mx_ninoska\\promotional_channel_mx_ninoska_04.wav",
+      "text": "Gracias por acompañar esta señal de Sísmica veinticuatro, con monitoreo visual durante todo el día."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "05",
+      "durationSec": 8.13,
+      "trailingSec": 0,
+      "status": "ok",
+      "attempt": 1,
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-promocionales\\promotional_channel\\mx_ninoska\\promotional_channel_mx_ninoska_05.wav",
+      "text": "Guarda este directo para consultar con calma la actividad sísmica, desde esta señal en vivo, en cualquier momento del día."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "durationSec": 6.09,
+      "trailingSec": 0,
+      "status": "ok",
+      "attempt": 2,
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-promocionales\\promotional_channel\\mx_ninoska\\promotional_channel_mx_ninoska_06.wav",
+      "text": "Sísmica veinticuatro sigue en vivo, acompañando el monitoreo global con una voz clara y cercana."
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "generatedAtUtc": "2026-07-05T20:44:18.176Z",
+  "classId": "data_literacy",
+  "generated": 6,
+  "approvalStatus": "approved",
+  "approvedAtUtc": "2026-07-05T20:44:18.176Z",
+  "targetDurationMs": {
+    "min": 6000,
+    "max": 8000
+  },
+  "status": [
+    {
+      "status": "ok",
+      "count": 6
+    }
+  ],
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "durationMs": 4480,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_literacy\\mx_carolina\\data_literacy_mx_carolina_01.wav",
+      "text": "La magnitud describe la energ\u00eda liberada por un sismo en su punto de origen.",
+      "bytes": 215084,
+      "tailSilenceSec": 0.287,
+      "elapsedMs": 25541
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "durationMs": 4800,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_literacy\\mx_liam\\data_literacy_mx_liam_02.wav",
+      "text": "La profundidad ayuda a entender c\u00f3mo puede percibirse un evento en superficie.",
+      "bytes": 230444,
+      "tailSilenceSec": 0.477,
+      "elapsedMs": 6819
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "durationMs": 5600,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_literacy\\mx_valentina\\data_literacy_mx_valentina_03.wav",
+      "text": "El epicentro se\u00f1ala la zona en superficie m\u00e1s cercana al origen del sismo.",
+      "bytes": 268844,
+      "tailSilenceSec": 0.329,
+      "elapsedMs": 8319
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "durationMs": 5840,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_literacy\\mx_martin\\data_literacy_mx_martin_04.wav",
+      "text": "La hora del registro permite ordenar cada evento dentro de la secuencia s\u00edsmica.",
+      "bytes": 280364,
+      "tailSilenceSec": 0.335,
+      "elapsedMs": 8163
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "durationMs": 5800,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_literacy\\mx_sofia\\data_literacy_mx_sofia_05.wav",
+      "text": "La ubicaci\u00f3n reportada indica el \u00e1rea m\u00e1s cercana al epicentro calculado.",
+      "bytes": 278444,
+      "tailSilenceSec": 0.793,
+      "elapsedMs": 8125
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "durationMs": 5400,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_literacy\\mx_ninoska\\data_literacy_mx_ninoska_06.wav",
+      "text": "La fuente s\u00edsmica confirma qu\u00e9 entidad emiti\u00f3 y revis\u00f3 los datos del evento.",
+      "bytes": 259244,
+      "tailSilenceSec": 0.553,
+      "elapsedMs": 7753
+    }
+  ],
+  "updatedAtUtc": "2026-07-05T20:44:18.176Z",
+  "lastRegeneration": {
+    "classId": "data_literacy",
+    "reason": "regeneracion raw solicitada por usuario",
+    "policy": "salida directa de Chatterbox sin trimming ni limpieza de cola",
+    "backupRoot": "E:\\Proyecto\\Grabaciones\\_repair-backups\\data_literacy-raw-2026-07-05T20-44-18-176Z"
+  }
+}

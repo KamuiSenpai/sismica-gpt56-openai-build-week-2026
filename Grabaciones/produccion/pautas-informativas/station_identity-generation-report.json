@@ -1,0 +1,82 @@
+{
+  "generatedAtUtc": "2026-07-05T17:56:34.0130343Z",
+  "service": {
+    "url": "http://127.0.0.1:8091",
+    "device": "cuda",
+    "precision": "bf16",
+    "compileMode": "off"
+  },
+  "targetDurationMs": {
+    "min": 5000,
+    "max": 8000
+  },
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "durationSec": 5.69,
+      "trailingSec": 0,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\station_identity\\mx_carolina\\station_identity_mx_carolina_01.wav",
+      "text": "Sísmica veinticuatro acompaña el monitoreo sísmico en vivo, con información clara, serena y continua.",
+      "bytes": 292340,
+      "durationMs": 6089,
+      "regeneratedAtUtc": "2026-07-05T20:01:04.187Z",
+      "tailSilenceSec": 0.4,
+      "modelWarnings": 1
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "durationSec": 5.47,
+      "trailingSec": 0,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\station_identity\\mx_liam\\station_identity_mx_liam_02.wav"
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "durationSec": 5.01,
+      "trailingSec": 0,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\station_identity\\mx_valentina\\station_identity_mx_valentina_03.wav"
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "durationSec": 5.29,
+      "trailingSec": 0,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\station_identity\\mx_martin\\station_identity_mx_martin_04.wav"
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "durationSec": 5.98,
+      "trailingSec": 0,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\station_identity\\mx_sofia\\station_identity_mx_sofia_05.wav"
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "durationSec": 5.2,
+      "trailingSec": 0,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\station_identity\\mx_ninoska\\station_identity_mx_ninoska_06.wav"
+    }
+  ],
+  "updatedAtUtc": "2026-07-05T20:01:04.187Z",
+  "lastRegeneration": {
+    "classId": "station_identity",
+    "voice": "mx_carolina",
+    "variant": "01",
+    "reason": "corregir pronunciacion de ene con tilde en acompana",
+    "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\station_identity\\mx_carolina\\station_identity_mx_carolina_01.wav",
+    "durationMs": 6089,
+    "tailSilenceSec": 0.4,
+    "selectedAttempt": 4,
+    "modelWarnings": 1,
+    "text": "Sísmica veinticuatro acompaña el monitoreo sísmico en vivo, con información clara, serena y continua."
+  }
+}

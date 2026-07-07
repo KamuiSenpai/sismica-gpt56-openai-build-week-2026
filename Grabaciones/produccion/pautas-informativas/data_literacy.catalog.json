@@ -1,0 +1,44 @@
+{
+  "version": "data_literacy-2026-07-05",
+  "classId": "data_literacy",
+  "playbackRole": "guide",
+  "approvalStatus": "approved",
+  "targetDurationMs": {
+    "min": 6000,
+    "max": 8000
+  },
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "text": "La magnitud describe la energía liberada por un sismo en su punto de origen."
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "text": "La profundidad ayuda a entender cómo puede percibirse un evento en superficie."
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "text": "El epicentro señala la zona en superficie más cercana al origen del sismo."
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "text": "La hora del registro permite ordenar cada evento dentro de la secuencia sísmica."
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "text": "La ubicación reportada indica el área más cercana al epicentro calculado."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "text": "La fuente sísmica confirma qué entidad emitió y revisó los datos del evento."
+    }
+  ],
+  "approvedAtUtc": "2026-07-05T20:40:26.900Z",
+  "approvedVoices": ["mx_carolina", "mx_liam", "mx_valentina", "mx_martin", "mx_sofia", "mx_ninoska"]
+}

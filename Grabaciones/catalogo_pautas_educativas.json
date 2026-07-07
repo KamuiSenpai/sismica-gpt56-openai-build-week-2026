@@ -1,0 +1,127 @@
+{
+  "version": "2026-07-04-educativas-concisas",
+  "descripcion": "Capsulas educativas concisas (~25 palabras / ~10s) para directo 24/7. Texto acentuado y numeros deletreados. keywords = seleccion inteligente por contexto del evento (lugar/profundidad/tipo).",
+  "voices": ["mx_carolina", "mx_liam", "mx_martin", "mx_ninoska", "mx_sofia", "mx_valentina"],
+  "items": [
+    {
+      "id": 1,
+      "source": "USGS - Magnitude & Intensity",
+      "keywords": [],
+      "text": "Magnitud e intensidad no son lo mismo: la magnitud mide la energía del sismo, una sola por evento; la intensidad es cuánto se sintió en cada lugar."
+    },
+    {
+      "id": 2,
+      "source": "USGS - Moment Magnitude (Mw)",
+      "keywords": [],
+      "text": "La escala de magnitud es logarítmica: cada punto libera unas treinta y dos veces más energía. Por eso un siete es enormemente mayor que un seis."
+    },
+    {
+      "id": 3,
+      "source": "USGS - Earthquake depth",
+      "keywords": ["profundo", "intermedio"],
+      "text": "Los sismos superficiales, de menos de setenta kilómetros, se sienten más fuerte; los profundos pueden percibirse en áreas mucho más amplias."
+    },
+    {
+      "id": 4,
+      "source": "USGS / IRIS - Seismic waves",
+      "keywords": [],
+      "text": "Un sismo emite ondas P, rápidas, que llegan primero, y ondas S, más lentas pero de sacudida más fuerte. La diferencia entre ambas revela la distancia al epicentro."
+    },
+    {
+      "id": 5,
+      "source": "USGS - Ring of Fire",
+      "keywords": ["pacifico", "cinturon"],
+      "text": "Cerca del ochenta por ciento de los grandes sismos ocurren en el Cinturón de Fuego del Pacífico, donde chocan las placas que rodean ese océano."
+    },
+    {
+      "id": 6,
+      "source": "USGS - Aftershocks",
+      "keywords": [],
+      "text": "Tras un sismo importante llegan las réplicas: temblores menores en la misma zona. Son normales y disminuyen con los días, aunque pueden durar semanas."
+    },
+    {
+      "id": 7,
+      "source": "USGS - Subduction zones",
+      "keywords": ["subduccion"],
+      "text": "En las zonas de subducción una placa oceánica se hunde bajo otra. Ahí se generan los sismos más potentes del planeta, como los del margen del Pacífico."
+    },
+    {
+      "id": 8,
+      "source": "NOAA / USGS - Tsunami generation",
+      "keywords": ["marino", "costa", "oceanico"],
+      "text": "Un tsunami surge cuando un sismo submarino desplaza de golpe el fondo marino y mueve toda la columna de agua. No todo sismo marino genera tsunami."
+    },
+    {
+      "id": 9,
+      "source": "USGS / EMSC - Magnitude revision",
+      "keywords": [],
+      "text": "La magnitud inicial es automática y puede ajustarse: al llegar más datos de estaciones, los sismólogos la revisan. Por eso una cifra puede cambiar tras publicarse."
+    },
+    {
+      "id": 10,
+      "source": "EMSC",
+      "keywords": ["mediterraneo", "colision", "grecia", "turquia", "italia"],
+      "text": "El EMSC, Centro Sismológico Euromediterráneo, reúne y difunde información sísmica de Europa y el Mediterráneo, y recoge testimonios de quienes sintieron el temblor."
+    },
+    {
+      "id": 11,
+      "source": "USGS",
+      "keywords": [],
+      "text": "El USGS, Servicio Geológico de Estados Unidos, opera una red mundial que detecta y publica sismos en minutos. Es una de las fuentes más consultadas del planeta."
+    },
+    {
+      "id": 12,
+      "source": "JMA - Japan Meteorological Agency",
+      "keywords": ["japon"],
+      "text": "La Agencia Meteorológica de Japón vigila los sismos del país con una red densísima y opera un sistema de alerta que avisa segundos antes de la sacudida."
+    },
+    {
+      "id": 13,
+      "source": "USGS ShakeAlert / JMA - Early warning",
+      "keywords": ["japon", "california"],
+      "text": "La alerta temprana no predice sismos: detecta las primeras ondas y avisa segundos antes de la sacudida fuerte. Esos segundos permiten ponerse a salvo."
+    },
+    {
+      "id": 14,
+      "source": "USGS - Earthquake prediction",
+      "keywords": [],
+      "text": "Ningún organismo científico puede predecir el día y lugar exactos de un sismo. Lo que sí se hace es estimar la probabilidad a largo plazo en cada región."
+    },
+    {
+      "id": 15,
+      "source": "USGS - Hypocenter and epicenter",
+      "keywords": [],
+      "text": "El hipocentro es el punto bajo tierra donde se rompe la falla; el epicentro es su proyección en la superficie, el lugar que solemos ver en el mapa."
+    },
+    {
+      "id": 16,
+      "source": "USGS - Faults and elastic rebound",
+      "keywords": ["continental", "cortical"],
+      "text": "Los sismos ocurren cuando las rocas se rompen a lo largo de una falla y liberan de golpe la energía acumulada por el lento movimiento de las placas."
+    },
+    {
+      "id": 17,
+      "source": "USGS - Plate tectonics",
+      "keywords": [],
+      "text": "La capa externa de la Tierra está dividida en placas que se mueven pocos centímetros al año. Sus bordes concentran la mayoría de los sismos del mundo."
+    },
+    {
+      "id": 18,
+      "source": "USGS - Earthquake frequency",
+      "keywords": [],
+      "text": "Los sismos de magnitud ocho o más son raros: ocurre alrededor de uno por año en promedio en todo el planeta. Los de magnitud dos son diarios y por miles."
+    },
+    {
+      "id": 19,
+      "source": "USGS - Modified Mercalli Intensity",
+      "keywords": [],
+      "text": "La intensidad se mide con la escala de Mercalli, en números romanos: describe los efectos observados, desde apenas perceptible hasta destrucción total."
+    },
+    {
+      "id": 20,
+      "source": "GeoNet, Nueva Zelanda",
+      "keywords": ["zelanda"],
+      "text": "GeoNet vigila la actividad sísmica y volcánica de Nueva Zelanda, un país en pleno límite de placas, y publica todos sus datos de forma abierta."
+    }
+  ]
+}

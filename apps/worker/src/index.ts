@@ -3,6 +3,7 @@ import { pool } from "./db/pool.js";
 import { runIngestion } from "./services/ingestionService.js";
 import { runSeismicEngineCycle } from "./services/seismicEngine/engine.js";
 import { refreshStationCatalogIfDue } from "./services/stationCatalogService.js";
+import { runYoutubeChatPublisherCycle } from "./services/youtubeChatPublisher.js";
 
 async function executeOnce() {
   try {
@@ -39,16 +40,35 @@ async function runEngineSafely() {
   }
 }
 
+async function runYoutubeChatPublisherSafely() {
+  try {
+    const summary = await runYoutubeChatPublisherCycle();
+    if (summary.status === "posted") {
+      console.log(`youtube chat posted: messageId=${summary.messageId}, reason=${summary.reason}`);
+      return;
+    }
+    if (summary.status === "skipped" || summary.status === "failed") {
+      console.warn(
+        `youtube chat ${summary.status}: messageId=${summary.messageId}, reason=${summary.reason}`
+      );
+    }
+  } catch (error) {
+    console.error("YouTube chat publisher cycle failed", error);
+  }
+}
+
 async function main() {
   if (env.runOnce) {
     await executeOnce();
     await runEngineSafely();
+    await runYoutubeChatPublisherSafely();
     await pool.end();
     return;
   }
 
   await executeOnce();
   await runEngineSafely();
+  await runYoutubeChatPublisherSafely();
 
   const timer = setInterval(async () => {
     try {
@@ -59,10 +79,12 @@ async function main() {
   }, env.pollIntervalMs);
 
   const engineTimer = setInterval(runEngineSafely, env.seismicEngineIntervalMs);
+  const youtubeChatTimer = setInterval(runYoutubeChatPublisherSafely, env.youtubeChatPublishIntervalMs);
 
   const shutdown = async () => {
     clearInterval(timer);
     clearInterval(engineTimer);
+    clearInterval(youtubeChatTimer);
     await pool.end();
     process.exit(0);
   };

@@ -1,0 +1,44 @@
+{
+  "version": "data_transparency-2026-07-05",
+  "classId": "data_transparency",
+  "playbackRole": "guide",
+  "approvalStatus": "approved",
+  "targetDurationMs": {
+    "min": 5000,
+    "max": 7000
+  },
+  "items": [
+    {
+      "variant": "01",
+      "voice": "mx_carolina",
+      "text": "La información sísmica inicial puede ajustarse cuando las agencias revisan el evento."
+    },
+    {
+      "variant": "02",
+      "voice": "mx_liam",
+      "text": "Magnitud, profundidad y ubicación pueden cambiar durante el procesamiento de nuevos datos."
+    },
+    {
+      "variant": "03",
+      "voice": "mx_valentina",
+      "text": "Los reportes iniciales son referenciales y pueden actualizarse con nueva señal sísmica."
+    },
+    {
+      "variant": "04",
+      "voice": "mx_martin",
+      "text": "Sísmica veinticuatro muestra datos en seguimiento, sujetos a revisión técnica."
+    },
+    {
+      "variant": "05",
+      "voice": "mx_sofia",
+      "text": "Si un evento cambia, actualizaremos la lectura visual con la información más reciente."
+    },
+    {
+      "variant": "06",
+      "voice": "mx_ninoska",
+      "text": "Los datos sísmicos se refinan con el tiempo, conforme avanza la revisión oficial."
+    }
+  ],
+  "approvedAtUtc": "2026-07-05T19:13:31.883Z",
+  "approvedVoices": ["mx_carolina", "mx_liam", "mx_valentina", "mx_martin", "mx_sofia", "mx_ninoska"]
+}

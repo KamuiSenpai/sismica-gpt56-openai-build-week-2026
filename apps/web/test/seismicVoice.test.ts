@@ -9,6 +9,8 @@ import {
   classifyBridgeGroup,
   neuralFallbackOrder,
   pickBridgeCandidateForTests,
+  pickDirectorV2TransitionCandidateForTests,
+  pickGuideBridgeCandidateForTests,
   pickBreakingNarrationIntro,
   rememberBlobReadyTimingForTests,
   resetBlobReadyTelemetryForTests,
@@ -348,10 +350,10 @@ test("a newly arrived earthquake never switches from Chatterbox to Piper", () =>
   assert.deepEqual(neuralFallbackOrder("chatterbox", true), ["chatterbox", "piper"]);
 });
 
-test("station guides exhaust the active voice pool before repeating", () => {
+test("guide clips exhaust the active voice pool and do not repeat within one hour", () => {
   resetBridgeSelectionStateForTests();
   const manifest = {
-    library: "station",
+    library: "educational",
     version: "test",
     generatedAtUtc: "2026-07-04T00:00:00.000Z",
     voices: ["mx_carolina"],
@@ -411,15 +413,215 @@ test("station guides exhaust the active voice pool before repeating", () => {
   assert.equal(new Set(firstCycle).size, 4);
 
   const fifth = pickBridgeCandidateForTests(manifest, "mx_carolina", "station_identity");
-  assert.ok(fifth);
-  assert.equal(firstCycle.includes(fifth.variant), true);
-  assert.equal(fifth.variant === firstCycle[3], false);
+  assert.equal(fifth, null);
 });
 
-test("station guides prefer keyword-matching context when available", () => {
+test("Director V2 official reutiliza pautas si el pool se agota antes de una hora", () => {
   resetBridgeSelectionStateForTests();
   const manifest = {
-    library: "station",
+    library: "official-informative",
+    version: "v2",
+    generatedAtUtc: "2026-07-05T00:00:00.000Z",
+    voices: ["mx_carolina"],
+    groups: [],
+    items: [
+      {
+        voice: "mx_carolina",
+        classId: "station_identity",
+        playbackRole: "guide",
+        groupId: "station_identity",
+        variant: "01",
+        text: "Pauta oficial",
+        bytes: 1,
+        durationMs: 5_200,
+        approvalStatus: "approved",
+        path: "/tmp/station.wav",
+        url: "http://localhost/station.wav",
+        keywords: []
+      }
+    ]
+  } as const;
+
+  const first = pickGuideBridgeCandidateForTests(manifest, "station_identity", undefined, {
+    requireApproved: true,
+    directorV2Eligible: true,
+    strictGroup: true
+  });
+  const second = pickGuideBridgeCandidateForTests(manifest, "station_identity", undefined, {
+    requireApproved: true,
+    directorV2Eligible: true,
+    strictGroup: true,
+    allowRepeatWhenExhausted: true
+  });
+
+  assert.equal(first?.variant, "01");
+  assert.equal(second?.variant, "01");
+});
+
+test("recorded guides rotate through every manifest voice before reusing one", () => {
+  resetBridgeSelectionStateForTests();
+  const voices = ["mx_carolina", "mx_liam", "mx_martin", "mx_ninoska", "mx_sofia", "mx_valentina"];
+  const manifest = {
+    library: "educational",
+    version: "test",
+    generatedAtUtc: "2026-07-05T00:00:00.000Z",
+    voices,
+    groups: [],
+    items: voices.flatMap((voice) =>
+      ["01", "02"].map((variant) => ({
+        voice,
+        groupId: "station_identity",
+        variant,
+        text: `${voice} ${variant}`,
+        bytes: 1,
+        path: `/tmp/${voice}-${variant}.wav`,
+        url: `http://localhost/${voice}-${variant}.wav`,
+        keywords: []
+      }))
+    )
+  };
+
+  const selectedVoices = Array.from(
+    { length: voices.length + 1 },
+    () => pickGuideBridgeCandidateForTests(manifest, "station_identity")?.voice
+  );
+
+  assert.deepEqual(new Set(selectedVoices.slice(0, voices.length)), new Set(voices));
+  assert.notEqual(selectedVoices[voices.length - 1], selectedVoices[voices.length]);
+});
+
+test("Director V2 separa remates de continuidad de pautas de espera official", () => {
+  resetBridgeSelectionStateForTests();
+  const base = {
+    voice: "mx_carolina",
+    groupId: "station_identity",
+    text: "Pauta",
+    bytes: 1,
+    path: "/tmp/pauta.wav",
+    url: "http://localhost/pauta.wav",
+    keywords: []
+  };
+  const manifest = {
+    library: "official-educational",
+    version: "v2",
+    generatedAtUtc: "2026-07-05T00:00:00.000Z",
+    voices: ["mx_carolina"],
+    groups: [],
+    items: [
+      {
+        ...base,
+        classId: "continuity_transition",
+        playbackRole: "transition",
+        groupId: "continuity_transition",
+        variant: "transition",
+        durationMs: 4_200,
+        approvalStatus: "approved"
+      },
+      {
+        ...base,
+        classId: "station_identity",
+        playbackRole: "guide",
+        variant: "pending",
+        durationMs: 7_500,
+        approvalStatus: "pending"
+      },
+      {
+        ...base,
+        classId: "verified_tectonics",
+        playbackRole: "guide",
+        variant: "approved",
+        durationMs: 11_200,
+        approvalStatus: "approved"
+      }
+    ]
+  } as const;
+
+  const guide = pickGuideBridgeCandidateForTests(manifest, "continuity_transition", undefined, {
+    requireApproved: true,
+    directorV2Eligible: true,
+    strictGroup: true
+  });
+  const transition = pickDirectorV2TransitionCandidateForTests(manifest);
+
+  assert.equal(guide, null);
+  assert.equal(transition?.variant, "transition");
+});
+
+test("Director V2 official no cambia de clase mediante fallback", () => {
+  resetBridgeSelectionStateForTests();
+  const manifest = {
+    library: "official-informative",
+    version: "v2",
+    generatedAtUtc: "2026-07-05T00:00:00.000Z",
+    voices: ["mx_carolina"],
+    groups: [],
+    items: [
+      {
+        voice: "mx_carolina",
+        classId: "verified_tectonics",
+        playbackRole: "guide",
+        groupId: "verified_tectonics",
+        variant: "01",
+        text: "Pauta tectonica",
+        bytes: 1,
+        durationMs: 6_500,
+        approvalStatus: "approved",
+        path: "/tmp/tectonica.wav",
+        url: "http://localhost/tectonica.wav",
+        keywords: []
+      }
+    ]
+  } as const;
+
+  const strict = pickGuideBridgeCandidateForTests(manifest, "station_identity", undefined, {
+    requireApproved: true,
+    directorV2Eligible: true,
+    strictGroup: true
+  });
+  const fallback = pickGuideBridgeCandidateForTests(manifest, "station_identity", undefined, {
+    requireApproved: true,
+    directorV2Eligible: true
+  });
+
+  assert.equal(strict, null);
+  assert.equal(fallback?.groupId, "verified_tectonics");
+});
+
+test("Director V2 conserva el filtro generico de duracion para catalogos trial", () => {
+  resetBridgeSelectionStateForTests();
+  const base = {
+    voice: "mx_carolina",
+    groupId: "station_identity",
+    text: "Pauta",
+    bytes: 1,
+    path: "/tmp/pauta.wav",
+    url: "http://localhost/pauta.wav",
+    keywords: []
+  };
+  const manifest = {
+    library: "educational",
+    version: "trial",
+    generatedAtUtc: "2026-07-05T00:00:00.000Z",
+    voices: ["mx_carolina"],
+    groups: [],
+    items: [
+      { ...base, variant: "short", durationMs: 4_900, approvalStatus: "approved" },
+      { ...base, variant: "approved", durationMs: 8_000, approvalStatus: "approved" },
+      { ...base, variant: "long", durationMs: 10_100, approvalStatus: "approved" }
+    ]
+  } as const;
+
+  const selected = pickGuideBridgeCandidateForTests(manifest, "station_identity", undefined, {
+    directorV2Eligible: true
+  });
+
+  assert.equal(selected?.variant, "approved");
+});
+
+test("guide clips prefer keyword-matching context when available", () => {
+  resetBridgeSelectionStateForTests();
+  const manifest = {
+    library: "educational",
     version: "test",
     generatedAtUtc: "2026-07-04T00:00:00.000Z",
     voices: ["mx_sofia"],
@@ -457,10 +659,10 @@ test("station guides prefer keyword-matching context when available", () => {
   assert.equal(selected?.variant, "03");
 });
 
-test("station guides widen to generic alternatives before repeating the same contextual clip", () => {
+test("guide clips widen to generic alternatives before repeating the same contextual clip", () => {
   resetBridgeSelectionStateForTests();
   const manifest = {
-    library: "station",
+    library: "educational",
     version: "test",
     generatedAtUtc: "2026-07-04T00:00:00.000Z",
     voices: ["mx_sofia"],
@@ -526,46 +728,54 @@ test("station guides widen to generic alternatives before repeating the same con
   assert.equal(new Set([second?.variant, third?.variant]).size, 2);
 });
 
-test("bridge plan skips long station fillers for short and medium texts", () => {
+test("bridge plan uses only informative and educational guides", () => {
   assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(8)), {
-    libraries: ["short"],
-    stationEarliestAtMs: null,
-    overflowLibraries: ["extended"],
+    libraries: ["educational", "informative"],
     maxBridgeElapsedMs: 20000
   });
 
   assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(25)), {
-    libraries: ["short", "extended"],
-    stationEarliestAtMs: null,
-    overflowLibraries: ["extended"],
+    libraries: ["educational", "informative"],
     maxBridgeElapsedMs: 30000
   });
 
   assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(40)), {
-    libraries: ["short", "extended", "extended"],
-    stationEarliestAtMs: null,
-    overflowLibraries: ["extended"],
+    libraries: ["educational", "informative"],
     maxBridgeElapsedMs: 38000
   });
 });
 
-test("bridge plan only enables station guides for clearly long texts", () => {
+test("bridge plan adds at most one guide selected by the adaptive cadence", () => {
+  assert.deepEqual(
+    buildBridgePlaybackPlanForTests(repeatedTerms(55), "mx_carolina", "chatterbox", "educational"),
+    {
+      libraries: ["educational", "informative"],
+      maxBridgeElapsedMs: 46000
+    }
+  );
+
+  assert.deepEqual(
+    buildBridgePlaybackPlanForTests(repeatedTerms(70), "mx_carolina", "chatterbox", "informative"),
+    {
+      libraries: ["informative", "educational"],
+      maxBridgeElapsedMs: 52000
+    }
+  );
+});
+
+test("bridge plan orders the guide libraries by expected wait", () => {
   assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(55)), {
-    libraries: ["short", "extended", "extended", "station"],
-    stationEarliestAtMs: 18000,
-    overflowLibraries: ["extended"],
+    libraries: ["educational", "informative"],
     maxBridgeElapsedMs: 46000
   });
 
   assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(70)), {
-    libraries: ["short", "extended", "extended", "station"],
-    stationEarliestAtMs: 16000,
-    overflowLibraries: ["extended", "station"],
+    libraries: ["informative", "educational"],
     maxBridgeElapsedMs: 52000
   });
 });
 
-test("bridge plan adapts station delay from recent blob-ready telemetry by voice and length", () => {
+test("bridge plan adapts its budget from recent blob-ready telemetry by voice and length", () => {
   resetBlobReadyTelemetryForTests();
   rememberBlobReadyTimingForTests({
     engine: "chatterbox",
@@ -590,14 +800,12 @@ test("bridge plan adapts station delay from recent blob-ready telemetry by voice
   });
 
   assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(55), "mx_carolina", "chatterbox"), {
-    libraries: ["short", "extended", "extended", "station"],
-    stationEarliestAtMs: 20600,
-    overflowLibraries: ["extended"],
+    libraries: ["educational", "informative"],
     maxBridgeElapsedMs: 32000
   });
 });
 
-test("ready-cache blob timings do not skew adaptive station delay", () => {
+test("ready-cache blob timings do not skew adaptive bridge timing", () => {
   resetBlobReadyTelemetryForTests();
   rememberBlobReadyTimingForTests({
     engine: "chatterbox",
@@ -608,9 +816,46 @@ test("ready-cache blob timings do not skew adaptive station delay", () => {
   });
 
   assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(55), "mx_carolina", "chatterbox"), {
-    libraries: ["short", "extended", "extended", "station"],
-    stationEarliestAtMs: 18000,
-    overflowLibraries: ["extended"],
+    libraries: ["educational", "informative"],
     maxBridgeElapsedMs: 46000
+  });
+});
+
+test("bridge budget follows slow real latency above the word-count hardcap", () => {
+  resetBlobReadyTelemetryForTests();
+  // Generaciones lentas reales (~55 s) para 40 palabras (hardcap fijo 38 s).
+  for (const durationMs of [55000, 55000, 55000]) {
+    rememberBlobReadyTimingForTests({
+      engine: "chatterbox",
+      voice: "mx_carolina",
+      durationMs,
+      wordCount: 40,
+      cacheState: "missing"
+    });
+  }
+  // El presupuesto sigue la latencia observada (55 s + 2.5 s slack) en vez de capar en 38 s,
+  // para que los puentes cubran la cola de la generacion lenta.
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(40), "mx_carolina", "chatterbox"), {
+    libraries: ["educational", "informative"],
+    maxBridgeElapsedMs: 57500
+  });
+});
+
+test("bridge budget never exceeds the absolute safety ceiling", () => {
+  resetBlobReadyTelemetryForTests();
+  // Latencia patologica: la generacion casi nunca completa.
+  for (const durationMs of [150000, 150000, 150000]) {
+    rememberBlobReadyTimingForTests({
+      engine: "chatterbox",
+      voice: "mx_carolina",
+      durationMs,
+      wordCount: 40,
+      cacheState: "missing"
+    });
+  }
+  // El techo de 90 s acota el relleno aunque la estimacion sea mayor.
+  assert.deepEqual(buildBridgePlaybackPlanForTests(repeatedTerms(40), "mx_carolina", "chatterbox"), {
+    libraries: ["educational", "informative"],
+    maxBridgeElapsedMs: 90000
   });
 });

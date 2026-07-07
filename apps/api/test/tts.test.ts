@@ -7,8 +7,16 @@ delete process.env.PIPER_BINARY_PATH;
 delete process.env.PIPER_VOICE_MODEL;
 delete process.env.XTTS_SERVICE_URL;
 
-const { getHealth, synthesize, ttsEngineSchema, ttsRequestSchema, TtsUnavailableError, voiceEngineSchema } =
-  await import("../src/services/ttsService.js");
+const {
+  getHealth,
+  normalizeTextForTtsEngine,
+  synthesize,
+  ttsEngineSchema,
+  ttsRequestSchema,
+  TtsUnavailableError,
+  voiceEngineSchema
+} = await import("../src/services/ttsService.js");
+const { getTtsBridgeManifest, parsePcmWavDurationMs } = await import("../src/services/ttsBridgeService.js");
 
 test("ttsEngineSchema acepta los tres motores locales", () => {
   assert.equal(ttsEngineSchema.safeParse("piper").success, true);
@@ -41,4 +49,62 @@ test("getHealth reporta motores no disponibles cuando no hay configuracion", asy
 test("synthesize lanza TtsUnavailableError si el motor no esta listo", async () => {
   await assert.rejects(() => synthesize("piper", { text: "Sismo de prueba" }), TtsUnavailableError);
   await assert.rejects(() => synthesize("xtts", { text: "Sismo de prueba" }), TtsUnavailableError);
+});
+
+test("Chatterbox conserva puntuacion real y otros motores usan comas seguras", () => {
+  assert.equal(normalizeTextForTtsEngine("chatterbox", "Frase uno. Frase dos"), "Frase uno. Frase dos.");
+  assert.equal(
+    normalizeTextForTtsEngine("piper", "Magnitud 4.0. Frase dos."),
+    "Magnitud 4 punto 0, Frase dos,"
+  );
+});
+
+test("el manifiesto puede obtener la duracion exacta desde un WAV PCM", () => {
+  const sampleRate = 24_000;
+  const byteRate = sampleRate * 2;
+  const durationSeconds = 7.5;
+  const dataBytes = Math.round(byteRate * durationSeconds);
+  const wav = Buffer.alloc(44);
+  wav.write("RIFF", 0, "ascii");
+  wav.writeUInt32LE(36 + dataBytes, 4);
+  wav.write("WAVE", 8, "ascii");
+  wav.write("fmt ", 12, "ascii");
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(byteRate, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36, "ascii");
+  wav.writeUInt32LE(dataBytes, 40);
+
+  assert.equal(parsePcmWavDurationMs(wav), 7_500);
+  assert.equal(parsePcmWavDurationMs(Buffer.from("not-a-wave")), null);
+});
+
+test("los catalogos oficiales conservan clase, rol y aprobacion", async () => {
+  const informative = await getTtsBridgeManifest("official-informative");
+  assert.ok(informative);
+  assert.ok(
+    informative.items.some(
+      (item) =>
+        item.classId === "verified_tectonics" &&
+        item.playbackRole === "guide" &&
+        item.approvalStatus === "approved"
+    )
+  );
+
+  const promotional = await getTtsBridgeManifest("official-promotional");
+  assert.ok(promotional);
+  assert.ok(promotional.items.length > 0);
+  assert.equal(
+    promotional.items.every(
+      (item) =>
+        item.classId === "promotional_channel" &&
+        item.playbackRole === "guide" &&
+        item.approvalStatus === "approved"
+    ),
+    true
+  );
 });

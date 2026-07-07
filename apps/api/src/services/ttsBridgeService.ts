@@ -1,9 +1,17 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type TtsBridgeLibrary = "short" | "extended" | "station";
+export type TtsBridgeLibrary =
+  | "short"
+  | "extended"
+  | "informative"
+  | "educational"
+  | "official-informative"
+  | "official-educational"
+  | "official-promotional";
+export type TtsBridgeApprovalStatus = "pending" | "approved" | "rejected";
 
 type RawBridgeManifest = {
   version?: string;
@@ -22,20 +30,28 @@ type RawBridgeGroup = {
 
 type RawBridgeItem = {
   voice?: unknown;
+  classId?: unknown;
+  playbackRole?: unknown;
   groupId?: unknown;
   variant?: unknown;
   text?: unknown;
   outputPath?: unknown;
   bytes?: unknown;
+  durationMs?: unknown;
+  approvalStatus?: unknown;
   keywords?: unknown;
 };
 
 export type TtsBridgeManifestItem = {
   voice: string;
+  classId: string | null;
+  playbackRole: string | null;
   groupId: string;
   variant: string;
   text: string;
   bytes: number | null;
+  durationMs: number | null;
+  approvalStatus: TtsBridgeApprovalStatus | null;
   path: string;
   keywords: string[];
 };
@@ -61,13 +77,23 @@ type CachedBridgeLibrary = {
   files: Map<string, string>;
 };
 
+type CachedBridgeLibraryEntry = {
+  manifestPath: string;
+  manifestMtimeMs: number;
+  pending: Promise<CachedBridgeLibrary | null>;
+};
+
 const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const BRIDGE_LIBRARY_ROOTS: Record<TtsBridgeLibrary, string> = {
   short: join(REPO_ROOT, "Grabaciones", "contexto-pregabado"),
   extended: join(REPO_ROOT, "Grabaciones", "contexto-extendido"),
-  station: join(REPO_ROOT, "Grabaciones", "pautas-informativas")
+  informative: join(REPO_ROOT, "Grabaciones", "pautas-informativas"),
+  educational: join(REPO_ROOT, "Grabaciones", "pautas-educativas"),
+  "official-informative": join(REPO_ROOT, "Grabaciones", "produccion", "pautas-informativas"),
+  "official-educational": join(REPO_ROOT, "Grabaciones", "produccion", "pautas-educativas"),
+  "official-promotional": join(REPO_ROOT, "Grabaciones", "produccion", "pautas-promocionales")
 };
-const manifestCache = new Map<TtsBridgeLibrary, Promise<CachedBridgeLibrary | null>>();
+const manifestCache = new Map<TtsBridgeLibrary, CachedBridgeLibraryEntry>();
 
 function stripBom(raw: string): string {
   return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
@@ -81,19 +107,76 @@ function fileKey(voice: string, fileName: string): string {
   return `${voice}/${fileName}`.toLowerCase();
 }
 
+function fileNameKey(fileName: string): string {
+  return fileName.toLowerCase();
+}
+
 function isString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function approvalStatus(value: unknown): TtsBridgeApprovalStatus | null {
+  return value === "pending" || value === "approved" || value === "rejected" ? value : null;
+}
+
+export function parsePcmWavDurationMs(buffer: Buffer): number | null {
+  if (
+    buffer.length < 12 ||
+    buffer.toString("ascii", 0, 4) !== "RIFF" ||
+    buffer.toString("ascii", 8, 12) !== "WAVE"
+  ) {
+    return null;
+  }
+
+  let byteRate: number | null = null;
+  let dataBytes: number | null = null;
+  let offset = 12;
+  while (offset + 8 <= buffer.length) {
+    const chunkId = buffer.toString("ascii", offset, offset + 4);
+    const chunkSize = buffer.readUInt32LE(offset + 4);
+    const payloadOffset = offset + 8;
+    if (chunkId === "fmt " && chunkSize >= 16 && payloadOffset + 12 <= buffer.length) {
+      const parsedByteRate = buffer.readUInt32LE(payloadOffset + 8);
+      if (parsedByteRate > 0) byteRate = parsedByteRate;
+    }
+    if (chunkId === "data") {
+      dataBytes = chunkSize;
+      break;
+    }
+    const nextOffset = payloadOffset + chunkSize + (chunkSize % 2);
+    if (nextOffset <= offset || nextOffset > buffer.length) break;
+    offset = nextOffset;
+  }
+
+  if (!byteRate || dataBytes === null) return null;
+  return Math.max(1, Math.round((dataBytes / byteRate) * 1000));
+}
+
+async function readWavDurationMs(filePath: string): Promise<number | null> {
+  if (!existsSync(filePath)) return null;
+  const handle = await open(filePath, "r");
+  try {
+    const file = await handle.stat();
+    const header = Buffer.alloc(Math.min(file.size, 256 * 1024));
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    return parsePcmWavDurationMs(header.subarray(0, bytesRead));
+  } finally {
+    await handle.close();
+  }
+}
+
 async function loadBridgeLibrary(library: TtsBridgeLibrary): Promise<CachedBridgeLibrary | null> {
+  const root = BRIDGE_LIBRARY_ROOTS[library];
+  const manifestPath = join(root, "manifest-current.json");
+  if (!existsSync(manifestPath)) return null;
+
+  const manifestMtimeMs = (await stat(manifestPath)).mtimeMs;
   const cached = manifestCache.get(library);
-  if (cached) return cached;
+  if (cached && cached.manifestPath === manifestPath && cached.manifestMtimeMs === manifestMtimeMs) {
+    return cached.pending;
+  }
 
   const pending = (async (): Promise<CachedBridgeLibrary | null> => {
-    const root = BRIDGE_LIBRARY_ROOTS[library];
-    const manifestPath = join(root, "manifest-current.json");
-    if (!existsSync(manifestPath)) return null;
-
     const parsed = JSON.parse(stripBom(await readFile(manifestPath, "utf8"))) as RawBridgeManifest;
     const rootKey = normalizedPath(root);
     const items: TtsBridgeManifestItem[] = [];
@@ -116,13 +199,22 @@ async function loadBridgeLibrary(library: TtsBridgeLibrary): Promise<CachedBridg
         continue;
       }
       const fileName = basename(outputPath);
+      const durationMs =
+        typeof item.durationMs === "number" && Number.isFinite(item.durationMs) && item.durationMs > 0
+          ? Math.round(item.durationMs)
+          : await readWavDurationMs(outputPath).catch(() => null);
       files.set(fileKey(item.voice, fileName), outputPath);
+      files.set(fileNameKey(fileName), outputPath);
       items.push({
         voice: item.voice,
+        classId: isString(item.classId) ? item.classId.trim() : null,
+        playbackRole: isString(item.playbackRole) ? item.playbackRole.trim() : null,
         groupId: item.groupId,
         variant: item.variant,
         text: item.text.trim(),
         bytes: typeof item.bytes === "number" && Number.isFinite(item.bytes) ? item.bytes : null,
+        durationMs,
+        approvalStatus: approvalStatus(item.approvalStatus),
         path: `/api/tts/bridges/${library}/${encodeURIComponent(item.voice)}/${encodeURIComponent(fileName)}`,
         keywords: Array.isArray(item.keywords)
           ? item.keywords
@@ -173,7 +265,11 @@ async function loadBridgeLibrary(library: TtsBridgeLibrary): Promise<CachedBridg
     };
   })();
 
-  manifestCache.set(library, pending);
+  manifestCache.set(library, {
+    manifestPath,
+    manifestMtimeMs,
+    pending
+  });
   return pending;
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 
 import { type SeismicEvent } from "@sismica/shared";
 
-import { fetchDirectorDecision, fetchSegmentText } from "./api";
+import { fetchSegmentText } from "./api";
 import { getRecentEditorialLines, rememberEditorialLine } from "./editorialHistory";
 import { broadcastPlace } from "./broadcastPlace";
 import {
@@ -16,14 +16,18 @@ import {
   getActiveBroadcastHost,
   getNextBroadcastHost,
   isSeismicNarrationActive,
+  prefetchSeismicNarration,
   prefetchText,
   resolveEventNarration,
   setActiveBroadcastHost,
-  speakText
+  speakSeismicNarration,
+  speakText,
+  type VoiceEngine
 } from "./seismicVoice";
+import { decideDirectorV2Action } from "./directorV2";
 import { normalizeSpanishText } from "./spanishText";
 
-export type DirectorMode = "off" | "rules" | "ai";
+export type DirectorMode = "off" | "rules" | "ai" | "v2";
 export type BroadcastSegmentKind = DirectorSegmentKind | "en-vivo";
 export type BroadcastSegment = {
   kind: BroadcastSegmentKind;
@@ -34,9 +38,10 @@ export type BroadcastSegment = {
 export const HOST_ROTATION_INTERVAL_MS = 5 * 60_000;
 export const HOST_ROTATION_POLL_MS = 500;
 const RECAP_DUE_MIN = 60;
-const EDUCATION_DUE_MIN = 8;
+const EDUCATION_DUE_MIN = 15;
 const EDUCATION_REPEAT_WINDOW_MS = 60 * 60_000;
 const EVENT_REPEAT_WINDOW_MS = 10 * 60_000;
+const DIRECTOR_IDLE_RETRY_MS = 15_000;
 const BULLETIN_WINDOWS: Array<60 | 30 | 15> = [60, 30, 15];
 const DIRECTOR_DEBUG = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
@@ -53,11 +58,11 @@ const EDUCATIVO_TOPICS: Array<{ topic: string; fallback: string }> = [
   {
     topic: "escala de magnitud logaritmica",
     fallback:
-      "La escala de magnitud es logaritmica: cada punto equivale a unas treinta y dos veces mas energia liberada."
+      "La escala de magnitud es logaritmica, cada punto equivale a unas treinta y dos veces mas energia liberada."
   },
   {
     topic: "magnitud frente a intensidad",
-    fallback: "La magnitud mide la energia del sismo; la intensidad, cuanto se sintio en cada lugar."
+    fallback: "La magnitud mide la energia del sismo, la intensidad, cuanto se sintio en cada lugar."
   },
   {
     topic: "zonas de subduccion",
@@ -175,13 +180,24 @@ function joinAreas(areas: string[]): string {
   return `${areas[0]}, ${areas[1]} y ${areas[2]}`;
 }
 
-function comparisonText(currentCount: number, previousCount: number, windowMinutes: number): string {
+function trendPhrase(currentCount: number, previousCount: number, windowMinutes: number): string {
   const delta = currentCount - previousCount;
   if (delta > 0) return `${delta} mas que en los ${windowMinutes} minutos previos`;
   if (delta < 0) return `${Math.abs(delta)} menos que en los ${windowMinutes} minutos previos`;
-  return `sin cambio frente a los ${windowMinutes} minutos previos`;
+  return `estable frente a los ${windowMinutes} minutos previos`;
 }
 
+// Aperturas rotativas: el boletin no debe sonar identico cada vez (retencion 24/7).
+const BULLETIN_OPENERS: Array<(windowMinutes: number) => string> = [
+  (w) => `Boletin de ${w} minutos.`,
+  (w) => `Resumen de los ultimos ${w} minutos.`,
+  (w) => `Panorama sismico de los ultimos ${w} minutos.`,
+  (w) => `Actualizacion de ${w} minutos.`
+];
+let bulletinOpenerIndex = 0;
+
+// Respaldo del boletin cuando DeepSeek no responde. TODO sale del feed real
+// (conteos, mayor magnitud, profundidad, zonas): verificable por construccion.
 function fallbackBulletinPacket(
   windowMinutes: 15 | 30 | 60,
   currentCount: number,
@@ -189,14 +205,29 @@ function fallbackBulletinPacket(
   biggest: SeismicEvent | null,
   activeAreas: string[]
 ): SegmentPacket {
-  const parts = [
-    `Boletin de ${windowMinutes} minutos: ${currentCount} sismos detectados, ${comparisonText(currentCount, previousCount, windowMinutes)}.`
-  ];
-  if (typeof biggest?.magnitude === "number") {
-    parts.push(`La mayor magnitud fue ${biggest.magnitude.toFixed(1)} en ${broadcastPlace(biggest)}.`);
-  }
-  if (activeAreas.length > 0) {
-    parts.push(`Actividad concentrada en ${joinAreas(activeAreas)}.`);
+  const opener = BULLETIN_OPENERS[bulletinOpenerIndex % BULLETIN_OPENERS.length](windowMinutes);
+  bulletinOpenerIndex += 1;
+
+  const parts: string[] = [];
+  if (currentCount === 0) {
+    parts.push(`${opener} El planeta estuvo en calma: sin sismos registrados en este lapso.`);
+  } else {
+    const plural = currentCount === 1 ? "sismo" : "sismos";
+    parts.push(
+      `${opener} ${currentCount} ${plural} registrados, ${trendPhrase(currentCount, previousCount, windowMinutes)}.`
+    );
+    if (typeof biggest?.magnitude === "number") {
+      const depth =
+        typeof biggest.depthKm === "number"
+          ? `, a ${Math.round(biggest.depthKm)} kilometros de profundidad`
+          : "";
+      parts.push(
+        `El de mayor magnitud, ${biggest.magnitude.toFixed(1)} en ${broadcastPlace(biggest)}${depth}.`
+      );
+    }
+    if (activeAreas.length > 0) {
+      parts.push(`Mayor actividad en ${joinAreas(activeAreas)}.`);
+    }
   }
   return {
     text: parts.join(" "),
@@ -262,6 +293,7 @@ export function pickNextTourEvent(
 export function useBroadcastDirector(params: {
   mode: DirectorMode;
   voiceEnabled: boolean;
+  voiceEngine: VoiceEngine;
   events: SeismicEvent[];
   pendingLiveQueueRef: MutableRefObject<SeismicEvent[]>;
   onFocusEvent: (eventId: string) => void;
@@ -273,6 +305,8 @@ export function useBroadcastDirector(params: {
   eventsRef.current = params.events;
   const voiceEnabledRef = useRef(params.voiceEnabled);
   voiceEnabledRef.current = params.voiceEnabled;
+  const voiceEngineRef = useRef(params.voiceEngine);
+  voiceEngineRef.current = params.voiceEngine;
   const queueRef = params.pendingLiveQueueRef;
   const onFocusRef = useRef(params.onFocusEvent);
   onFocusRef.current = params.onFocusEvent;
@@ -343,6 +377,13 @@ export function useBroadcastDirector(params: {
     };
 
     const air = (segment: BroadcastSegment, eventId?: string) => {
+      if (mode === "v2" && segment.kind !== "en-vivo" && (queueRef.current?.length ?? 0) > 0) {
+        traceDirectorEvent("skip-for-live-priority", {
+          kind: segment.kind,
+          livePending: queueRef.current?.length ?? 0
+        });
+        return false;
+      }
       const text = normalizeSpanishText(segment.text);
       const cue = segmentCue(segment.kind, segment.cue);
       const delivery = cueToVoiceDelivery(cue, { text, kind: segment.kind });
@@ -352,31 +393,64 @@ export function useBroadcastDirector(params: {
       airingUntilRef.current = Date.now() + delivery.minDurationMs;
       if (voiceEnabledRef.current) {
         prefetchText(payload.text);
-        speakText(payload.text, { cue, kind: payload.kind, eventId });
+        speakText(payload.text, {
+          cue,
+          kind: payload.kind,
+          eventId,
+          continuityMode: mode === "v2" ? "director-v2" : "legacy",
+          isHigherPriorityPending:
+            mode === "v2" && payload.kind !== "en-vivo"
+              ? () => (queueRef.current?.length ?? 0) > 0
+              : undefined
+        });
       }
+      return true;
     };
 
     const airEvent = async (event: SeismicEvent, kind: BroadcastSegmentKind, intro?: string) => {
+      const narrationMode = kind === "en-vivo" ? "breaking" : "seguimiento";
       const narration = await resolveEventNarration(event, {
         intro,
-        mode: kind === "en-vivo" ? "breaking" : "seguimiento"
+        mode: narrationMode
       });
+      if (mode === "v2" && kind !== "en-vivo" && (queueRef.current?.length ?? 0) > 0) {
+        traceDirectorEvent("skip-event-for-live-priority", {
+          kind,
+          eventId: event.eventId,
+          livePending: queueRef.current?.length ?? 0
+        });
+        return;
+      }
+      const text = normalizeSpanishText(narration.text);
+      const cue = segmentCue(kind, narration.cue);
+      const delivery = cueToVoiceDelivery(cue, { text, kind });
+      const payload = { kind, text, cue };
       recentAiredEventsRef.current.set(event.eventId, Date.now());
       traceDirectorEvent("emit-event", {
         kind,
         eventId: event.eventId,
         place: broadcastPlace(event),
-        text: narration.text
+        text
       });
       onFocusRef.current(event.eventId);
-      air(
-        {
-          kind,
-          text: narration.text,
-          cue: narration.cue
-        },
-        event.eventId
-      );
+      onSegmentRef.current(payload);
+      rememberEditorialLine(text);
+      airingUntilRef.current = Date.now() + delivery.minDurationMs;
+      if (!voiceEnabledRef.current) return;
+      prefetchSeismicNarration(event, true, {
+        intro,
+        mode: narrationMode,
+        resolved: { ...narration, text, cue },
+        continuityMode: mode === "v2" ? "director-v2" : "legacy"
+      });
+      speakSeismicNarration(event, true, {
+        force: true,
+        intro,
+        mode: narrationMode,
+        resolved: { ...narration, text, cue },
+        continuityMode: mode === "v2" ? "director-v2" : "legacy",
+        isHigherPriorityPending: mode === "v2" ? () => (queueRef.current?.length ?? 0) > 0 : undefined
+      });
     };
 
     const airResumen = async () => {
@@ -399,8 +473,9 @@ export function useBroadcastDirector(params: {
           biggestPlace: biggest ? broadcastPlace(biggest) : null,
           recentLines: getRecentEditorialLines()
         })) ?? fallback;
-      lastRecapAtRef.current = Date.now();
-      air({ kind: "resumen", text: packet.text, cue: packet.cue });
+      if (air({ kind: "resumen", text: packet.text, cue: packet.cue })) {
+        lastRecapAtRef.current = Date.now();
+      }
     };
 
     const airEducativo = async () => {
@@ -418,9 +493,10 @@ export function useBroadcastDirector(params: {
         text: fallback,
         cue: fallbackSegmentCue("educativo")
       };
-      recentEducationalTopicsRef.current.set(topic, now);
-      lastEducativoAtRef.current = now;
-      air({ kind: "educativo", text: packet.text, cue: packet.cue });
+      if (air({ kind: "educativo", text: packet.text, cue: packet.cue })) {
+        recentEducationalTopicsRef.current.set(topic, now);
+        lastEducativoAtRef.current = now;
+      }
     };
 
     const dueBulletinWindow = (now: number): 15 | 30 | 60 | null => {
@@ -474,11 +550,53 @@ export function useBroadcastDirector(params: {
           biggest,
           activeAreas
         );
-      markBulletinAired(windowMinutes, now);
-      air({ kind: "boletin", text: packet.text, cue: packet.cue });
+      if (air({ kind: "boletin", text: packet.text, cue: packet.cue })) {
+        markBulletinAired(windowMinutes, now);
+      }
     };
 
     const airNext = async () => {
+      if (mode === "v2") {
+        const state = computeState();
+        const action = decideDirectorV2Action({
+          livePending: state.livePending,
+          dueBulletinWindow: dueBulletinWindow(Date.now()),
+          recentCount: state.recentCount,
+          minutesSinceRecap: state.minutesSinceRecap,
+          minutesSinceEducativo: state.minutesSinceEducativo,
+          recapDueMin: RECAP_DUE_MIN,
+          educationDueMin: EDUCATION_DUE_MIN,
+          tourEventAvailable: eventsRef.current.length > 0
+        });
+
+        if (action.kind === "en-vivo") {
+          const live = queueRef.current?.shift() ?? null;
+          if (live) await airEvent(live, "en-vivo", "Nuevo sismo detectado");
+          return;
+        }
+        if (action.kind === "boletin") {
+          await airBulletin(action.windowMinutes);
+          return;
+        }
+        if (action.kind === "resumen") {
+          await airResumen();
+          return;
+        }
+        if (action.kind === "educativo") {
+          await airEducativo();
+          return;
+        }
+        if (action.kind === "recorrido") {
+          const event = nextTourEvent();
+          if (event) {
+            await airEvent(event, "recorrido");
+            return;
+          }
+        }
+        airingUntilRef.current = Date.now() + DIRECTOR_IDLE_RETRY_MS;
+        return;
+      }
+
       const queue = queueRef.current;
       const live = queue && queue.length > 0 ? queue.shift() : null;
       if (live) {
@@ -493,13 +611,12 @@ export function useBroadcastDirector(params: {
       }
 
       const state = computeState();
-      let kind: Exclude<DirectorSegmentKind, "boletin">;
-      if (mode === "ai") {
-        const decision = await fetchDirectorDecision(state);
-        kind = normalizeAiKind(decision?.kind ?? rulesDecision(state), state);
-      } else {
-        kind = rulesDecision(state);
+      if (state.recentCount === 0 && state.minutesSinceEducativo < EDUCATION_DUE_MIN) {
+        airingUntilRef.current = Date.now() + DIRECTOR_IDLE_RETRY_MS;
+        return;
       }
+      let kind: Exclude<DirectorSegmentKind, "boletin">;
+      kind = mode === "ai" ? normalizeAiKind(rulesDecision(state), state) : rulesDecision(state);
 
       if (kind === "recorrido") {
         const event = nextTourEvent();
@@ -507,7 +624,12 @@ export function useBroadcastDirector(params: {
           await airEvent(event, "recorrido");
           return;
         }
-        kind = "educativo";
+        if (state.minutesSinceEducativo >= EDUCATION_DUE_MIN) {
+          kind = "educativo";
+        } else {
+          airingUntilRef.current = Date.now() + DIRECTOR_IDLE_RETRY_MS;
+          return;
+        }
       }
 
       if (kind === "resumen") {
@@ -521,7 +643,8 @@ export function useBroadcastDirector(params: {
     const intervalId = window.setInterval(() => {
       if (busyRef.current) return;
       if (voiceEnabledRef.current && isSeismicNarrationActive()) return;
-      if (Date.now() < airingUntilRef.current) return;
+      const followChatterboxTiming = voiceEnabledRef.current && voiceEngineRef.current === "chatterbox";
+      if (!followChatterboxTiming && Date.now() < airingUntilRef.current) return;
       busyRef.current = true;
       void airNext().finally(() => {
         busyRef.current = false;

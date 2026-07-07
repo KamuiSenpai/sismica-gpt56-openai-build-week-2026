@@ -36,18 +36,24 @@ Escucha en `127.0.0.1:8091`. Verifica con `curl http://127.0.0.1:8091/health`.
 ## Endpoints
 
 - `GET /health` -> `{ ok, model, device, sampleRate, defaultProfile, profiles }`
-- `POST /synthesize` -> body `{ "text", "speaker"?, "language"?, "exaggeration"?, "cfg_weight"?, "temperature"? }` -> `audio/wav`
+- `POST /synthesize` -> body `{ "text", "speaker"?, "language"?, "exaggeration"?, "cfg_weight"?, "temperature"?, "repetition_penalty"? }` -> `audio/wav`
 
 ## Variables de entorno
 
-| Variable                     | Default                      | Descripcion                    |
-| ---------------------------- | ---------------------------- | ------------------------------ |
-| `CHATTERBOX_DEVICE`          | auto                         | `cuda`, `cpu`, `mps` o `auto`. |
-| `CHATTERBOX_HOST` / `PORT`   | `127.0.0.1` / `8091`         | Bind del servidor.             |
-| `CHATTERBOX_VOICE_PROFILES`  | el de `XTTS_VOICE_PROFILES`  | Manifiesto de perfiles de voz. |
-| `CHATTERBOX_DEFAULT_PROFILE` | el de `XTTS_DEFAULT_PROFILE` | Perfil por defecto.            |
-| `CHATTERBOX_EXAGGERATION`    | `0.5`                        | Expresividad (0..1).           |
-| `CHATTERBOX_CFG_WEIGHT`      | `0.5`                        | Guia de estilo (0..1).         |
+| Variable                              | Default                      | Descripcion                                |
+| ------------------------------------- | ---------------------------- | ------------------------------------------ |
+| `CHATTERBOX_DEVICE`                   | auto                         | `cuda`, `cpu`, `mps` o `auto`.             |
+| `CHATTERBOX_HOST` / `PORT`            | `127.0.0.1` / `8091`         | Bind del servidor.                         |
+| `CHATTERBOX_VOICE_PROFILES`           | el de `XTTS_VOICE_PROFILES`  | Manifiesto de perfiles de voz.             |
+| `CHATTERBOX_DEFAULT_PROFILE`          | el de `XTTS_DEFAULT_PROFILE` | Perfil por defecto.                        |
+| `CHATTERBOX_EXAGGERATION`             | `0.5`                        | Expresividad (0..1).                       |
+| `CHATTERBOX_CFG_WEIGHT`               | `0.5`                        | Guia de estilo (0..1).                     |
+| `CHATTERBOX_REPETITION_PENALTY`       | `2.2`                        | Reduce bucles de tokens (1..3).            |
+| `CHATTERBOX_PRECISION`                | `auto`                       | En RTX 4060 Ti conviene `bf16`.            |
+| `CHATTERBOX_CACHE_CONDITIONING`       | `true`                       | Reutiliza conditioning de voces.           |
+| `CHATTERBOX_CONDITIONING_CACHE_LIMIT` | `2`                          | Para seis voces en vivo usar `6`.          |
+| `CHATTERBOX_PROFILE_WARMUP`           | `default`                    | Para produccion 24/7 usar `all`.           |
+| `CHATTERBOX_COMPILE_MODE`             | `off`                        | Mantener `off` en Windows salvo benchmark. |
 
 Ademas, en el `.env` raiz agrega `CHATTERBOX_SERVICE_URL=http://127.0.0.1:8091` para que el API
 Node lo enrute.

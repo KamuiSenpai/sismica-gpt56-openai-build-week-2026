@@ -1,7 +1,7 @@
 import { type SeismicEvent } from "@sismica/shared";
 
 import { broadcastPlace } from "./broadcastPlace";
-import { normalizeSpanishText } from "./spanishText";
+import { normalizeSpanishText, spellSpanishNumbers } from "./spanishText";
 
 const DEFAULT_SPEECH_LANG = "es-PE";
 const SPEECH_DEDUP_WINDOW_MS = 4_000;
@@ -19,23 +19,68 @@ function expandSpokenAbbreviations(text: string): string {
 }
 
 export function normalizeSpokenText(text: string): string {
-  return (
+  const withoutPunctuation = normalizeSpanishText(expandSpokenAbbreviations(text))
+    .replace(/\s*[\r\n]+\s*/gu, ", ")
+    .replace(/…/gu, ", ")
+    .replace(/\s*[;:!?]+\s*/gu, ", ")
+    // Colapsa los puntos internos de siglas/abreviaturas para que no se deletreen con "punto":
+    // "S.O." -> "SO", "U.S.A" -> "USA" (EE.UU ya se expande antes).
+    .replace(/\b(\p{L})\.(?=\p{L})/gu, "$1")
+    // Todo punto que NO sea decimal (entre digitos) es puntuacion: fin de frase o abreviatura.
+    // Pasa a pausa y no se pronuncia como "punto"; el decimal de la magnitud (3.5) se conserva.
+    .replace(/(?<!\d)\.|\.(?!\d)/gu, ", ");
+  // Deletrea los numeros en palabras ANTES del TTS (148 -> "ciento cuarenta y ocho";
+  // 3.5 -> "tres punto cinco") para que ningun motor los lea mal, y apocopa "uno/...uno" ->
+  // "un/...un" ante "kilometro(s)" (masculino): "veintiun kilometros".
+  return spellSpanishNumbers(withoutPunctuation)
+    .replace(/uno( kilometros?\b)/giu, "un$1")
+    .replace(/\s+,/gu, ",")
+    .replace(/,\s*,+/gu, ", ")
+    .replace(/\s{2,}/gu, " ")
+    .replace(/,\s*$/gu, "")
+    .trim();
+}
+
+function normalizeChatterboxPunctuation(text: string): string {
+  return text
+    .replace(/\s+([,.;:!?])/gu, "$1")
+    .replace(/([,;:!?])(?=\S)/gu, "$1 ")
+    .replace(/(?<!\d)\.(?=\S)/gu, ". ")
+    .replace(/(?<=\d)\.(?!\d)(?=\S)/gu, ". ")
+    .replace(/\s{2,}/gu, " ")
+    .trim();
+}
+
+function accentChatterboxWords(text: string): string {
+  return text
+    .replace(/\bdieciseis\b/giu, "dieciséis")
+    .replace(/\bveintidos\b/giu, "veintidós")
+    .replace(/\bveintitres\b/giu, "veintitrés")
+    .replace(/\bveintiseis\b/giu, "veintiséis")
+    .replace(/\bkilometro\b/giu, "kilómetro")
+    .replace(/\bkilometros\b/giu, "kilómetros");
+}
+
+export function normalizeChatterboxText(text: string): string {
+  const normalized = normalizeChatterboxPunctuation(
     normalizeSpanishText(expandSpokenAbbreviations(text))
-      .replace(/\s*[\r\n]+\s*/gu, ", ")
-      .replace(/…/gu, ", ")
-      .replace(/\s*[;:!?]+\s*/gu, ", ")
-      // Colapsa los puntos internos de siglas/abreviaturas para que no se deletreen con "punto":
-      // "S.O." -> "SO", "U.S.A" -> "USA" (EE.UU ya se expande antes).
+      .replace(/\s*[\r\n]+\s*/gu, ". ")
+      .replace(/…/gu, ". ")
+      .replace(/[“”]/gu, '"')
+      .replace(/[‘’]/gu, "'")
+      // Colapsa puntos internos de siglas/abreviaturas para que no se lean como "punto".
       .replace(/\b(\p{L})\.(?=\p{L})/gu, "$1")
-      // Todo punto que NO sea decimal (entre digitos) es puntuacion: fin de frase o abreviatura.
-      // Pasa a pausa y no se pronuncia como "punto"; el decimal de la magnitud (3.5) se conserva.
-      .replace(/(?<!\d)\.|\.(?!\d)/gu, ", ")
-      .replace(/\s+,/gu, ",")
-      .replace(/,\s*,+/gu, ", ")
-      .replace(/\s{2,}/gu, " ")
-      .replace(/,\s*$/gu, "")
-      .trim()
   );
+
+  const spokenNumbers = normalizeChatterboxPunctuation(
+    accentChatterboxWords(normalizeSpanishText(spellSpanishNumbers(normalized))).replace(
+      /uno( kilómetros?\b)/giu,
+      "un$1"
+    )
+  ).replace(/([.!?])(?:\s*[.!?])+$/gu, "$1");
+
+  if (!spokenNumbers) return "";
+  return /[.!?]$/u.test(spokenNumbers) ? spokenNumbers : `${spokenNumbers}.`;
 }
 
 function formatSpokenKilometers(value: number | string): string {

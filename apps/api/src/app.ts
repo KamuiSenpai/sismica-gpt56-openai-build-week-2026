@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { LRUCache } from "lru-cache";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 
 import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
@@ -51,6 +52,11 @@ import {
   segmentRequestSchema
 } from "./services/segmentService.js";
 import { decideNext, directorStateSchema } from "./services/directorService.js";
+import {
+  enqueueYoutubeChatTestMessage,
+  getYoutubeChatMessages,
+  getYoutubeChatStatus
+} from "./services/youtubeChatRepository.js";
 
 function hasValidEngineToken(candidate: string | undefined): boolean {
   if (!env.seismicEngineToken || !candidate) return false;
@@ -61,7 +67,18 @@ function hasValidEngineToken(candidate: string | undefined): boolean {
 
 export function createApp(streamBroker: StreamBroker) {
   const app = express();
-  const bridgeLibraries = new Set<TtsBridgeLibrary>(["short", "extended", "station"]);
+  const youtubeChatTestSchema = z.object({
+    text: z.string().trim().min(1).max(180)
+  });
+  const bridgeLibraries = new Set<TtsBridgeLibrary>([
+    "short",
+    "extended",
+    "informative",
+    "educational",
+    "official-informative",
+    "official-educational",
+    "official-promotional"
+  ]);
   const voiceTelemetry: Array<Record<string, string | number | null>> = [];
   let voiceTelemetrySequence = 0;
   let voiceOwner: { clientId: string; expiresAt: number } | null = null;
@@ -415,6 +432,53 @@ export function createApp(streamBroker: StreamBroker) {
     }
     try {
       response.json(await decideNext(parsed.data));
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/youtube/chat/status", async (_request, response) => {
+    try {
+      response.json(await getYoutubeChatStatus(pool));
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/youtube/chat/messages", async (request, response) => {
+    try {
+      const raw = typeof request.query.limit === "string" ? Number(request.query.limit) : 50;
+      const limit = Number.isFinite(raw) ? Math.min(200, Math.max(1, Math.trunc(raw))) : 50;
+      response.json({ items: await getYoutubeChatMessages(pool, limit) });
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/youtube/chat/test", async (request, response) => {
+    if (!env.youtubeChatEnabled) {
+      response.status(503).json({ error: "YouTube chat is disabled" });
+      return;
+    }
+    if (!env.seismicEngineToken) {
+      response.status(503).json({ error: "Operator token is not configured" });
+      return;
+    }
+    const token = request.header("x-seismic-engine-token");
+    if (!hasValidEngineToken(token)) {
+      response.status(401).json({ error: "Invalid operator token" });
+      return;
+    }
+
+    const parsed = youtubeChatTestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Invalid YouTube chat test request", issues: parsed.error.issues });
+      return;
+    }
+
+    try {
+      const item = await enqueueYoutubeChatTestMessage(pool, parsed.data.text);
+      response.status(202).json({ item });
     } catch (error) {
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }

@@ -10,6 +10,7 @@ const {
   generateSegment,
   handoffRequestSchema,
   sanitizeGeneratedSegmentPacket,
+  segmentSeedForTests,
   segmentRequestSchema
 } = await import("../src/services/segmentService.js");
 const { directorStateSchema } = await import("../src/services/directorService.js");
@@ -142,4 +143,18 @@ test("los catalogos de aire no incluyen replicas como tema activo", () => {
     RECOMMENDATION_TOPICS.some((entry: { topic: string }) => /replic/iu.test(entry.topic)),
     false
   );
+});
+
+test("el cache educativo cambia cuando cambia el historial editorial", () => {
+  const first = segmentSeedForTests({
+    kind: "educativo",
+    topic: "ondas P y ondas S",
+    recentLines: ["Las ondas P llegan primero."]
+  });
+  const second = segmentSeedForTests({
+    kind: "educativo",
+    topic: "ondas P y ondas S",
+    recentLines: ["La diferencia de llegada permite estimar distancias."]
+  });
+  assert.notEqual(first, second);
 });

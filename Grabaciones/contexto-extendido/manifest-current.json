@@ -1,6 +1,6 @@
 ﻿{
   "version": "2026-07-04-extended",
-  "generatedAtUtc": "2026-07-04T17:24:22.9813034Z",
+  "generatedAtUtc": "2026-07-04T22:14:29.1544938Z",
   "runStartedUtc": "2026-07-04T17:08:04.4483693Z",
   "statusFilter": "current",
   "requestedVoices": ["mx_carolina", "mx_liam"],
@@ -378,10 +378,12 @@
       "variant": "01",
       "text": "La profundidad lo ubica en un rango intermedio, por debajo de la sismicidad superficial tipica",
       "outputPath": "E:\\Proyecto\\Grabaciones\\contexto-extendido\\mx_carolina\\bridge_mx_carolina_foco_intermedio_generico_01.wav",
-      "bytes": 259244,
-      "elapsedMs": 9470.1,
+      "bytes": 237110,
+      "elapsedMs": 10651.2,
       "skipped": false,
-      "generatedAtUtc": "2026-07-04T17:12:19.5914450Z"
+      "generatedAtUtc": "2026-07-04T22:14:28.7028181Z",
+      "trimmedTailSec": 1,
+      "trailingAuditSec": 0
     },
     {
       "voice": "mx_carolina",

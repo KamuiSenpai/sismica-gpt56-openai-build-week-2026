@@ -1,6 +1,6 @@
 {
   "version": "2026-07-04",
-  "phase1Voices": ["mx_carolina", "mx_liam"],
+  "phase1Voices": ["mx_carolina", "mx_liam", "mx_valentina", "mx_sofia", "mx_ninoska"],
   "counts": {
     "immediatePerVoice": 47,
     "recommendedPerVoice": 56,

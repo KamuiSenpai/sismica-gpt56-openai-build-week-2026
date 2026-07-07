@@ -1,0 +1,98 @@
+{
+  "generatedAtUtc": "2026-07-05T21:08:47.420Z",
+  "classId": "verified_tectonics",
+  "generated": 6,
+  "approvalStatus": "approved",
+  "approvedAtUtc": "2026-07-05T21:08:47.420Z",
+  "targetDurationMs": {
+    "min": 10000,
+    "max": 12000
+  },
+  "status": [
+    {
+      "status": "ok",
+      "count": 6
+    }
+  ],
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "durationMs": 5960,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\verified_tectonics\\mx_carolina\\verified_tectonics_mx_carolina_01.wav",
+      "text": "Muchos sismos se concentran en bordes de placas donde la corteza libera energ\u00eda acumulada.",
+      "source": "USGS - Plate boundaries and seismicity",
+      "bytes": 286124,
+      "tailSilenceSec": 0.215,
+      "elapsedMs": 30329
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "durationMs": 6080,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\verified_tectonics\\mx_liam\\verified_tectonics_mx_liam_02.wav",
+      "text": "En zonas de subducci\u00f3n, una placa desciende bajo otra y genera actividad s\u00edsmica frecuente.",
+      "source": "USGS - Subduction zones",
+      "bytes": 291884,
+      "tailSilenceSec": 0.771,
+      "elapsedMs": 9404
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "durationMs": 6800,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\verified_tectonics\\mx_valentina\\verified_tectonics_mx_valentina_03.wav",
+      "text": "El cintur\u00f3n de fuego del Pac\u00edfico re\u00fane algunas de las regiones s\u00edsmicas m\u00e1s activas del planeta.",
+      "source": "USGS - Ring of Fire",
+      "bytes": 326444,
+      "tailSilenceSec": 0.282,
+      "elapsedMs": 11177
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "durationMs": 6240,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\verified_tectonics\\mx_martin\\verified_tectonics_mx_martin_04.wav",
+      "text": "Las fallas activas liberan tensi\u00f3n cuando las rocas ya no soportan m\u00e1s esfuerzo acumulado.",
+      "source": "USGS - Faults and elastic rebound",
+      "bytes": 299564,
+      "tailSilenceSec": 0.609,
+      "elapsedMs": 10609
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "durationMs": 6520,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\verified_tectonics\\mx_sofia\\verified_tectonics_mx_sofia_05.wav",
+      "text": "La interacci\u00f3n entre placas puede producir sismos superficiales, intermedios o profundos.",
+      "source": "USGS - Earthquake depth and plate interaction",
+      "bytes": 313004,
+      "tailSilenceSec": 0.876,
+      "elapsedMs": 10863
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "durationMs": 6240,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\verified_tectonics\\mx_ninoska\\verified_tectonics_mx_ninoska_06.wav",
+      "text": "La sismicidad regional depende del tipo de borde tect\u00f3nico y de su historia geol\u00f3gica.",
+      "source": "USGS - Tectonic setting and regional seismicity",
+      "bytes": 299564,
+      "tailSilenceSec": 1.013,
+      "elapsedMs": 9697
+    }
+  ],
+  "updatedAtUtc": "2026-07-05T21:08:47.420Z",
+  "lastRegeneration": {
+    "classId": "verified_tectonics",
+    "reason": "generacion inicial oficial aprobada por usuario",
+    "policy": "salida directa de Chatterbox sin trimming ni limpieza de cola",
+    "backupRoot": "E:\\Proyecto\\Grabaciones\\_repair-backups\\verified_tectonics-raw-2026-07-05T21-08-47-420Z"
+  }
+}

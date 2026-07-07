@@ -179,7 +179,8 @@ Ensure-ServiceWindow -Title "SISMICA WORKER" -WorkDir $root -Command "npm run de
 Write-Host "[4/5] Motor neural Chatterbox (XTTS-v2 deshabilitado)" -ForegroundColor Yellow
 Stop-ServiceProcesses -Description "XTTS-v2" -CommandPatterns @("services\\tts-xtts\\app\.py") -Ports @(8090)
 if (Test-Path (Join-Path $chatterboxDir ".venv\Scripts\python.exe")) {
-  Ensure-ServiceWindow -Title "SISMICA CHATTERBOX" -WorkDir $chatterboxDir -Command "`$env:CHATTERBOX_DEVICE='cuda'; `$env:CHATTERBOX_EAGER_LOAD='false'; & '.\.venv\Scripts\python.exe' app.py" -Port 8091 -Description "Chatterbox"
+  $chatterboxCommand = "`$env:CHATTERBOX_DEVICE='cuda'; `$env:CHATTERBOX_PRECISION='bf16'; `$env:CHATTERBOX_CACHE_CONDITIONING='true'; `$env:CHATTERBOX_CONDITIONING_CACHE_LIMIT='6'; `$env:CHATTERBOX_PROFILE_WARMUP='all'; `$env:CHATTERBOX_COMPILE_MODE='off'; `$env:CHATTERBOX_EAGER_LOAD='false'; & '.\.venv\Scripts\python.exe' app.py"
+  Ensure-ServiceWindow -Title "SISMICA CHATTERBOX" -WorkDir $chatterboxDir -Command $chatterboxCommand -Port 8091 -Description "Chatterbox"
 } else {
   Write-Host "  (omitido: falta services\tts-chatterbox\.venv)" -ForegroundColor DarkYellow
 }
@@ -209,7 +210,7 @@ for ($i = 0; $i -lt 60; $i++) {
   if (Test-Port -Port 5173) { break }
   Start-Sleep -Seconds 1
 }
-Start-Process "http://localhost:5173"
+Start-Process "http://localhost:5173/?monitor=1"
 
 Write-Host "`nListo. Cada servicio corre en su propia ventana." -ForegroundColor Cyan
 Write-Host "Motor neural activo: $selectedVoiceLabel" -ForegroundColor Cyan

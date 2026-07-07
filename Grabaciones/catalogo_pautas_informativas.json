@@ -1,7 +1,7 @@
 {
-  "version": "2026-07-04",
+  "version": "2026-07-04-pruned-30",
   "library": "station",
-  "description": "Pautas generales para cubrir esperas de sintesis sin atribuir datos no verificados a un evento.",
+  "description": "Pautas generales activas para cubrir esperas de sintesis sin atribuir datos no verificados a un evento.",
   "items": [
     {
       "id": "01",
@@ -167,16 +167,6 @@
       ]
     },
     {
-      "id": "16",
-      "voice": "mx_liam",
-      "keywords": [],
-      "paragraphs": [
-        "Cada tarjeta intenta conservar un enlace hacia el reporte de la institucion que origino el dato.",
-        "Ese documento es la referencia adecuada para consultar revisiones, parametros tecnicos y comunicados asociados.",
-        "La visualizacion resume informacion para el recorrido, pero la fuente oficial mantiene la descripcion autorizada."
-      ]
-    },
-    {
       "id": "17",
       "voice": "mx_carolina",
       "keywords": [],
@@ -207,16 +197,6 @@
       ]
     },
     {
-      "id": "20",
-      "voice": "mx_liam",
-      "keywords": [],
-      "paragraphs": [
-        "Este canal automatizado puede mantener el recorrido global durante todo el dia mientras los servicios permanezcan operativos.",
-        "Las fuentes institucionales aportan los eventos y el sistema organiza, relaciona y presenta la informacion disponible.",
-        "La audiencia conserva siempre la posibilidad de abrir el reporte original y contrastar cada actualizacion."
-      ]
-    },
-    {
       "id": "21",
       "voice": "mx_valentina",
       "keywords": [],
@@ -227,16 +207,6 @@
       ]
     },
     {
-      "id": "22",
-      "voice": "mx_martin",
-      "keywords": ["nueva zelanda", "new zealand", "geonet"],
-      "paragraphs": [
-        "Catalogos como GeoNet mantienen un identificador publico estable para cada sismo, incluso cuando la informacion tecnica se actualiza.",
-        "Eso facilita seguir un mismo evento a traves de revisiones de magnitud, profundidad o ubicacion sin perder su referencia principal.",
-        "Cuando una fuente publica ese tipo de codigo, conviene conservarlo como llave de trazabilidad dentro del sistema."
-      ]
-    },
-    {
       "id": "23",
       "voice": "mx_sofia",
       "keywords": ["japon", "japan", "hokkaido", "tohoku", "kyushu", "ryukyu"],
@@ -244,16 +214,6 @@
         "En Japon, la JMA opera un sistema oficial de alerta temprana sismica que emite avisos pocos segundos despues de iniciado un terremoto.",
         "Ese servicio busca ganar tiempo antes de la llegada del movimiento fuerte, pero no equivale a una prediccion previa del evento.",
         "Por eso la alerta temprana debe entenderse como una respuesta rapida basada en datos ya observados, no como adivinacion del futuro."
-      ]
-    },
-    {
-      "id": "24",
-      "voice": "mx_ninoska",
-      "keywords": ["tsunami", "mar", "costa", "oceano", "offshore"],
-      "paragraphs": [
-        "La plataforma IOC Sea Level Station Monitoring Facility muestra el estado operativo de redes globales y regionales de nivel del mar en tiempo real.",
-        "Segun ese servicio, muchas estaciones aportan valores cada minuto y el tablero se actualiza aproximadamente cada cinco minutos.",
-        "Ese seguimiento es util para confirmar cambios observados en el mar, pero siempre debe leerse junto con los avisos del centro oficial correspondiente."
       ]
     },
     {
@@ -307,16 +267,6 @@
       ]
     },
     {
-      "id": "30",
-      "voice": "mx_ninoska",
-      "keywords": ["tsunami", "pacifico", "caribe", "mediterraneo", "indico", "costa"],
-      "paragraphs": [
-        "La red de monitoreo del nivel del mar de IOC enlaza programas regionales del Indico, el Pacifico, el Caribe y el noreste del Atlantico con el Mediterraneo.",
-        "Esa arquitectura permite revisar estaciones vinculadas a los sistemas regionales de alerta por tsunami sin limitarse a una sola cuenca oceanica.",
-        "Cuando un evento ocurre cerca de la costa, esta capa aporta contexto adicional, pero la decision oficial sigue dependiendo del centro competente."
-      ]
-    },
-    {
       "id": "31",
       "voice": "mx_carolina",
       "keywords": ["nueva zelanda", "new zealand", "kermadec", "geonet", "wellington", "christchurch"],
@@ -327,26 +277,6 @@
       ]
     },
     {
-      "id": "32",
-      "voice": "mx_liam",
-      "keywords": [],
-      "paragraphs": [
-        "Los archivos tecnicos de un evento pueden incluir incertidumbres, picks de amplitud, algoritmo de localizacion y el modelo de Tierra usado por la fuente.",
-        "Ese nivel de detalle no siempre aparece en la tarjeta resumida, porque la visualizacion prioriza rapidez y lectura continua.",
-        "Cuando se necesita una revision fina del dato, el documento tecnico sigue siendo la referencia principal."
-      ]
-    },
-    {
-      "id": "33",
-      "voice": "mx_valentina",
-      "keywords": [],
-      "paragraphs": [
-        "Una red local densa puede detectar y ubicar sismos pequenos que no siempre entran en un tablero global con umbral de magnitud mas alto.",
-        "Eso no significa que falten datos; a menudo responde a diferencias de cobertura instrumental, criterio editorial y escala geografica del catalogo.",
-        "Por esa razon, la ausencia de microsismos en la vista mundial no debe leerse como ausencia total de actividad local."
-      ]
-    },
-    {
       "id": "34",
       "voice": "mx_martin",
       "keywords": [],
@@ -354,16 +284,6 @@
         "El USGS recuerda que un terremoto tiene una sola magnitud, pero el sacudimiento que produce puede tomar muchos valores de un lugar a otro.",
         "La distancia al epicentro, el tipo de material superficial y las condiciones locales modifican la forma en que se siente el mismo evento.",
         "Por eso una lectura tecnica de magnitud nunca sustituye por completo el analisis espacial de intensidades."
-      ]
-    },
-    {
-      "id": "35",
-      "voice": "mx_sofia",
-      "keywords": [],
-      "paragraphs": [
-        "Los catalogos historicos mezclan epocas de instrumentacion moderna con periodos mas antiguos reconstruidos desde registros orales y escritos.",
-        "GeoNet, por ejemplo, explica que sus eventos anteriores a la era instrumental se estiman a partir de ese tipo de evidencia documental.",
-        "Al comparar siglos distintos, siempre hay que considerar que la completitud del catalogo cambia junto con la tecnologia disponible."
       ]
     },
     {
@@ -387,16 +307,6 @@
       ]
     },
     {
-      "id": "38",
-      "voice": "mx_liam",
-      "keywords": ["tsunami", "mar", "costa", "nivel del mar", "oceano"],
-      "paragraphs": [
-        "La plataforma de IOC para nivel del mar no solo muestra datos en tiempo real; tambien enlaza series de promedio de nivel medio del mar cuando estan disponibles.",
-        "Esas series de mas largo plazo se apoyan en centros como PSMSL, BODC y UHSLC, especializados en el tratamiento de observaciones oceanograficas.",
-        "En el contexto sismico, sirven como referencia complementaria, pero no reemplazan los avisos oficiales de amenaza costera."
-      ]
-    },
-    {
       "id": "39",
       "voice": "mx_valentina",
       "keywords": ["tsunami", "warning", "watch", "advisory", "costa", "mar", "oceano"],
@@ -404,16 +314,6 @@
         "Los centros de alerta de tsunami distinguen niveles como warning, advisory, watch e information statement, cada uno con un significado operativo diferente.",
         "Esos niveles separan escenarios de inundacion peligrosa, corrientes fuertes, evaluacion en curso o ausencia de amenaza significativa.",
         "Por eso la palabra exacta del boletin importa tanto como la ubicacion del epicentro cuando se interpreta riesgo costero."
-      ]
-    },
-    {
-      "id": "40",
-      "voice": "mx_martin",
-      "keywords": [],
-      "paragraphs": [
-        "Las vistas rapidas de algunos servicios muestran la solucion preferida del evento, mientras los archivos completos conservan historia de origenes, amplitudes y revisiones.",
-        "GeoNet lo explica de forma clara al separar su busqueda operativa de los recursos detallados en formatos tecnicos como QuakeML.",
-        "Esa diferencia ayuda a entender por que una tarjeta publica puede ser sobria, aunque detras exista bastante mas informacion especializada."
       ]
     }
   ]

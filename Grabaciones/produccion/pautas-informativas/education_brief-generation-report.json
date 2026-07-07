@@ -1,0 +1,105 @@
+{
+  "generatedAtUtc": "2026-07-05T20:50:16.417Z",
+  "classId": "education_brief",
+  "generated": 6,
+  "approvalStatus": "approved",
+  "approvedAtUtc": "2026-07-05T20:50:16.417Z",
+  "targetDurationMs": {
+    "min": 7000,
+    "max": 10000
+  },
+  "status": [
+    {
+      "status": "ok",
+      "count": 6
+    }
+  ],
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "durationMs": 9460,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\education_brief\\mx_carolina\\education_brief_mx_carolina_01.wav",
+      "text": "Los sismos superficiales, de menos de setenta kil\u00f3metros, se sienten m\u00e1s fuerte; los profundos pueden percibirse en \u00e1reas mucho m\u00e1s amplias.",
+      "source": "USGS - Earthquake depth",
+      "bytes": 454124,
+      "tailSilenceSec": 0.569,
+      "elapsedMs": 32766
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "durationMs": 9820,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\education_brief\\mx_liam\\education_brief_mx_liam_02.wav",
+      "text": "Tras un sismo importante llegan las r\u00e9plicas: temblores menores en la misma zona. Son normales y disminuyen con los d\u00edas, aunque pueden durar semanas.",
+      "source": "USGS - Aftershocks",
+      "bytes": 471404,
+      "tailSilenceSec": 0.48,
+      "elapsedMs": 13799
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "durationMs": 10620,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\education_brief\\mx_valentina\\education_brief_mx_valentina_03.wav",
+      "text": "La alerta temprana no predice sismos: detecta las primeras ondas y avisa segundos antes de la sacudida fuerte. Esos segundos permiten ponerse a salvo.",
+      "source": "USGS ShakeAlert / JMA - Early warning",
+      "bytes": 509804,
+      "tailSilenceSec": 0.339,
+      "elapsedMs": 14768
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "durationMs": 10620,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\education_brief\\mx_martin\\education_brief_mx_martin_04.wav",
+      "text": "El hipocentro es el punto bajo tierra donde se rompe la falla; el epicentro es su proyecci\u00f3n en la superficie, el lugar que solemos ver en el mapa.",
+      "source": "USGS - Hypocenter and epicenter",
+      "bytes": 509804,
+      "tailSilenceSec": 0.518,
+      "elapsedMs": 15068
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "durationMs": 10340,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\education_brief\\mx_sofia\\education_brief_mx_sofia_05.wav",
+      "text": "Los sismos ocurren cuando las rocas se rompen a lo largo de una falla y liberan de golpe la energ\u00eda acumulada por el lento movimiento de las placas.",
+      "source": "USGS - Faults and elastic rebound",
+      "bytes": 496364,
+      "tailSilenceSec": 0.297,
+      "elapsedMs": 14897,
+      "spokenText": "Los sismos ocurren cuando las rocas se rompen a lo largo de una falla y liberan de golpe la energ\u00eda que estaba acumulada por el lento movimiento de las placas."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "durationMs": 10860,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\education_brief\\mx_ninoska\\education_brief_mx_ninoska_06.wav",
+      "text": "La capa externa de la Tierra est\u00e1 dividida en placas que se mueven pocos cent\u00edmetros al a\u00f1o. Sus bordes concentran la mayor\u00eda de los sismos del mundo.",
+      "source": "USGS - Plate tectonics",
+      "bytes": 521324,
+      "tailSilenceSec": 0.44,
+      "elapsedMs": 15195
+    }
+  ],
+  "updatedAtUtc": "2026-07-05T21:17:53.264Z",
+  "lastRegeneration": {
+    "classId": "education_brief",
+    "reason": "corregir pronunciacion cortada de energia en Sofia 05",
+    "policy": "salida directa de Chatterbox sin trimming ni limpieza de cola, usando spokenText",
+    "spokenText": "Los sismos ocurren cuando las rocas se rompen a lo largo de una falla y liberan de golpe la energ\u00eda que estaba acumulada por el lento movimiento de las placas.",
+    "chosen": {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "durationMs": 10340,
+      "tailSilenceSec": 0.297
+    }
+  }
+}

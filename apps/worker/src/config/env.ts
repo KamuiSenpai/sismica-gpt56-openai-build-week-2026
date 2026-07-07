@@ -16,6 +16,13 @@ const channelEnv = (fallback: string) =>
     .string()
     .regex(/^[a-z_][a-z0-9_]*$/i)
     .default(fallback);
+const booleanEnv = (fallback: boolean) =>
+  z.preprocess((value) => {
+    if (value === "" || value === undefined) return undefined;
+    if (typeof value === "string") return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+    return value;
+  }, z.boolean().default(fallback));
+const youtubeChatModeEnv = z.enum(["off", "dry-run", "live"]).default("off");
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
@@ -78,7 +85,20 @@ const envSchema = z.object({
   SEISMIC_ENGINE_API_URL: urlEnv("http://localhost:3000"),
   SEISMIC_ENGINE_INTERVAL_MS: numberEnv(120000),
   SEISMIC_ENGINE_MAX_STATIONS: numberEnv(8),
-  SEISMIC_ENGINE_MAX_EVENTS: numberEnv(6)
+  SEISMIC_ENGINE_MAX_EVENTS: numberEnv(6),
+  YOUTUBE_CHAT_ENABLED: booleanEnv(false),
+  YOUTUBE_CHAT_MODE: youtubeChatModeEnv,
+  YOUTUBE_CHAT_CLIENT_ID: z.string().min(1).optional(),
+  YOUTUBE_CHAT_CLIENT_SECRET: z.string().min(1).optional(),
+  YOUTUBE_CHAT_REFRESH_TOKEN: z.string().min(1).optional(),
+  YOUTUBE_CHAT_CHANNEL_ID: z.string().min(1).optional(),
+  YOUTUBE_CHAT_MIN_INTERVAL_MS: numberEnv(12000),
+  YOUTUBE_CHAT_MAX_EVENT_AGE_MINUTES: numberEnv(20),
+  YOUTUBE_CHAT_MAX_QUEUE_SIZE: numberEnv(200),
+  YOUTUBE_CHAT_STALE_QUEUE_MS: numberEnv(180000),
+  YOUTUBE_CHAT_PROMOTIONAL_ENABLED: booleanEnv(true),
+  YOUTUBE_CHAT_PROMOTIONAL_MIN_INTERVAL_MS: numberEnv(1200000),
+  YOUTUBE_CHAT_PUBLISH_INTERVAL_MS: numberEnv(3000)
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -135,5 +155,18 @@ export const env = {
   seismicEngineApiUrl: parsed.data.SEISMIC_ENGINE_API_URL,
   seismicEngineIntervalMs: parsed.data.SEISMIC_ENGINE_INTERVAL_MS,
   seismicEngineMaxStations: parsed.data.SEISMIC_ENGINE_MAX_STATIONS,
-  seismicEngineMaxEvents: parsed.data.SEISMIC_ENGINE_MAX_EVENTS
+  seismicEngineMaxEvents: parsed.data.SEISMIC_ENGINE_MAX_EVENTS,
+  youtubeChatEnabled: parsed.data.YOUTUBE_CHAT_ENABLED,
+  youtubeChatMode: parsed.data.YOUTUBE_CHAT_MODE,
+  youtubeChatClientId: parsed.data.YOUTUBE_CHAT_CLIENT_ID,
+  youtubeChatClientSecret: parsed.data.YOUTUBE_CHAT_CLIENT_SECRET,
+  youtubeChatRefreshToken: parsed.data.YOUTUBE_CHAT_REFRESH_TOKEN,
+  youtubeChatChannelId: parsed.data.YOUTUBE_CHAT_CHANNEL_ID,
+  youtubeChatMinIntervalMs: parsed.data.YOUTUBE_CHAT_MIN_INTERVAL_MS,
+  youtubeChatMaxEventAgeMinutes: parsed.data.YOUTUBE_CHAT_MAX_EVENT_AGE_MINUTES,
+  youtubeChatMaxQueueSize: parsed.data.YOUTUBE_CHAT_MAX_QUEUE_SIZE,
+  youtubeChatStaleQueueMs: parsed.data.YOUTUBE_CHAT_STALE_QUEUE_MS,
+  youtubeChatPromotionalEnabled: parsed.data.YOUTUBE_CHAT_PROMOTIONAL_ENABLED,
+  youtubeChatPromotionalMinIntervalMs: parsed.data.YOUTUBE_CHAT_PROMOTIONAL_MIN_INTERVAL_MS,
+  youtubeChatPublishIntervalMs: parsed.data.YOUTUBE_CHAT_PUBLISH_INTERVAL_MS
 };

@@ -66,12 +66,26 @@ import { useBroadcastDirector, type BroadcastSegment, type DirectorMode } from "
 import { fallbackSegmentCue, type EditorialCue } from "./lib/editorial";
 import { normalizeSpanishText } from "./lib/spanishText";
 
-const DIRECTOR_MODES: DirectorMode[] = ["off", "rules", "ai"];
+const DIRECTOR_MODES: DirectorMode[] = ["off", "rules", "ai", "v2"];
 const DIRECTOR_MODE_LABELS: Record<DirectorMode, string> = {
   off: "Recorrido",
   rules: "Director reglas",
-  ai: "Director IA"
+  ai: "Director IA V1",
+  v2: "Director IA V2"
 };
+const DIRECTOR_MODE_STORAGE_KEY = "sismica.directorMode";
+
+function loadDirectorMode(): DirectorMode {
+  try {
+    const stored = window.localStorage.getItem(DIRECTOR_MODE_STORAGE_KEY);
+    if (stored === "off" || stored === "rules" || stored === "ai" || stored === "v2") {
+      return stored;
+    }
+  } catch {
+    // El almacenamiento puede estar bloqueado en navegadores endurecidos.
+  }
+  return "v2";
+}
 const SEGMENT_LABELS: Record<BroadcastSegment["kind"], string> = {
   "en-vivo": "EN VIVO",
   recorrido: "RECORRIDO",
@@ -277,7 +291,7 @@ export default function App() {
     xtts: false,
     browser: isEngineAvailable("browser")
   }));
-  const [directorMode, setDirectorMode] = useState<DirectorMode>("ai");
+  const [directorMode, setDirectorMode] = useState<DirectorMode>(loadDirectorMode);
   const [overlaySegment, setOverlaySegment] = useState<BroadcastSegment | null>(null);
   const [overlayCard, setOverlayCard] = useState<OverlayCard | null>(null);
   const overlayTimersRef = useRef<{ settle: number | null; exit: number | null }>({
@@ -286,6 +300,7 @@ export default function App() {
   });
   const minMagnitude = DEFAULT_MIN_MAGNITUDE;
   const hours = DEFAULT_HOURS;
+  const followChatterboxTiming = voiceEnabled && voiceEngine === "chatterbox";
 
   const eventsQuery = useEventsQuery(minMagnitude, hours);
   const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data]);
@@ -378,6 +393,7 @@ export default function App() {
   useBroadcastDirector({
     mode: directorMode,
     voiceEnabled,
+    voiceEngine,
     events,
     pendingLiveQueueRef,
     onFocusEvent: setSelectedEventId,
@@ -447,7 +463,7 @@ export default function App() {
         promotedLiveAtRef.current === null
           ? Number.POSITIVE_INFINITY
           : Date.now() - promotedLiveAtRef.current;
-      if (sincePromote < MIN_LIVE_DISPLAY_MS) return;
+      if (!followChatterboxTiming && sincePromote < MIN_LIVE_DISPLAY_MS) return;
 
       const next = queue.shift();
       if (!next) return;
@@ -455,11 +471,11 @@ export default function App() {
         ? { eventId: next.eventId, intro: pickBreakingNarrationIntro(next) }
         : null;
       promotedLiveAtRef.current = Date.now();
-      liveHoldUntilRef.current = Date.now() + MIN_LIVE_DISPLAY_MS;
+      liveHoldUntilRef.current = followChatterboxTiming ? 0 : Date.now() + MIN_LIVE_DISPLAY_MS;
       setSelectedEventId(next.eventId);
     }, 400);
     return () => window.clearInterval(intervalId);
-  }, [voiceEnabled, directorMode]);
+  }, [voiceEnabled, directorMode, followChatterboxTiming]);
   const handleStationState = useCallback(
     (incoming: StationState) => {
       queryClient.setQueryData<SeismicStation[]>(["stations"], (current = []) =>
@@ -499,6 +515,18 @@ export default function App() {
     (enabled: boolean) => {
       if (!enabled) return;
       if (directorMode !== "off" && overlaySegment) {
+        if (focusEvent && (overlaySegment.kind === "en-vivo" || overlaySegment.kind === "recorrido")) {
+          speakSeismicNarration(focusEvent, true, {
+            force: true,
+            mode: overlaySegment.kind === "en-vivo" ? "breaking" : "seguimiento",
+            resolved: {
+              text: normalizeSpanishText(overlaySegment.text),
+              cue: overlaySegment.cue ?? { urgency: "media", rhythm: "fluido", tone: "sobrio" },
+              tectonicContext: null
+            }
+          });
+          return;
+        }
         speakText(normalizeSpanishText(overlaySegment.text), {
           cue: overlaySegment.cue,
           kind: overlaySegment.kind
@@ -683,8 +711,8 @@ export default function App() {
   }, [focusEventId, tourPaused, voiceEnabled, voiceEngine, directorMode]);
 
   useEffect(() => {
-    tourAdvanceAtRef.current = Date.now() + TOUR_DWELL_MS;
-  }, [focusEventId, tourPaused]);
+    tourAdvanceAtRef.current = followChatterboxTiming ? 0 : Date.now() + TOUR_DWELL_MS;
+  }, [focusEventId, tourPaused, followChatterboxTiming]);
 
   // Arranca el recorrido: selecciona el primer sismo en cuanto hay datos.
   useEffect(() => {
@@ -693,25 +721,27 @@ export default function App() {
     }
   }, [events, selectedEventId]);
 
-  // Auto-recorrido: conserva un minimo de 16 s por evento y, si la voz sigue generando o
-  // reproduciendo, espera su final. Al terminar avanza en el siguiente pulso corto.
+  // Auto-recorrido: con Chatterbox el foco avanza apenas termina la locucion; con el resto
+  // conserva un minimo de 16 s por evento y, si la voz sigue generando o reproduciendo, espera
+  // igualmente su final.
   useEffect(() => {
     if (tourPaused || directorMode !== "off") return;
     const intervalId = window.setInterval(() => {
       // Cede el turno mientras se presentan sismos EN VIVO (cola o hold vigente).
-      if (pendingLiveQueueRef.current.length > 0 || Date.now() < liveHoldUntilRef.current) return;
-      if (Date.now() < tourAdvanceAtRef.current) return;
+      if (pendingLiveQueueRef.current.length > 0) return;
+      if (!followChatterboxTiming && Date.now() < liveHoldUntilRef.current) return;
+      if (!followChatterboxTiming && Date.now() < tourAdvanceAtRef.current) return;
       if (voiceEnabled && isSeismicNarrationActive()) return;
       const tour = eventsRef.current.slice(0, 15);
       if (tour.length === 0) return;
-      tourAdvanceAtRef.current = Date.now() + TOUR_DWELL_MS;
+      tourAdvanceAtRef.current = followChatterboxTiming ? 0 : Date.now() + TOUR_DWELL_MS;
       setSelectedEventId((current) => {
         const index = tour.findIndex((event) => event.eventId === current);
         return tour[(index + 1) % tour.length].eventId;
       });
     }, TOUR_ACTIVITY_POLL_MS);
     return () => window.clearInterval(intervalId);
-  }, [tourPaused, voiceEnabled, directorMode]);
+  }, [tourPaused, voiceEnabled, directorMode, followChatterboxTiming]);
 
   return (
     <main className={activeTsunami ? "monitor-shell has-tsunami" : "monitor-shell"}>
@@ -794,7 +824,15 @@ export default function App() {
             <select
               className="voice-engine-select"
               value={directorMode}
-              onChange={(event) => setDirectorMode(event.target.value as DirectorMode)}
+              onChange={(event) => {
+                const nextMode = event.target.value as DirectorMode;
+                setDirectorMode(nextMode);
+                try {
+                  window.localStorage.setItem(DIRECTOR_MODE_STORAGE_KEY, nextMode);
+                } catch {
+                  // El selector sigue funcionando aunque no pueda persistirse.
+                }
+              }}
             >
               {DIRECTOR_MODES.map((mode) => (
                 <option key={mode} value={mode}>

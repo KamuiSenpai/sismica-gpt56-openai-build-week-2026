@@ -11,11 +11,17 @@ param(
   [string[]]$Voices,
   [int]$TimeoutSec = 300,
   [switch]$Force,
-  [switch]$KeepService
+  [switch]$KeepService,
+  [double]$TrimThresholdDb = -34,
+  [double]$TrimMinSilenceSec = 0.15,
+  [double]$TrimKeepTailSec = 0.08,
+  [double]$OutputTailSilenceSec = 1.0,
+  [int]$MaxSynthesisAttempts = 2
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot "tts-audio-utils.ps1")
 
 function Test-Health {
   param([string]$Url)
@@ -93,7 +99,7 @@ function Save-Manifest {
 
 $catalog = Get-Content -Raw $CatalogPath | ConvertFrom-Json
 if (-not $Voices -or $Voices.Count -eq 0) {
-  $Voices = @($catalog.phase1Voices)
+  $Voices = @("mx_carolina", "mx_liam")
 }
 
 $groups = @($catalog.groups)
@@ -169,12 +175,64 @@ foreach ($voice in $Voices) {
       } | ConvertTo-Json -Compress
 
       $startedAt = Get-Date
-      Invoke-WebRequest -Uri "$ServiceUrl/synthesize" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body $body `
-        -TimeoutSec $TimeoutSec `
-        -OutFile $targetPath
+      $trimmedTailSec = $null
+      $audit = $null
+      $cleanDurationSec = $null
+      $expectedMinDurationSec = Get-MinExpectedGeneratedDurationSeconds -Text $text -TailSec $OutputTailSilenceSec
+      $attempts = 0
+
+      while ($attempts -lt $MaxSynthesisAttempts) {
+        $attempts++
+        $rawPath = New-TempWavPath
+        $trimmedPath = New-TempWavPath
+        try {
+          Invoke-WebRequest -Uri "$ServiceUrl/synthesize" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $body `
+            -TimeoutSec $TimeoutSec `
+            -OutFile $rawPath
+          $rawDurationSec = Get-AudioDurationSeconds -Path $rawPath
+          Invoke-TrimTrailingTail `
+            -InputPath $rawPath `
+            -OutputPath $trimmedPath `
+            -ThresholdDb $TrimThresholdDb `
+            -MinSilenceSec $TrimMinSilenceSec `
+            -KeepTailSec $TrimKeepTailSec
+          $trimmedDurationSec = Get-AudioDurationSeconds -Path $trimmedPath
+          Invoke-AppendSilenceTail `
+            -InputPath $trimmedPath `
+            -OutputPath $targetPath `
+            -TailSec $OutputTailSilenceSec
+          $cleanDurationSec = Get-AudioDurationSeconds -Path $targetPath
+          $trimmedTailSec = [math]::Max(0, [math]::Round($rawDurationSec - $trimmedDurationSec, 2))
+          $audit = Get-AudioTrimAudit `
+            -Path $targetPath `
+            -ThresholdDb $TrimThresholdDb `
+            -MinSilenceSec $TrimMinSilenceSec `
+            -KeepTailSec $TrimKeepTailSec
+
+          if ($cleanDurationSec -ge $expectedMinDurationSec) {
+            break
+          }
+
+          if ($attempts -lt $MaxSynthesisAttempts) {
+            Remove-Item -LiteralPath $targetPath -Force -ErrorAction SilentlyContinue
+            Write-Warning ("Reintentando {0}: duracion {1}s menor al minimo dinamico {2}s" -f $fileName, [math]::Round($cleanDurationSec, 2), $expectedMinDurationSec)
+            continue
+          }
+
+          throw ("Clip sospechosamente corto en {0}: {1}s < minimo dinamico {2}s" -f $fileName, [math]::Round($cleanDurationSec, 2), $expectedMinDurationSec)
+        } finally {
+          if (Test-Path -LiteralPath $rawPath) {
+            Remove-Item -LiteralPath $rawPath -Force
+          }
+          if (Test-Path -LiteralPath $trimmedPath) {
+            Remove-Item -LiteralPath $trimmedPath -Force
+          }
+        }
+      }
+
       $elapsedMs = [math]::Round(((Get-Date) - $startedAt).TotalMilliseconds, 1)
       $file = Get-Item $targetPath
 
@@ -186,6 +244,12 @@ foreach ($voice in $Voices) {
           outputPath = $targetPath
           bytes = $file.Length
           elapsedMs = $elapsedMs
+          durationSec = if ($cleanDurationSec -ne $null) { [math]::Round($cleanDurationSec, 2) } else { $null }
+          expectedMinDurationSec = $expectedMinDurationSec
+          attempts = $attempts
+          outputTailSilenceSec = $OutputTailSilenceSec
+          trimmedTailSec = $trimmedTailSec
+          trailingAuditSec = if ($audit) { $audit.trailingSec } else { $null }
           skipped = $false
           generatedAtUtc = [DateTime]::UtcNow.ToString("o")
         })

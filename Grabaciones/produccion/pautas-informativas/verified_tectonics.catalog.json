@@ -1,0 +1,56 @@
+{
+  "version": "verified_tectonics-2026-07-05",
+  "classId": "verified_tectonics",
+  "playbackRole": "guide",
+  "approvalStatus": "approved",
+  "targetDurationMs": {
+    "min": 10000,
+    "max": 12000
+  },
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "source": "USGS - Plate boundaries and seismicity",
+      "keywords": ["tectonica", "placas", "borde", "energia"],
+      "text": "Muchos sismos se concentran en bordes de placas donde la corteza libera energía acumulada."
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "source": "USGS - Subduction zones",
+      "keywords": ["tectonica", "subduccion", "placas"],
+      "text": "En zonas de subducción, una placa desciende bajo otra y genera actividad sísmica frecuente."
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "source": "USGS - Ring of Fire",
+      "keywords": ["tectonica", "pacifico", "cinturon-de-fuego"],
+      "text": "El cinturón de fuego del Pacífico reúne algunas de las regiones sísmicas más activas del planeta."
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "source": "USGS - Faults and elastic rebound",
+      "keywords": ["tectonica", "falla", "tension"],
+      "text": "Las fallas activas liberan tensión cuando las rocas ya no soportan más esfuerzo acumulado."
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "source": "USGS - Earthquake depth and plate interaction",
+      "keywords": ["tectonica", "placas", "profundidad"],
+      "text": "La interacción entre placas puede producir sismos superficiales, intermedios o profundos."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "source": "USGS - Tectonic setting and regional seismicity",
+      "keywords": ["tectonica", "sismicidad-regional", "historia-geologica"],
+      "text": "La sismicidad regional depende del tipo de borde tectónico y de su historia geológica."
+    }
+  ],
+  "approvedAtUtc": "2026-07-05T21:10:00.000Z",
+  "approvedVoices": ["mx_carolina", "mx_liam", "mx_valentina", "mx_martin", "mx_sofia", "mx_ninoska"]
+}

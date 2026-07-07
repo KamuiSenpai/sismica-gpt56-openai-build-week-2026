@@ -1,0 +1,101 @@
+{
+  "version": "promotional_channel-2026-07-05",
+  "classId": "promotional_channel",
+  "playbackRole": "guide",
+  "approvalStatus": "approved",
+  "targetDurationMs": {
+    "min": 6000,
+    "max": 9000
+  },
+  "allowedVoices": ["mx_ninoska", "mx_valentina"],
+  "items": [
+    {
+      "variant": "01",
+      "voice": "mx_ninoska",
+      "text": "Si este monitoreo te resulta útil, suscríbete a Sísmica veinticuatro y acompaña esta señal en vivo."
+    },
+    {
+      "variant": "02",
+      "voice": "mx_ninoska",
+      "text": "Activa las notificaciones para volver a esta señal en vivo, cuando quieras seguir la actividad sísmica con calma."
+    },
+    {
+      "variant": "03",
+      "voice": "mx_ninoska",
+      "text": "Comparte esta transmisión con quienes buscan datos sísmicos claros, en una señal continua y serena."
+    },
+    {
+      "variant": "04",
+      "voice": "mx_ninoska",
+      "text": "Gracias por acompañar esta señal de Sísmica veinticuatro, con monitoreo visual durante todo el día."
+    },
+    {
+      "variant": "05",
+      "voice": "mx_ninoska",
+      "text": "Guarda este directo para consultar con calma la actividad sísmica, desde esta señal en vivo, en cualquier momento del día."
+    },
+    {
+      "variant": "06",
+      "voice": "mx_ninoska",
+      "text": "Sísmica veinticuatro sigue en vivo, acompañando el monitoreo global con una voz clara y cercana."
+    },
+    {
+      "variant": "07",
+      "voice": "mx_ninoska",
+      "text": "Si esta transmisión te resulta útil, deja tu like y ayuda a mantener activa esta señal en vivo.",
+      "spokenText": "Si esta transmisión te resulta útil, deja tu laik y ayuda a mantener activa esta señal en vivo."
+    },
+    {
+      "variant": "08",
+      "voice": "mx_ninoska",
+      "text": "Tu like ayuda a que más personas encuentren Sísmica veinticuatro y sigan esta transmisión en vivo.",
+      "spokenText": "Tu laik ayuda a que más personas encuentren Sísmica veinticuatro y sigan esta transmisión en vivo."
+    },
+    {
+      "variant": "01",
+      "voice": "mx_valentina",
+      "text": "Si este monitoreo te resulta útil, suscríbete a Sísmica veinticuatro y acompaña esta señal en vivo."
+    },
+    {
+      "variant": "02",
+      "voice": "mx_valentina",
+      "text": "Activa las notificaciones para volver a esta señal en vivo, cuando quieras seguir la actividad sísmica con calma."
+    },
+    {
+      "variant": "03",
+      "voice": "mx_valentina",
+      "text": "Comparte esta transmisión con quienes buscan datos sísmicos claros, en una señal continua y serena."
+    },
+    {
+      "variant": "04",
+      "voice": "mx_valentina",
+      "text": "Gracias por acompañar esta señal de Sísmica veinticuatro, con monitoreo visual durante todo el día.",
+      "spokenText": "Gracias por acompañar esta señal de Sísmica veinticuatro, con monitoreo visual en vivo durante todo el día."
+    },
+    {
+      "variant": "05",
+      "voice": "mx_valentina",
+      "text": "Guarda este directo para consultar con calma la actividad sísmica, desde esta señal en vivo, en cualquier momento del día."
+    },
+    {
+      "variant": "06",
+      "voice": "mx_valentina",
+      "text": "Sísmica veinticuatro sigue en vivo, acompañando el monitoreo global con una voz clara y cercana.",
+      "spokenText": "Sísmica veinticuatro sigue en vivo, acompañando el monitoreo global con una voz clara y cercana, durante esta transmisión."
+    },
+    {
+      "variant": "07",
+      "voice": "mx_valentina",
+      "text": "Si esta transmisión te resulta útil, deja tu like y ayuda a mantener activa esta señal en vivo.",
+      "spokenText": "Si esta transmisión te resulta útil, deja tu laik y ayuda a mantener activa esta señal en vivo."
+    },
+    {
+      "variant": "08",
+      "voice": "mx_valentina",
+      "text": "Tu like ayuda a que más personas encuentren Sísmica veinticuatro y sigan esta transmisión en vivo, con calma y claridad.",
+      "spokenText": "Tu laik ayuda a que más personas encuentren Sísmica veinticuatro y sigan esta transmisión en vivo, con calma y claridad."
+    }
+  ],
+  "approvedAtUtc": "2026-07-05T19:00:47.820Z",
+  "approvedVoices": ["mx_ninoska", "mx_valentina"]
+}

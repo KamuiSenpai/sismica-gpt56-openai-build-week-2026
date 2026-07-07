@@ -2,10 +2,23 @@
 // El API enruta a Piper (binario local) o hace proxy a XTTS-v2 (servicio Python).
 
 export type NeuralEngine = "piper" | "xtts" | "chatterbox";
+export type NeuralBlobReadyMetrics = {
+  engine: NeuralEngine;
+  voice?: string;
+  durationMs: number;
+  wordCount: number;
+  cacheState: "ready" | "pending" | "missing";
+};
+export type NeuralPlaybackState = {
+  currentTimeMs: number;
+  durationMs: number | null;
+  playbackRate: number;
+};
 export type NeuralSpeechOptions = {
   voice?: string;
   playbackRate?: number;
   beforePlayback?: () => Promise<void> | void;
+  onBlobReady?: (metrics: NeuralBlobReadyMetrics) => void;
 };
 export type NeuralSpeechRequest = { text: string; voice?: string };
 
@@ -25,7 +38,8 @@ export type TtsHealth = {
 const API_BASE_URL =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL ??
   "http://localhost:3000";
-const SYNTH_TIMEOUT_MS = 120_000;
+const SYNTH_TIMEOUT_MS = 240_000;
+const BUSY_RETRY_MS = 600;
 const ENGINE_SWITCH_TIMEOUT_MS = 300_000;
 const PREFETCH_CACHE_LIMIT = 8;
 const ABORTED_PENDING_BLOB = Symbol("aborted-pending-blob");
@@ -41,6 +55,13 @@ const inFlightBlobRequests = new Map<string, PendingBlobRequest>();
 
 function cacheKey(engine: NeuralEngine, text: string, voice?: string): string {
   return `${engine}|${voice ?? "default"}|${text}`;
+}
+
+function neuralWordCount(text: string): number {
+  return text
+    .trim()
+    .split(/\s+/u)
+    .filter((term) => term.length > 0).length;
 }
 
 export function getNeuralBlobState(
@@ -69,16 +90,32 @@ async function requestNeuralBlob(
   engine: NeuralEngine,
   signal: AbortSignal
 ): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}/api/tts?engine=${engine}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text: request.text, voice: request.voice }),
-    signal
-  });
-  if (!response.ok) {
-    throw new Error(`TTS ${engine} respondio ${response.status}`);
+  while (true) {
+    const response = await fetch(`${API_BASE_URL}/api/tts?engine=${engine}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: request.text, voice: request.voice }),
+      signal
+    });
+    if (response.status !== 429 || engine !== "chatterbox") {
+      if (!response.ok) {
+        throw new Error(`TTS ${engine} respondio ${response.status}`);
+      }
+      return response.blob();
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () => {
+        window.clearTimeout(timer);
+        reject(signal.reason);
+      };
+      const timer = window.setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, BUSY_RETRY_MS);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
   }
-  return response.blob();
 }
 
 function startSharedBlobRequest(request: NeuralSpeechRequest, engine: NeuralEngine): PendingBlobRequest {
@@ -205,6 +242,19 @@ export function cancelNeuralNarration(): void {
 
 export function isNeuralNarrationActive(): boolean {
   return currentAudio !== null && !currentAudio.paused && !currentAudio.ended;
+}
+
+export function getNeuralPlaybackState(): NeuralPlaybackState | null {
+  if (!currentAudio || currentAudio.paused || currentAudio.ended) return null;
+  const durationMs =
+    Number.isFinite(currentAudio.duration) && currentAudio.duration > 0
+      ? currentAudio.duration * 1_000
+      : null;
+  return {
+    currentTimeMs: currentAudio.currentTime * 1_000,
+    durationMs,
+    playbackRate: currentAudio.playbackRate
+  };
 }
 
 export async function fetchTtsHealth(signal?: AbortSignal): Promise<TtsHealth | null> {
@@ -349,10 +399,20 @@ export async function speakNeural(
   const controller = new AbortController();
   activeController = controller;
   activeRequestKey = key;
+  const blobStartedAt = performance.now();
+  const initialBlobState = getNeuralBlobState(text, engine, { voice: options.voice });
+  const wordCount = neuralWordCount(text);
 
   const playback = (async () => {
     const blob = await obtainBlob(request, engine, controller, seq);
     if (!blob) return;
+    options.onBlobReady?.({
+      engine,
+      voice: options.voice,
+      durationMs: performance.now() - blobStartedAt,
+      wordCount,
+      cacheState: initialBlobState
+    });
     await options.beforePlayback?.();
     if (seq !== requestSeq || controller.signal.aborted) return;
     await playBlob(blob, controller, seq, options.playbackRate ?? 1);

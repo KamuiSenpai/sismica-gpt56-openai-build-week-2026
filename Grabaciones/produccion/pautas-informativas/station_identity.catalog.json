@@ -1,0 +1,44 @@
+{
+  "version": "station_identity-2026-07-05",
+  "classId": "station_identity",
+  "playbackRole": "guide",
+  "approvalStatus": "approved",
+  "approvedAtUtc": "2026-07-05T19:04:23.952Z",
+  "approvedVoices": ["mx_carolina", "mx_liam", "mx_valentina", "mx_martin", "mx_sofia", "mx_ninoska"],
+  "targetDurationMs": {
+    "min": 5000,
+    "max": 8000
+  },
+  "items": [
+    {
+      "variant": "01",
+      "voice": "mx_carolina",
+      "text": "Sísmica veinticuatro acompaña el monitoreo sísmico en vivo, con información clara, serena y continua."
+    },
+    {
+      "variant": "02",
+      "voice": "mx_liam",
+      "text": "La Tierra se mantiene en observacion permanente, y seguimos atentos a su actividad durante todo el dia."
+    },
+    {
+      "variant": "03",
+      "voice": "mx_valentina",
+      "text": "Este es Sismica veinticuatro, seguimiento sismico visual en vivo durante el dia."
+    },
+    {
+      "variant": "04",
+      "voice": "mx_martin",
+      "text": "Observamos el planeta con datos sismicos actualizados y lectura responsable."
+    },
+    {
+      "variant": "05",
+      "voice": "mx_sofia",
+      "text": "Sismica veinticuatro mantiene el foco en la actividad sismica global, minuto a minuto."
+    },
+    {
+      "variant": "06",
+      "voice": "mx_ninoska",
+      "text": "Seguimos en vivo, conectando datos sismicos con una mirada clara del planeta."
+    }
+  ]
+}

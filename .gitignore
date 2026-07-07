@@ -20,6 +20,20 @@ models/
 
 # Entornos Python locales
 .venv/
+.venv-audit/
 venv/
 __pycache__/
 *.pyc
+
+# Auditorias y reparaciones temporales de audio
+Grabaciones/_repair-backups/
+Grabaciones/audit-*.json
+
+# Salidas operativas locales
+output/monitor*.json
+output/monitor*.pid
+output/pre-monitor-telemetry.json
+output/obs-config-backup-*/
+output/obs-sentinel-backup-*/
+output/obs-sismica-preview.png
+output/playwright/

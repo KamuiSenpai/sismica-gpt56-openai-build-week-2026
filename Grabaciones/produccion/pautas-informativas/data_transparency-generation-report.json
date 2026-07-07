@@ -1,0 +1,79 @@
+{
+  "generatedAtUtc": "2026-07-05T19:13:32.080Z",
+  "classId": "data_transparency",
+  "generated": 6,
+  "approvalStatus": "approved",
+  "approvedAtUtc": "2026-07-05T19:13:31.883Z",
+  "status": [
+    {
+      "status": "ok",
+      "count": 6
+    }
+  ],
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "durationMs": 5100,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_transparency\\mx_carolina\\data_transparency_mx_carolina_01.wav",
+      "text": "La información sísmica inicial puede ajustarse cuando las agencias revisan el evento."
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "durationMs": 5198,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_transparency\\mx_liam\\data_transparency_mx_liam_02.wav",
+      "text": "Magnitud, profundidad y ubicación pueden cambiar durante el procesamiento de nuevos datos."
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "durationMs": 5646,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_transparency\\mx_valentina\\data_transparency_mx_valentina_03.wav",
+      "text": "Los reportes iniciales son referenciales y pueden actualizarse con nueva señal sísmica."
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "durationMs": 6440,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_transparency\\mx_martin\\data_transparency_mx_martin_04.wav",
+      "text": "Sísmica veinticuatro muestra datos en seguimiento, sujetos a revisión técnica."
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "durationMs": 5785,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_transparency\\mx_sofia\\data_transparency_mx_sofia_05.wav",
+      "text": "Si un evento cambia, actualizaremos la lectura visual con la información más reciente.",
+      "bytes": 277740,
+      "regeneratedAtUtc": "2026-07-05T19:56:13.237Z",
+      "tailSilenceSec": 0.79,
+      "modelWarnings": 1
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "durationMs": 5559,
+      "status": "ok",
+      "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_transparency\\mx_ninoska\\data_transparency_mx_ninoska_06.wav",
+      "text": "Los datos sísmicos se refinan con el tiempo, conforme avanza la revisión oficial."
+    }
+  ],
+  "updatedAtUtc": "2026-07-05T19:56:13.238Z",
+  "lastRegeneration": {
+    "classId": "data_transparency",
+    "voice": "mx_sofia",
+    "variant": "05",
+    "reason": "ruido al final del audio",
+    "outputPath": "E:\\Proyecto\\Grabaciones\\produccion\\pautas-informativas\\data_transparency\\mx_sofia\\data_transparency_mx_sofia_05.wav",
+    "durationMs": 5785,
+    "tailSilenceSec": 0.79,
+    "selectedAttempt": 4,
+    "modelWarnings": 1
+  }
+}

@@ -80,6 +80,7 @@ export class TtsBusyError extends Error {
 
 const PIPER_TIMEOUT_MS = 20_000;
 const XTTS_TIMEOUT_MS = 120_000;
+const CHATTERBOX_TIMEOUT_MS = 240_000;
 const XTTS_HEALTH_TIMEOUT_MS = 1_500;
 const XTTS_HEALTH_TTL_MS = 10_000;
 
@@ -121,6 +122,26 @@ function effectiveVoice(engine: TtsEngine, requested?: string): string {
 
 function cacheKey(engine: TtsEngine, voice: string, text: string): string {
   return createHash("sha256").update(`${engine}|${voice}|${text}`).digest("hex");
+}
+
+export function normalizeTextForTtsEngine(engine: TtsEngine, text: string): string {
+  const sourceText =
+    engine === "chatterbox" ? text : text.replace(/(\d)\.(\d)/g, "$1 punto $2").replace(/\./g, ",");
+
+  const compactText = sourceText
+    .replace(/\s*[\r\n]+\s*/gu, " ")
+    .replace(/\s+([,.;:!?])/gu, "$1")
+    .replace(/([,;:!?])(?=\S)/gu, "$1 ")
+    .replace(/(?<!\d)\.(?=\S)/gu, ". ")
+    .replace(/(?<=\d)\.(?!\d)(?=\S)/gu, ". ")
+    .replace(/\s{2,}/gu, " ")
+    .trim();
+
+  if (engine === "chatterbox") {
+    return /[.!?]$/u.test(compactText) ? compactText : `${compactText}.`;
+  }
+
+  return compactText;
 }
 
 async function ensureCacheDir(dir: string): Promise<void> {
@@ -234,7 +255,7 @@ async function synthesizeChatterbox(text: string, voice?: string): Promise<Buffe
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text, speaker: voice }),
-      signal: AbortSignal.timeout(XTTS_TIMEOUT_MS)
+      signal: AbortSignal.timeout(CHATTERBOX_TIMEOUT_MS)
     });
   } catch (error) {
     throw new TtsUnavailableError(
@@ -331,8 +352,8 @@ export async function synthesize(engine: TtsEngine, request: TtsRequest): Promis
 
   const voice = effectiveVoice(engine, request.voice);
 
-  // Normalizar números decimales para que el locutor no los lea como años (ej: 2.6 -> 2 punto 6)
-  const spokenText = request.text.replace(/(\d)\.(\d)/g, "$1 punto $2");
+  // Chatterbox conserva puntuacion real; Piper/XTTS siguen usando comas como pausas seguras.
+  const spokenText = normalizeTextForTtsEngine(engine, request.text);
 
   const key = cacheKey(engine, voice, spokenText);
 

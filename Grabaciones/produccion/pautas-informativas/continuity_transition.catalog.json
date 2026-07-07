@@ -1,0 +1,122 @@
+{
+  "version": "continuity_transition-2026-07-05",
+  "classId": "continuity_transition",
+  "playbackRole": "transition",
+  "approvalStatus": "approved",
+  "targetDurationMs": {
+    "min": 3000,
+    "max": 5000
+  },
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "keywords": ["transition", "continuidad", "planeta"],
+      "text": "Seguimos con el recorrido por el planeta."
+    },
+    {
+      "voice": "mx_carolina",
+      "variant": "02",
+      "keywords": ["transition", "continuidad", "planeta"],
+      "text": "Seguimos observando la actividad del planeta."
+    },
+    {
+      "voice": "mx_carolina",
+      "variant": "03",
+      "keywords": ["transition", "continuidad", "tierra"],
+      "text": "Retomamos la mirada sobre la Tierra."
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "04",
+      "keywords": ["transition", "continuidad", "monitoreo"],
+      "text": "Continuamos monitoreando la actividad sísmica."
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "05",
+      "keywords": ["transition", "continuidad", "tiempo-real"],
+      "text": "El monitoreo sísmico continúa en tiempo real."
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "06",
+      "keywords": ["transition", "continuidad", "planeta"],
+      "text": "Seguimos atentos al movimiento del planeta."
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "07",
+      "keywords": ["transition", "continuidad", "mapa"],
+      "text": "Volvemos al mapa en tiempo real."
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "08",
+      "keywords": ["transition", "continuidad", "seguimiento-global"],
+      "text": "Regresamos al seguimiento global en vivo."
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "09",
+      "keywords": ["transition", "continuidad", "mapa"],
+      "text": "Retomamos el mapa para seguir la señal."
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "10",
+      "keywords": ["transition", "continuidad", "vigilancia"],
+      "text": "La vigilancia sísmica sigue activa."
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "11",
+      "keywords": ["transition", "continuidad", "observacion"],
+      "text": "La observación sísmica permanece en curso."
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "12",
+      "keywords": ["transition", "continuidad", "seguimiento"],
+      "text": "El seguimiento sísmico continúa sin pausa."
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "13",
+      "keywords": ["transition", "continuidad", "monitoreo-global"],
+      "text": "Retomamos el monitoreo global."
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "14",
+      "keywords": ["transition", "continuidad", "actividad-global"],
+      "text": "Retornamos al mapa para seguir la actividad global."
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "15",
+      "keywords": ["transition", "continuidad", "planeta"],
+      "text": "Volvemos al seguimiento del planeta."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "16",
+      "keywords": ["transition", "continuidad", "tierra"],
+      "text": "Seguimos atentos a la Tierra."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "17",
+      "keywords": ["transition", "continuidad", "pulso"],
+      "text": "Seguimos acompañando el pulso de la Tierra."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "18",
+      "keywords": ["transition", "continuidad", "ritmo"],
+      "text": "Continuamos atentos al ritmo del planeta."
+    }
+  ],
+  "approvedAtUtc": "2026-07-05T21:30:00.000Z",
+  "approvedVoices": ["mx_carolina", "mx_liam", "mx_valentina", "mx_martin", "mx_sofia", "mx_ninoska"]
+}

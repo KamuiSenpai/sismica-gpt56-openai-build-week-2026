@@ -23,7 +23,7 @@ type ChatResponse = { choices?: Array<{ message?: { content?: string } }> };
 
 export async function chat(
   messages: ChatMessage[],
-  options: { maxTokens?: number; temperature?: number } = {}
+  options: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {}
 ): Promise<string> {
   if (!env.deepseekEnabled) {
     throw new DeepSeekUnavailableError("DeepSeek deshabilitado (DEEPSEEK_ENABLED=false)");
@@ -47,7 +47,7 @@ export async function chat(
         temperature: options.temperature ?? 1.0,
         stream: false
       }),
-      signal: AbortSignal.timeout(CHAT_TIMEOUT_MS)
+      signal: AbortSignal.timeout(options.timeoutMs ?? CHAT_TIMEOUT_MS)
     });
   } catch (error) {
     throw new DeepSeekUnavailableError(

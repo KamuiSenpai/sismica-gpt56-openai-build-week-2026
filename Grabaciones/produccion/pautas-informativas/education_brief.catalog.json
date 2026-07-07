@@ -1,0 +1,57 @@
+{
+  "version": "education_brief-2026-07-05",
+  "classId": "education_brief",
+  "playbackRole": "guide",
+  "approvalStatus": "approved",
+  "targetDurationMs": {
+    "min": 7000,
+    "max": 10000
+  },
+  "items": [
+    {
+      "voice": "mx_carolina",
+      "variant": "01",
+      "source": "USGS - Earthquake depth",
+      "keywords": ["education", "profundidad", "superficial", "profundo"],
+      "text": "Los sismos superficiales, de menos de setenta kil\u00f3metros, se sienten m\u00e1s fuerte; los profundos pueden percibirse en \u00e1reas mucho m\u00e1s amplias."
+    },
+    {
+      "voice": "mx_liam",
+      "variant": "02",
+      "source": "USGS - Aftershocks",
+      "keywords": ["education", "replicas", "secuencia"],
+      "text": "Tras un sismo importante llegan las r\u00e9plicas: temblores menores en la misma zona. Son normales y disminuyen con los d\u00edas, aunque pueden durar semanas."
+    },
+    {
+      "voice": "mx_valentina",
+      "variant": "03",
+      "source": "USGS ShakeAlert / JMA - Early warning",
+      "keywords": ["education", "alerta-temprana", "ondas"],
+      "text": "La alerta temprana no predice sismos: detecta las primeras ondas y avisa segundos antes de la sacudida fuerte. Esos segundos permiten ponerse a salvo."
+    },
+    {
+      "voice": "mx_martin",
+      "variant": "04",
+      "source": "USGS - Hypocenter and epicenter",
+      "keywords": ["education", "hipocentro", "epicentro"],
+      "text": "El hipocentro es el punto bajo tierra donde se rompe la falla; el epicentro es su proyecci\u00f3n en la superficie, el lugar que solemos ver en el mapa."
+    },
+    {
+      "voice": "mx_sofia",
+      "variant": "05",
+      "source": "USGS - Faults and elastic rebound",
+      "keywords": ["education", "falla", "placas", "energia"],
+      "text": "Los sismos ocurren cuando las rocas se rompen a lo largo de una falla y liberan de golpe la energ\u00eda acumulada por el lento movimiento de las placas.",
+      "spokenText": "Los sismos ocurren cuando las rocas se rompen a lo largo de una falla y liberan de golpe la energ\u00eda que estaba acumulada por el lento movimiento de las placas."
+    },
+    {
+      "voice": "mx_ninoska",
+      "variant": "06",
+      "source": "USGS - Plate tectonics",
+      "keywords": ["education", "placas", "tectonica"],
+      "text": "La capa externa de la Tierra est\u00e1 dividida en placas que se mueven pocos cent\u00edmetros al a\u00f1o. Sus bordes concentran la mayor\u00eda de los sismos del mundo."
+    }
+  ],
+  "approvedAtUtc": "2026-07-05T21:00:00.000Z",
+  "approvedVoices": ["mx_carolina", "mx_liam", "mx_valentina", "mx_martin", "mx_sofia", "mx_ninoska"]
+}

@@ -246,7 +246,7 @@ export type UsgsGeoJson = {
   features: UsgsFeature[];
 };
 
-export const DEFAULT_MIN_MAGNITUDE = 2.5;
+export const DEFAULT_MIN_MAGNITUDE = 3.0;
 export const DEFAULT_HOURS = 24;
 export const DEFAULT_LIMIT = 100;
 
@@ -303,3 +303,5 @@ export function normalizeUsgsFeature(
     ingestedAt
   };
 }
+
+export * from "./youtubeChat.js";

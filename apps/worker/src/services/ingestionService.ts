@@ -167,7 +167,9 @@ async function persistSeismic(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const stats = await ingestSeismicRecords(client, records, env.streamChannel);
+    const stats = await ingestSeismicRecords(client, records, env.streamChannel, {
+      enqueueYoutubeChat: true
+    });
     await client.query("COMMIT");
     await finishRun(runId, stats);
     return { source: provider.code, status: "success", errorMessage: null, ...stats };

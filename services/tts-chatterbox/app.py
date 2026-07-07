@@ -21,11 +21,14 @@ Config por env:
   CHATTERBOX_LANGUAGE        idioma por defecto (default: es)
   CHATTERBOX_EXAGGERATION    expresividad 0..1 (default: 0.5)
   CHATTERBOX_CFG_WEIGHT      guia de estilo 0..1 (default: 0.5)
+  CHATTERBOX_REPETITION_PENALTY
+                              penaliza bucles de tokens (default: 2.2)
   CHATTERBOX_EAGER_LOAD      true | false (default: false)
   CHATTERBOX_PRECISION       auto | fp32 | bf16 | fp16 (default: auto)
   CHATTERBOX_CACHE_CONDITIONING
                              true | false (default: true)
   CHATTERBOX_PROFILE_WARMUP  off | default | all (default: default)
+  CHATTERBOX_CHUNK_WORDS     palabras maximas por bloque largo (default: 20)
   CHATTERBOX_COMPILE_MODE    off | reduce-overhead | max-autotune (default: off)
   CHATTERBOX_T3_MODEL        variante futura si el paquete la soporta
 """
@@ -37,6 +40,7 @@ import importlib.util
 import inspect
 import json
 import os
+import re
 import time
 from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass
@@ -107,10 +111,12 @@ def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
 
 EXAGGERATION = _float_env("CHATTERBOX_EXAGGERATION", 0.5)
 CFG_WEIGHT = _float_env("CHATTERBOX_CFG_WEIGHT", 0.5)
+REPETITION_PENALTY = max(1.0, min(3.0, _float_env("CHATTERBOX_REPETITION_PENALTY", 2.2)))
 EAGER_LOAD = _bool_env("CHATTERBOX_EAGER_LOAD", False)
 CONDITIONING_CACHE_ENABLED = _bool_env("CHATTERBOX_CACHE_CONDITIONING", True)
 CONDITIONING_CACHE_LIMIT = _int_env("CHATTERBOX_CONDITIONING_CACHE_LIMIT", 2, 1, 6)
 MAX_NEW_TOKENS = _int_env("CHATTERBOX_MAX_NEW_TOKENS", 280, 120, 1000)
+SYNTHESIS_CHUNK_WORDS = _int_env("CHATTERBOX_CHUNK_WORDS", 20, 10, 40)
 
 
 def _env_choice(name: str, default: str, allowed: set[str]) -> str:
@@ -470,6 +476,7 @@ class SynthesizeRequest(BaseModel):
     exaggeration: float | None = None
     cfg_weight: float | None = None
     temperature: float | None = None
+    repetition_penalty: float | None = Field(default=None, ge=1.0, le=3.0)
 
 
 @app.get("/health")
@@ -483,6 +490,7 @@ def health() -> dict:
         "precision": state.precision,
         "compileMode": state.compile_mode,
         "maxNewTokens": MAX_NEW_TOKENS,
+        "repetitionPenalty": REPETITION_PENALTY,
         "sampleRate": state.sample_rate,
         "speaker": None,
         "defaultProfile": state.default_profile,
@@ -528,6 +536,83 @@ def _resolve_reference(requested_voice: str | None) -> tuple[str | None, str | N
     return None, None, DEFAULT_LANGUAGE, requested_voice
 
 
+def _split_synthesis_text(text: str) -> list[str]:
+    """Divide mensajes largos sin quitar contenido; cada bloque conserva puntuacion natural."""
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?;:])\s+", text.strip()) if part.strip()]
+    chunks: list[str] = []
+    current: list[str] = []
+
+    for sentence in sentences:
+        for unit in _split_long_sentence(sentence):
+            words = unit.split()
+            if len(words) > SYNTHESIS_CHUNK_WORDS:
+                if current:
+                    chunks.append(_ensure_terminal_punctuation(" ".join(current)))
+                    current = []
+                for index in range(0, len(words), SYNTHESIS_CHUNK_WORDS):
+                    chunks.append(_ensure_terminal_punctuation(" ".join(words[index : index + SYNTHESIS_CHUNK_WORDS])))
+                continue
+
+            if current and len(current) + len(words) > SYNTHESIS_CHUNK_WORDS:
+                chunks.append(_ensure_terminal_punctuation(" ".join(current)))
+                current = []
+            current.extend(words)
+
+    if current:
+        chunks.append(_ensure_terminal_punctuation(" ".join(current)))
+    return chunks or [_ensure_terminal_punctuation(text.strip())]
+
+
+def _split_long_sentence(sentence: str) -> list[str]:
+    words = sentence.split()
+    if len(words) <= SYNTHESIS_CHUNK_WORDS:
+        return [sentence]
+
+    comma_units = [part.strip() for part in re.split(r"(?<=,)\s+", sentence) if part.strip()]
+    if len(comma_units) <= 1:
+        return [sentence]
+
+    units: list[str] = []
+    current: list[str] = []
+    for unit in comma_units:
+        unit_words = unit.split()
+        if len(unit_words) > SYNTHESIS_CHUNK_WORDS:
+            if current:
+                units.append(" ".join(current))
+                current = []
+            units.append(unit)
+            continue
+
+        if current and len(current) + len(unit_words) > SYNTHESIS_CHUNK_WORDS:
+            units.append(" ".join(current))
+            current = []
+        current.extend(unit_words)
+
+    if current:
+        units.append(" ".join(current))
+    return units
+
+
+def _ensure_terminal_punctuation(text: str) -> str:
+    clean = re.sub(r"\s+", " ", text.strip())
+    if not clean:
+        return clean
+    return clean if re.search(r"[.!?;:,]$", clean) else f"{clean}."
+
+
+def _postprocess_audio(samples: np.ndarray) -> np.ndarray:
+    processed = np.asarray(samples, dtype=np.float32)
+    if processed.size == 0:
+        return processed
+    processed = np.nan_to_num(processed, nan=0.0, posinf=0.0, neginf=0.0)
+    processed = np.clip(processed, -1.0, 1.0)
+    fade_samples = min(processed.size, int(state.sample_rate * 0.08))
+    if fade_samples > 1:
+        processed[-fade_samples:] *= np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
+    tail = np.zeros(int(state.sample_rate * 0.12), dtype=np.float32)
+    return np.concatenate([processed, tail])
+
+
 @app.post("/synthesize")
 def synthesize(request: SynthesizeRequest) -> Response:
     profile_id, audio_prompt, profile_language, resolved_voice = _resolve_reference(request.speaker)
@@ -537,6 +622,11 @@ def synthesize(request: SynthesizeRequest) -> Response:
         "language_id": language,
         "exaggeration": exaggeration,
         "cfg_weight": request.cfg_weight if request.cfg_weight is not None else CFG_WEIGHT,
+        "repetition_penalty": (
+            request.repetition_penalty
+            if request.repetition_penalty is not None
+            else REPETITION_PENALTY
+        ),
     }
     if request.temperature is not None:
         kwargs["temperature"] = request.temperature
@@ -545,8 +635,6 @@ def synthesize(request: SynthesizeRequest) -> Response:
         with synthesis_lock:
             request_started_at = time.perf_counter()
             _load_model()  # carga perezosa / recarga bajo demanda.
-            word_count = len(request.text.split())
-            state.request_max_new_tokens = min(MAX_NEW_TOKENS, max(180, word_count * 14 + 60))
             cache_status = "hit" if _try_use_conditionals_cache(profile_id, exaggeration) else "miss"
             if cache_status == "miss" and profile_id:
                 _prime_profile_conditionals(profile_id, exaggeration)
@@ -557,14 +645,37 @@ def synthesize(request: SynthesizeRequest) -> Response:
             elif cache_status == "miss" and audio_prompt:
                 kwargs["audio_prompt_path"] = audio_prompt
             generate_started_at = time.perf_counter()
-            with _autocast_context():
-                wav = state.model.generate(request.text, **kwargs)
+            chunks = _split_synthesis_text(request.text)
+            generated_chunks: list[np.ndarray] = []
+            token_caps: list[int] = []
+            for chunk in chunks:
+                word_count = len(chunk.split())
+                state.request_max_new_tokens = min(MAX_NEW_TOKENS, max(180, word_count * 14 + 60))
+                token_caps.append(state.request_max_new_tokens)
+                with _autocast_context():
+                    wav = state.model.generate(chunk, **kwargs)
+                generated_chunks.append(
+                    np.asarray(getattr(wav, "cpu", lambda: wav)().squeeze(), dtype=np.float32)
+                )
+            silence = np.zeros(int(state.sample_rate * 0.18), dtype=np.float32)
+            samples = np.concatenate(
+                [
+                    sample
+                    for index, chunk_samples in enumerate(generated_chunks)
+                    for sample in (
+                        [chunk_samples, silence]
+                        if index < len(generated_chunks) - 1
+                        else [chunk_samples]
+                    )
+                ]
+            )
+            samples = _postprocess_audio(samples)
             total_ms = (time.perf_counter() - request_started_at) * 1000
             infer_ms = (time.perf_counter() - generate_started_at) * 1000
             print(
                 f"[chatterbox] synth voice={resolved_voice or 'default'} lang={language} "
                 f"cache={cache_status} precision={state.precision} "
-                f"token_cap={state.request_max_new_tokens} "
+                f"chunks={len(chunks)} token_caps={token_caps} "
                 f"infer={infer_ms:.1f} ms total={total_ms:.1f} ms"
             )
     except Exception as error:  # noqa: BLE001
@@ -573,7 +684,6 @@ def synthesize(request: SynthesizeRequest) -> Response:
             detail=f"Fallo la sintesis ({resolved_voice or 'default'}): {error}",
         ) from error
 
-    samples = np.asarray(getattr(wav, "cpu", lambda: wav)().squeeze(), dtype=np.float32)
     buffer = io.BytesIO()
     sf.write(buffer, samples, state.sample_rate, format="WAV", subtype="PCM_16")
     return Response(content=buffer.getvalue(), media_type="audio/wav")

@@ -57,12 +57,12 @@ export const EDUCATIVO_TOPICS: SingleFallbackTopic[] = [
   {
     topic: "escala de magnitud logaritmica",
     fallback:
-      "La escala de magnitud es logaritmica: cada punto equivale a unas treinta y dos veces mas energia liberada."
+      "La escala de magnitud es logaritmica, cada punto equivale a unas treinta y dos veces mas energia liberada."
   },
   {
     topic: "magnitud frente a intensidad",
     fallback:
-      "La magnitud mide la energia del sismo; la intensidad, cuanto se sintio en un lugar. Un mismo sismo tiene una magnitud pero muchas intensidades."
+      "La magnitud mide la energia del sismo, la intensidad, cuanto se sintio en un lugar. Un mismo sismo tiene una magnitud pero muchas intensidades."
   },
   {
     topic: "zonas de subduccion y placas",
@@ -340,6 +340,18 @@ const HANDOFF_FALLBACK_VARIANTS: Array<(cur: string, next: string) => HandoffSeg
   (cur, next) => ({
     currentHostLine: `${next}, cierro mi turno y te dejo la conduccion. Gracias por tanto, seguimos en contacto.`,
     nextHostLine: `Gracias por el relevo, ${cur}. Tomo la posta y continuamos con la informacion sismica al aire.`
+  }),
+  (cur, next) => ({
+    currentHostLine: `${next}, aqui te entrego la cabina. Fue un gusto acompanar a la audiencia, nos reencontramos pronto.`,
+    nextHostLine: `Gracias, ${cur}, que descanses. Retomo yo y seguimos atentos al pulso sismico del planeta.`
+  }),
+  (cur, next) => ({
+    currentHostLine: `${next}, cierro tranquilo sabiendo que quedas al frente. Un abrazo grande, colega.`,
+    nextHostLine: `Igualmente, ${cur}. Recibo la conduccion y continuamos con la vigilancia sismica en vivo.`
+  }),
+  (cur, next) => ({
+    currentHostLine: `${next}, te cedo la conduccion. Gracias a todos por acompanarnos; sigo pendiente detras de camaras.`,
+    nextHostLine: `Un placer, ${cur}. Tomo la posta y mantenemos el monitoreo minuto a minuto.`
   })
 ];
 let handoffFallbackIndex = 0;
@@ -615,12 +627,28 @@ export async function generateHandoffSegment(request: HandoffRequest): Promise<H
   }
 }
 
+function recentLinesFingerprint(lines: string[] | undefined): string {
+  return createHash("sha1")
+    .update((lines ?? []).slice(-12).map(canonicalizeEditorialText).join("\u0001"))
+    .digest("hex")
+    .slice(0, 12);
+}
+
 function segmentSeed(request: SegmentRequest): string {
-  if (request.kind === "educativo") return request.topic ?? "educativo";
+  if (request.kind === "educativo") {
+    return JSON.stringify({
+      topic: request.topic ?? "educativo",
+      recent: recentLinesFingerprint(request.recentLines)
+    });
+  }
   return JSON.stringify({
     ...request,
     activeAreas: request.activeAreas?.slice(0, 3) ?? []
   });
+}
+
+export function segmentSeedForTests(request: SegmentRequest): string {
+  return segmentSeed(request);
 }
 
 export async function generateSegment(request: SegmentRequest): Promise<SegmentPacket> {

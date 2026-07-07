@@ -4,11 +4,17 @@ param(
   [string]$OutputRoot = "E:\Proyecto\Grabaciones\pautas-informativas",
   [string]$ServiceUrl = "http://127.0.0.1:8091",
   [int]$TimeoutSec = 300,
-  [switch]$Force
+  [switch]$Force,
+  [ValidateSet("pending", "approved")]
+  [string]$ApprovalStatus = "pending",
+  [double]$TrimThresholdDb = -34,
+  [double]$TrimMinSilenceSec = 0.15,
+  [double]$TrimKeepTailSec = 0.04
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot "tts-audio-utils.ps1")
 
 function Save-Manifest {
   param([string]$Path, [object]$Payload)
@@ -17,8 +23,8 @@ function Save-Manifest {
 
 $catalog = Get-Content -Raw $CatalogPath | ConvertFrom-Json
 $items = @($catalog.items)
-if ($items.Count -ne 40) {
-  throw "El catalogo debe contener exactamente 40 pautas; contiene $($items.Count)"
+if ($items.Count -lt 1) {
+  throw "El catalogo debe contener al menos una pauta activa"
 }
 
 $requiredVoices = @(
@@ -80,27 +86,47 @@ foreach ($item in $items) {
 
   $elapsedMs = $null
   $skipped = $false
+  $trimmedTailSec = $null
+  $trailingAuditSec = $null
   if ((-not $Force) -and (Test-Path $targetPath)) {
     $skipped = $true
   } else {
     $startedAt = Get-Date
     $partPaths = New-Object System.Collections.Generic.List[string]
+    $totalTrimmedTailSec = 0.0
     for ($paragraphIndex = 0; $paragraphIndex -lt $paragraphs.Count; $paragraphIndex++) {
       $partPath = Join-Path $partsRoot ("{0}_{1}_p{2}.wav" -f $voice, $variant, ($paragraphIndex + 1))
+      $partRawPath = New-TempWavPath
       $body = @{
         text = ([string]$paragraphs[$paragraphIndex]).Trim()
         speaker = $voice
       } | ConvertTo-Json -Compress
 
-      Invoke-WebRequest -Uri "$ServiceUrl/synthesize" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body $body `
-        -TimeoutSec $TimeoutSec `
-        -OutFile $partPath
+      try {
+        Invoke-WebRequest -Uri "$ServiceUrl/synthesize" `
+          -Method Post `
+          -ContentType "application/json" `
+          -Body $body `
+          -TimeoutSec $TimeoutSec `
+          -OutFile $partRawPath
+        $rawPartDurationSec = Get-AudioDurationSeconds -Path $partRawPath
+        Invoke-TrimTrailingTail `
+          -InputPath $partRawPath `
+          -OutputPath $partPath `
+          -ThresholdDb $TrimThresholdDb `
+          -MinSilenceSec $TrimMinSilenceSec `
+          -KeepTailSec $TrimKeepTailSec
+        $cleanPartDurationSec = Get-AudioDurationSeconds -Path $partPath
+        $totalTrimmedTailSec += [math]::Max(0, ($rawPartDurationSec - $cleanPartDurationSec))
+      } finally {
+        if (Test-Path -LiteralPath $partRawPath) {
+          Remove-Item -LiteralPath $partRawPath -Force
+        }
+      }
       $partPaths.Add($partPath)
     }
 
+    $targetRawPath = New-TempWavPath
     $ffmpegArgs = @("-y", "-loglevel", "error")
     foreach ($partPath in $partPaths) {
       $ffmpegArgs += @("-i", $partPath)
@@ -116,19 +142,40 @@ foreach ($item in $items) {
       "24000",
       "-ac",
       "1",
-      $targetPath
+      $targetRawPath
     )
     & ffmpeg @ffmpegArgs
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $targetPath)) {
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $targetRawPath)) {
       throw "FFmpeg no pudo consolidar la pauta $($item.id)"
     }
+    $rawGuideDurationSec = Get-AudioDurationSeconds -Path $targetRawPath
+    Invoke-TrimTrailingTail `
+      -InputPath $targetRawPath `
+      -OutputPath $targetPath `
+      -ThresholdDb $TrimThresholdDb `
+      -MinSilenceSec $TrimMinSilenceSec `
+      -KeepTailSec $TrimKeepTailSec
+    $cleanGuideDurationSec = Get-AudioDurationSeconds -Path $targetPath
+    $trimmedTailSec = [math]::Round(
+      $totalTrimmedTailSec + [math]::Max(0, ($rawGuideDurationSec - $cleanGuideDurationSec)),
+      2
+    )
+    $trailingAuditSec = (Get-AudioTrimAudit `
+      -Path $targetPath `
+      -ThresholdDb $TrimThresholdDb `
+      -MinSilenceSec $TrimMinSilenceSec `
+      -KeepTailSec $TrimKeepTailSec).trailingSec
     foreach ($partPath in $partPaths) {
       Remove-Item -LiteralPath $partPath -Force
+    }
+    if (Test-Path -LiteralPath $targetRawPath) {
+      Remove-Item -LiteralPath $targetRawPath -Force
     }
     $elapsedMs = [math]::Round(((Get-Date) - $startedAt).TotalMilliseconds, 1)
   }
 
   $file = Get-Item $targetPath
+  $durationMs = [math]::Round((Get-AudioDurationSeconds -Path $targetPath) * 1000, 0)
   $manifestItems.Add([pscustomobject]@{
       voice = $voice
       groupId = "station_identity"
@@ -138,7 +185,11 @@ foreach ($item in $items) {
       keywords = @($item.keywords | Where-Object { $_ -is [string] -and $_.Trim().Length -gt 0 } | ForEach-Object { ([string]$_).Trim() })
       outputPath = $targetPath
       bytes = $file.Length
+      durationMs = $durationMs
+      approvalStatus = $ApprovalStatus
       elapsedMs = $elapsedMs
+      trimmedTailSec = $trimmedTailSec
+      trailingAuditSec = $trailingAuditSec
       skipped = $skipped
       generatedAtUtc = $file.LastWriteTimeUtc.ToString("o")
     })
