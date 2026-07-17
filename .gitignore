@@ -37,3 +37,4 @@ output/obs-config-backup-*/
 output/obs-sentinel-backup-*/
 output/obs-sismica-preview.png
 output/playwright/
+output/build-week/
