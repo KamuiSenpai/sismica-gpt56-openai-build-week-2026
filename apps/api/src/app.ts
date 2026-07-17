@@ -53,6 +53,12 @@ import {
 } from "./services/segmentService.js";
 import { decideNext, directorStateSchema } from "./services/directorService.js";
 import {
+  eventExplanationRequestSchema,
+  explainSeismicEvent,
+  OpenAiExplainerResponseError,
+  OpenAiExplainerUnavailableError
+} from "./services/openaiExplainerService.js";
+import {
   enqueueYoutubeChatTestMessage,
   getYoutubeChatMessages,
   getYoutubeChatStatus
@@ -394,6 +400,27 @@ export function createApp(streamBroker: StreamBroker) {
     try {
       response.json({ editorial: await generateNarration(parsed.data) });
     } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/ai/explain-event", async (request, response) => {
+    const parsed = eventExplanationRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Solicitud de explicacion invalida", issues: parsed.error.issues });
+      return;
+    }
+    try {
+      response.json(await explainSeismicEvent(parsed.data));
+    } catch (error) {
+      if (error instanceof OpenAiExplainerUnavailableError) {
+        response.status(503).json({ error: error.message });
+        return;
+      }
+      if (error instanceof OpenAiExplainerResponseError) {
+        response.status(502).json({ error: error.message });
+        return;
+      }
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
