@@ -11,6 +11,7 @@ import {
 } from "@sismica/shared";
 
 import { EventList } from "./components/EventList";
+import { AiEventExplainer } from "./components/AiEventExplainer";
 import { MapPanel } from "./components/MapPanel";
 import { SourceStatusCard } from "./components/SourceStatusCard";
 import { useEventStream } from "./hooks/useEventStream";
@@ -1017,6 +1018,8 @@ export default function App() {
                     Abrir reporte oficial {focusEvent.source}
                   </a>
                 ) : null}
+
+                <AiEventExplainer event={focusEvent} />
               </div>
             ) : (
               <div className="empty-state">Esperando eventos.</div>

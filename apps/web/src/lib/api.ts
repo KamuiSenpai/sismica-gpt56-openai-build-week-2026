@@ -107,6 +107,31 @@ export type VoiceTelemetryEvent = {
   durationMs?: number;
 };
 
+export type EventExplanationResult = {
+  provider: "openai";
+  model: string;
+  responseId: string;
+  generatedAtUtc: string;
+  disclaimer: string;
+  explanation: {
+    headline: string;
+    overview: string;
+    technicalReading: string;
+    recommendedActions: string[];
+    dataLimitations: string[];
+  };
+};
+
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 type EventsInput = {
   minMagnitude?: number;
   hours?: number;
@@ -348,6 +373,41 @@ export async function fetchTopMagnitude(limit = 10): Promise<SeismicEvent[]> {
     console.warn("Top de mayor magnitud no disponible.", error);
     return [];
   }
+}
+
+export async function fetchEventExplanation(
+  event: SeismicEvent,
+  signal?: AbortSignal
+): Promise<EventExplanationResult> {
+  const response = await fetch(`${API_BASE_URL}/api/ai/explain-event`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      eventId: event.eventId,
+      source: event.source,
+      title: event.title,
+      magnitude: event.magnitude,
+      magnitudeType: event.magnitudeType,
+      depthKm: event.depthKm,
+      latitude: event.latitude,
+      longitude: event.longitude,
+      eventTimeUtc: event.eventTimeUtc,
+      status: event.status,
+      tsunami: event.tsunami,
+      sourceUrl: event.sourceUrl
+    }),
+    signal
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiRequestError(
+      payload?.error ?? `La explicacion respondio con estado ${response.status}`,
+      response.status
+    );
+  }
+
+  return (await response.json()) as EventExplanationResult;
 }
 
 // Pauta editorial de narracion. El backend devuelve solo intro/remate/cue; el texto final

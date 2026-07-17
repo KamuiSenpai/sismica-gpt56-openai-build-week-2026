@@ -1688,6 +1688,390 @@ button {
   font-size: 0.7rem;
 }
 
+.ai-explainer-trigger {
+  width: 100%;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 7px;
+  border: 1px solid rgba(80, 200, 255, 0.7);
+  color: #e9f8ff;
+  background:
+    linear-gradient(105deg, rgba(5, 27, 40, 0.98), rgba(8, 18, 27, 0.96)),
+    repeating-linear-gradient(90deg, transparent 0 19px, rgba(80, 200, 255, 0.08) 20px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-explainer-trigger:hover,
+.ai-explainer-trigger:focus-visible {
+  border-color: var(--amber);
+  outline: none;
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.ai-explainer-trigger > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.ai-explainer-trigger strong {
+  color: #fff;
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+.ai-explainer-trigger small {
+  color: #91a7b7;
+  font-size: 0.52rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ai-explainer-trigger i {
+  color: var(--cyan);
+  font-size: 1.15rem;
+  font-style: normal;
+}
+
+.ai-explainer-mark {
+  padding: 5px 6px 4px;
+  color: #041018;
+  background: var(--cyan);
+  font-size: 0.56rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+}
+
+.ai-explainer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 34px;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(17, 64, 82, 0.26), transparent 42%), rgba(0, 4, 7, 0.82);
+  backdrop-filter: blur(5px);
+  animation: ai-explainer-backdrop-in 180ms ease-out both;
+}
+
+.ai-explainer-dialog {
+  width: min(760px, calc(100vw - 42px));
+  max-height: calc(100vh - 54px);
+  overflow: auto;
+  border: 1px solid #6a8192;
+  color: #eaf2f7;
+  background: linear-gradient(rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 40%), #061018;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(80, 200, 255, 0.12);
+  animation: ai-explainer-dialog-in 260ms cubic-bezier(0.2, 0.82, 0.22, 1) both;
+}
+
+.ai-explainer-header {
+  min-height: 58px;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  border-bottom: 1px solid #6a8192;
+  background: linear-gradient(90deg, #112b3b, #07131c 70%);
+}
+
+.ai-explainer-header > div {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 9px 15px;
+  border-left: 5px solid var(--cyan);
+}
+
+.ai-explainer-header span,
+.ai-explainer-grid span,
+.ai-explainer-lead > span,
+.ai-explainer-error > span {
+  color: var(--cyan);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+}
+
+.ai-explainer-header strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-explainer-header button {
+  min-width: 82px;
+  border-left: 1px solid #4c6475;
+  color: #b9c8d3;
+  background: rgba(3, 10, 15, 0.72);
+  font-size: 0.58rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ai-explainer-header button:hover,
+.ai-explainer-header button:focus-visible {
+  color: #071018;
+  background: var(--amber);
+  outline: none;
+}
+
+.ai-explainer-event-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(106, 129, 146, 0.55);
+  color: #9eb1bf;
+  background: #02090e;
+  font-size: 0.65rem;
+}
+
+.ai-explainer-event-strip > span {
+  padding: 3px 6px;
+  color: #05121a;
+  background: var(--amber);
+  font-weight: 950;
+}
+
+.ai-explainer-event-strip strong {
+  overflow: hidden;
+  color: #e4edf3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-explainer-event-strip small {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-explainer-loading {
+  min-height: 270px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 36px;
+  text-align: center;
+}
+
+.ai-explainer-loading > span {
+  width: 42px;
+  height: 42px;
+  border: 2px solid rgba(80, 200, 255, 0.2);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: ai-explainer-spin 800ms linear infinite;
+}
+
+.ai-explainer-loading strong {
+  max-width: 430px;
+  font-size: 0.9rem;
+}
+
+.ai-explainer-loading small {
+  color: #718898;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ai-explainer-error {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 34px;
+  text-align: center;
+}
+
+.ai-explainer-error > span {
+  color: var(--red);
+}
+
+.ai-explainer-error p {
+  max-width: 520px;
+  margin: 0;
+  color: #d8e1e7;
+  line-height: 1.5;
+}
+
+.ai-explainer-error button {
+  padding: 7px 14px;
+  border: 1px solid var(--red);
+  color: #ffd7da;
+  background: rgba(255, 94, 104, 0.08);
+  font-size: 0.62rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ai-explainer-content {
+  padding: 0 18px 16px;
+}
+
+.ai-explainer-lead {
+  padding: 22px 2px 18px;
+}
+
+.ai-explainer-lead h2 {
+  margin: 6px 0 8px;
+  color: #fff;
+  font-size: clamp(1.25rem, 3vw, 1.85rem);
+  line-height: 1.1;
+}
+
+.ai-explainer-lead p,
+.ai-explainer-grid p {
+  margin: 0;
+  color: #c8d4dc;
+  font-size: 0.82rem;
+  line-height: 1.52;
+}
+
+.ai-explainer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid #385162;
+  border-left: 1px solid #385162;
+}
+
+.ai-explainer-grid section {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  border-right: 1px solid #385162;
+  border-bottom: 1px solid #385162;
+  background: rgba(7, 24, 35, 0.62);
+}
+
+.ai-explainer-grid .ai-explainer-limitations {
+  grid-column: 1 / -1;
+  border-left: 4px solid var(--amber);
+  background: rgba(255, 211, 78, 0.045);
+}
+
+.ai-explainer-grid ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 16px;
+  color: #c8d4dc;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.ai-explainer-disclaimer {
+  margin: 12px 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 211, 78, 0.5);
+  color: #f4dda0;
+  background: rgba(255, 211, 78, 0.05);
+  font-size: 0.67rem;
+  line-height: 1.35;
+}
+
+.ai-explainer-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 18px;
+  padding-top: 10px;
+  border-top: 1px dashed #385162;
+  color: #6f8797;
+  font-family: Consolas, monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+}
+
+.ai-explainer-metadata span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-explainer-metadata strong {
+  color: #b8ccd9;
+  font-weight: 700;
+}
+
+@keyframes ai-explainer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ai-explainer-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}
+
+@keyframes ai-explainer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .ai-explainer-backdrop {
+    place-items: start center;
+    padding: 12px;
+  }
+
+  .ai-explainer-dialog {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+  }
+
+  .ai-explainer-header strong {
+    font-size: 0.92rem;
+  }
+
+  .ai-explainer-event-strip {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ai-explainer-event-strip small {
+    display: none;
+  }
+
+  .ai-explainer-grid,
+  .ai-explainer-metadata {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-explainer-grid .ai-explainer-limitations {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-explainer-backdrop,
+  .ai-explainer-dialog,
+  .ai-explainer-loading > span {
+    animation: none;
+  }
+}
+
 .cesium-canvas .cesium-viewer,
 .cesium-canvas .cesium-widget,
 .cesium-canvas .cesium-widget canvas {
