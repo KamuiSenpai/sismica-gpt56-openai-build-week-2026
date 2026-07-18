@@ -2,16 +2,16 @@
 
 ## Estado al 17 de julio
 
-| Evidencia                     | Estado    | Referencia                                |
-| ----------------------------- | --------- | ----------------------------------------- |
-| Commits dentro de la ventana  | Completo  | `5f15320`, `471cc1d`, `6a98924`           |
-| Sesion Codex identificada     | Completo  | `evidence/CODEX_SESSION_2026-07-17.md`    |
-| Integracion GPT-5.6 en codigo | Completo  | `POST /api/ai/explain-event`              |
-| Pruebas automatizadas         | Completo  | 49 API, 52 worker y 107 web               |
-| Validacion visual             | Completo  | Escritorio y movil con respuesta simulada |
-| Respuesta real `resp_...`     | Pendiente | Requiere `OPENAI_API_KEY`                 |
-| Video de demo                 | Pendiente | Grabar despues de la llamada real         |
-| Repositorio remoto            | Completo  | `KamuiSenpai/sismica-gpt56-build-week`    |
+| Evidencia                     | Estado    | Referencia                                         |
+| ----------------------------- | --------- | -------------------------------------------------- |
+| Commits dentro de la ventana  | Completo  | `5f15320`, `471cc1d`, `6a98924`                    |
+| Sesion Codex identificada     | Completo  | `evidence/CODEX_SESSION_2026-07-17.md`             |
+| Integracion GPT-5.6 en codigo | Completo  | `POST /api/ai/explain-event`                       |
+| Pruebas automatizadas         | Completo  | 49 API, 52 worker y 107 web                        |
+| Validacion visual             | Completo  | Escritorio y movil con respuesta simulada          |
+| Respuesta real `resp_...`     | Pendiente | Requiere `OPENAI_API_KEY`                          |
+| Video de demo                 | Pendiente | Grabar despues de la llamada real                  |
+| Repositorio remoto            | Completo  | `KamuiSenpai/sismica-gpt56-openai-build-week-2026` |
 
 ## 1. Configurar la llamada real
 
@@ -81,7 +81,7 @@ El transcript completo se conserva localmente bajo `$CODEX_HOME/sessions`. Antes
 
 ## 6. Publicacion
 
-Repositorio publico: [KamuiSenpai/sismica-gpt56-build-week](https://github.com/KamuiSenpai/sismica-gpt56-build-week).
+Repositorio publico: [KamuiSenpai/sismica-gpt56-openai-build-week-2026](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026).
 
 - `main`: rama principal para evaluacion.
 - `feat/build-week-gpt56`: rama trazable del trabajo Build Week.

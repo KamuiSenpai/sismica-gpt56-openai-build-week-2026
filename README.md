@@ -4,7 +4,7 @@
 
 **Multi-source seismic monitoring with evidence-grounded AI explanations.**
 
-[![CI](https://github.com/KamuiSenpai/sismica-gpt56-build-week/actions/workflows/ci.yml/badge.svg)](https://github.com/KamuiSenpai/sismica-gpt56-build-week/actions/workflows/ci.yml)
+[![CI](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026/actions/workflows/ci.yml/badge.svg)](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026/actions/workflows/ci.yml)
 ![Node.js](https://img.shields.io/badge/Node.js-22-233056?logo=nodedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-Responses_API-111827?logo=openai&logoColor=white)
@@ -36,10 +36,10 @@ Development attribution: the project is led and authored by KamuiSenpai. AI-assi
 
 Core Build Week commits:
 
-- [`5f15320`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/5f15320): GPT-5.6 specification and acceptance criteria.
-- [`471cc1d`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/471cc1d): Responses API service, schema validation and tests.
-- [`6a98924`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/6a98924): user-facing explanation panel and responsive behavior.
-- [`05555fc`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/05555fc): evidence capture workflow and validation records.
+- [`5f15320`](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026/commit/5f15320): GPT-5.6 specification and acceptance criteria.
+- [`471cc1d`](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026/commit/471cc1d): Responses API service, schema validation and tests.
+- [`6a98924`](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026/commit/6a98924): user-facing explanation panel and responsive behavior.
+- [`05555fc`](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026/commit/05555fc): evidence capture workflow and validation records.
 
 ## GPT-5.6 integration
 
@@ -92,8 +92,8 @@ docs             Specifications, validation and Build Week evidence
 ### Setup
 
 ```powershell
-git clone https://github.com/KamuiSenpai/sismica-gpt56-build-week.git
-Set-Location sismica-gpt56-build-week
+git clone https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026.git
+Set-Location sismica-gpt56-openai-build-week-2026
 npm ci
 Copy-Item .env.example .env
 docker compose up -d

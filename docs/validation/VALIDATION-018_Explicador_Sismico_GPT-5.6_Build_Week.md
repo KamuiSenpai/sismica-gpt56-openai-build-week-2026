@@ -87,4 +87,4 @@ El modal estaba anidado bajo el contexto de apilamiento de la columna izquierda.
 3. Confirmar modelo `gpt-5.6...` y un `response_id` real con prefijo `resp_`.
 4. Grabar el video con esa respuesta real.
 
-La publicacion ya esta completa en [KamuiSenpai/sismica-gpt56-build-week](https://github.com/KamuiSenpai/sismica-gpt56-build-week), con `main` y `feat/build-week-gpt56` disponibles.
+La publicacion ya esta completa en [KamuiSenpai/sismica-gpt56-openai-build-week-2026](https://github.com/KamuiSenpai/sismica-gpt56-openai-build-week-2026), con `main` y `feat/build-week-gpt56` disponibles.
