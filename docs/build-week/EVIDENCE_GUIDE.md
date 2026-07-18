@@ -11,7 +11,7 @@
 | Validacion visual             | Completo  | Escritorio y movil con respuesta simulada |
 | Respuesta real `resp_...`     | Pendiente | Requiere `OPENAI_API_KEY`                 |
 | Video de demo                 | Pendiente | Grabar despues de la llamada real         |
-| Repositorio remoto            | Pendiente | No hay remoto Git configurado             |
+| Repositorio remoto            | Completo  | `KamuiSenpai/sismica-gpt56-build-week`    |
 
 ## 1. Configurar la llamada real
 
@@ -79,6 +79,10 @@ El transcript completo se conserva localmente bajo `$CODEX_HOME/sessions`. Antes
 3. Usar la accion `Share` de la aplicacion cuando este disponible, o presentar la ficha sanitizada y los commits.
 4. No versionar el JSONL completo en el repositorio.
 
-## 6. Publicacion pendiente
+## 6. Publicacion
 
-Crear un repositorio remoto, subir `feat/build-week-gpt56` y usar una URL accesible para los jueces. El historial debe conservar las fechas y los commits separados de especificacion, backend, interfaz y evidencia.
+Repositorio publico: [KamuiSenpai/sismica-gpt56-build-week](https://github.com/KamuiSenpai/sismica-gpt56-build-week).
+
+- `main`: rama principal para evaluacion.
+- `feat/build-week-gpt56`: rama trazable del trabajo Build Week.
+- El historial conserva las fechas y los commits separados de especificacion, backend, interfaz, evidencia y preparacion publica.

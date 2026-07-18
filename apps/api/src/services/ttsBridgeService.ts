@@ -103,6 +103,22 @@ function normalizedPath(value: string): string {
   return resolve(value).replace(/\\/g, "/").toLowerCase();
 }
 
+function resolveManifestOutputPath(root: string, value: string): string {
+  const portablePath = value.replace(/\\/g, "/");
+  const lowerPath = portablePath.toLowerCase();
+  const recordingsMarker = "/grabaciones/";
+  const markerIndex = lowerPath.indexOf(recordingsMarker);
+
+  if (markerIndex >= 0) {
+    const relativeToRepo = portablePath.slice(markerIndex + 1);
+    return resolve(REPO_ROOT, ...relativeToRepo.split("/").filter(Boolean));
+  }
+  if (lowerPath.startsWith("grabaciones/")) {
+    return resolve(REPO_ROOT, ...portablePath.split("/").filter(Boolean));
+  }
+  return resolve(root, ...portablePath.split("/").filter(Boolean));
+}
+
 function fileKey(voice: string, fileName: string): string {
   return `${voice}/${fileName}`.toLowerCase();
 }
@@ -194,7 +210,7 @@ async function loadBridgeLibrary(library: TtsBridgeLibrary): Promise<CachedBridg
       ) {
         continue;
       }
-      const outputPath = resolve(item.outputPath);
+      const outputPath = resolveManifestOutputPath(root, item.outputPath);
       if (!normalizedPath(outputPath).startsWith(`${rootKey}/`)) {
         continue;
       }

@@ -86,4 +86,5 @@ El modal estaba anidado bajo el contexto de apilamiento de la columna izquierda.
 2. Iniciar API y ejecutar `node scripts/capture-build-week-evidence.mjs --session-id=<id>`.
 3. Confirmar modelo `gpt-5.6...` y un `response_id` real con prefijo `resp_`.
 4. Grabar el video con esa respuesta real.
-5. Publicar la rama en un repositorio remoto accesible para jueces.
+
+La publicacion ya esta completa en [KamuiSenpai/sismica-gpt56-build-week](https://github.com/KamuiSenpai/sismica-gpt56-build-week), con `main` y `feat/build-week-gpt56` disponibles.
