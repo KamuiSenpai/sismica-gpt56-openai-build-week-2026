@@ -17,6 +17,7 @@ import {
   ColorMaterialProperty,
   ConstantPositionProperty,
   ConstantProperty,
+  CustomDataSource,
   EasingFunction,
   EllipsoidGeodesic,
   Entity,
@@ -27,11 +28,13 @@ import {
   type ImageryLayer,
   Ion,
   JulianDate,
+  LabelStyle,
   Math as CesiumMath,
   PolygonHierarchy,
   Rectangle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  SceneTransforms,
   SingleTileImageryProvider,
   UrlTemplateImageryProvider,
   VerticalOrigin,
@@ -56,6 +59,13 @@ import {
   type EventHaloLayer
 } from "../lib/mapActivity";
 import { precacheMapArea } from "../lib/mapCache";
+import {
+  estimateMapZoom,
+  selectMapLabelCandidates,
+  type SpanishMapLabel,
+  type SpanishMapLabelCatalog,
+  type SpanishMapLabelKind
+} from "../lib/mapLabels";
 import {
   estimatedIntensity,
   formatDepth,
@@ -117,6 +127,7 @@ const COASTAL_ZONE_PREFIX = "coastal-zone:";
 const EXPERIMENTAL_ORIGIN_PREFIX = "origin:";
 const ESTIMATED_SHAKEMAP_PREFIX = "estimated-shakemap:";
 const WAVE_PREFIX = "wave:";
+const MAP_LABEL_PREFIX = "map-label:";
 
 type ActiveFocusCameraState = {
   eventId: string;
@@ -800,8 +811,7 @@ function SeismicPresenceLegend({ summary }: { summary: SeismicPresenceSummary | 
 async function setupBasemap(viewer: Viewer): Promise<void> {
   if (viewer.isDestroyed()) return;
 
-  // Base oscura SIN etiquetas: mapa limpio sobre el que superponemos nombres
-  // reforzados y fronteras vectoriales nitidas.
+  // El texto se renderiza por separado desde un catalogo localizado en espanol.
   viewer.imageryLayers.addImageryProvider(
     new UrlTemplateImageryProvider({
       url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
@@ -810,25 +820,176 @@ async function setupBasemap(viewer: Viewer): Promise<void> {
       credit: "(c) OpenStreetMap contributors (c) CARTO"
     })
   );
+}
 
-  // Capa de etiquetas (paises, ciudades, mares) con brillo/contraste reforzado
-  // para que los nombres se lean con claridad sobre el globo oscuro.
-  const labelLayer = viewer.imageryLayers.addImageryProvider(
-    new UrlTemplateImageryProvider({
-      url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}@2x.png",
-      subdomains: "abcd",
-      maximumLevel: 20,
-      // Carto entrega 512 px, pero cada tesela conserva una huella logica de 256 px.
-      // Asi Cesium mantiene el nivel de zoom y usa la densidad extra para texto nitido.
-      tileWidth: 256,
-      tileHeight: 256,
-      enablePickFeatures: false,
-      credit: "(c) OpenStreetMap contributors (c) CARTO"
-    })
+type MapLabelVisual = {
+  color: Color;
+  font: string;
+  fontSize: number;
+  outlineWidth: number;
+  uppercase: boolean;
+};
+
+const MAP_LABEL_VISUALS: Record<SpanishMapLabelKind, MapLabelVisual> = {
+  country: {
+    color: Color.fromCssColorString("#dcecff"),
+    font: '700 15px "Bahnschrift Condensed", "Arial Narrow", sans-serif',
+    fontSize: 15,
+    outlineWidth: 4,
+    uppercase: true
+  },
+  marine: {
+    color: Color.fromCssColorString("#8fb7d5"),
+    font: 'italic 600 13px "Bahnschrift Condensed", "Arial Narrow", sans-serif',
+    fontSize: 13,
+    outlineWidth: 4,
+    uppercase: true
+  },
+  region: {
+    color: Color.fromCssColorString("#a9c1d3"),
+    font: '600 12px "Bahnschrift Condensed", "Arial Narrow", sans-serif',
+    fontSize: 12,
+    outlineWidth: 3,
+    uppercase: false
+  },
+  admin1: {
+    color: Color.fromCssColorString("#c8d8e5"),
+    font: '600 13px "Bahnschrift Condensed", "Arial Narrow", sans-serif',
+    fontSize: 13,
+    outlineWidth: 3,
+    uppercase: false
+  },
+  city: {
+    color: Color.WHITE,
+    font: '600 12px "Bahnschrift Condensed", "Arial Narrow", sans-serif',
+    fontSize: 12,
+    outlineWidth: 3,
+    uppercase: false
+  }
+};
+
+function isSpanishMapLabelCatalog(value: unknown): value is SpanishMapLabelCatalog {
+  if (!value || typeof value !== "object") return false;
+  const catalog = value as Partial<SpanishMapLabelCatalog>;
+  return catalog.language === "es" && Array.isArray(catalog.labels);
+}
+
+function labelsOverlap(
+  left: { left: number; top: number; right: number; bottom: number },
+  right: { left: number; top: number; right: number; bottom: number }
+): boolean {
+  return !(
+    left.right < right.left ||
+    left.left > right.right ||
+    left.bottom < right.top ||
+    left.top > right.bottom
   );
-  labelLayer.brightness = 1.45;
-  labelLayer.contrast = 1.35;
-  labelLayer.gamma = 0.9;
+}
+
+async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
+  try {
+    const response = await fetch("/data/map-labels-es.json");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const catalog: unknown = await response.json();
+    if (!isSpanishMapLabelCatalog(catalog)) throw new Error("Catalogo de etiquetas invalido");
+    if (viewer.isDestroyed()) return () => undefined;
+
+    const dataSource = new CustomDataSource("etiquetas-geograficas-es");
+    await viewer.dataSources.add(dataSource);
+    if (viewer.isDestroyed()) return () => undefined;
+
+    let lastSignature = "";
+    const refresh = () => {
+      if (viewer.isDestroyed()) return;
+      const rectangle = viewer.camera.computeViewRectangle(viewer.scene.globe.ellipsoid);
+      if (!rectangle) return;
+
+      const canvas = viewer.scene.canvas;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (width <= 0 || height <= 0) return;
+
+      const candidates = selectMapLabelCandidates(catalog.labels, {
+        zoom: estimateMapZoom(viewer.camera.positionCartographic.height),
+        bounds: {
+          west: CesiumMath.toDegrees(rectangle.west),
+          south: CesiumMath.toDegrees(rectangle.south),
+          east: CesiumMath.toDegrees(rectangle.east),
+          north: CesiumMath.toDegrees(rectangle.north)
+        },
+        maxCandidates: 550
+      });
+      const maximumLabels = CesiumMath.clamp(Math.floor((width * height) / 18_000), 28, 110);
+      const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = [];
+      const visible: SpanishMapLabel[] = [];
+
+      for (const label of candidates) {
+        const screenPosition = SceneTransforms.worldToWindowCoordinates(
+          viewer.scene,
+          Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000)
+        );
+        if (!screenPosition || screenPosition.x < 0 || screenPosition.y < 0) continue;
+        if (screenPosition.x > width || screenPosition.y > height) continue;
+
+        const visual = MAP_LABEL_VISUALS[label.kind];
+        const labelWidth = CesiumMath.clamp(label.name.length * visual.fontSize * 0.57, 34, 210);
+        const box = {
+          left: screenPosition.x - labelWidth / 2 - 5,
+          top: screenPosition.y - visual.fontSize / 2 - 4,
+          right: screenPosition.x + labelWidth / 2 + 5,
+          bottom: screenPosition.y + visual.fontSize / 2 + 4
+        };
+        if (occupied.some((existing) => labelsOverlap(existing, box))) continue;
+
+        occupied.push(box);
+        visible.push(label);
+        if (visible.length >= maximumLabels) break;
+      }
+
+      const signature = visible.map((label) => label.id).join("|");
+      if (signature === lastSignature) return;
+      lastSignature = signature;
+
+      dataSource.entities.suspendEvents();
+      dataSource.entities.removeAll();
+      for (const label of visible) {
+        const visual = MAP_LABEL_VISUALS[label.kind];
+        dataSource.entities.add({
+          id: `${MAP_LABEL_PREFIX}${label.id}`,
+          position: Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000),
+          label: {
+            text: visual.uppercase ? label.name.toLocaleUpperCase("es") : label.name,
+            font: visual.font,
+            fillColor: visual.color,
+            outlineColor: Color.BLACK.withAlpha(0.92),
+            outlineWidth: visual.outlineWidth,
+            style: LabelStyle.FILL_AND_OUTLINE,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            verticalOrigin: VerticalOrigin.CENTER
+          }
+        });
+      }
+      dataSource.entities.resumeEvents();
+      viewer.scene.requestRender();
+    };
+
+    const removeMoveListener = viewer.camera.moveEnd.addEventListener(refresh);
+    window.addEventListener("resize", refresh);
+    const refreshTimer = window.setInterval(refresh, 1_500);
+    refresh();
+
+    return () => {
+      removeMoveListener();
+      window.removeEventListener("resize", refresh);
+      window.clearInterval(refreshTimer);
+      if (!viewer.isDestroyed() && viewer.dataSources.contains(dataSource)) {
+        viewer.dataSources.remove(dataSource, true);
+      }
+    };
+  } catch (error) {
+    console.warn("No se pudieron cargar las etiquetas geograficas en espanol.", error);
+    return () => undefined;
+  }
 }
 
 async function loadCountryBorders(viewer: Viewer): Promise<void> {
@@ -1030,7 +1191,9 @@ export function MapPanel({
     const handler = new ScreenSpaceEventHandler(canvas);
 
     handler.setInputAction((movement: ScreenSpaceEventHandler.PositionedEvent) => {
-      const picked = viewer.scene.pick(movement.position);
+      const picked = viewer.scene
+        .drillPick(movement.position, 12)
+        .find((candidate) => candidate.id instanceof Entity && !candidate.id.id.startsWith(MAP_LABEL_PREFIX));
       if (!defined(picked) || !(picked.id instanceof Entity) || typeof picked.id.id !== "string") return;
       if (eventMapRef.current.has(picked.id.id)) {
         setSelectedStationId(null);
@@ -1052,7 +1215,9 @@ export function MapPanel({
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     handler.setInputAction((movement: ScreenSpaceEventHandler.MotionEvent) => {
-      const picked = viewer.scene.pick(movement.endPosition);
+      const picked = viewer.scene
+        .drillPick(movement.endPosition, 12)
+        .find((candidate) => candidate.id instanceof Entity && !candidate.id.id.startsWith(MAP_LABEL_PREFIX));
       const entity = defined(picked) && picked.id instanceof Entity ? picked.id : undefined;
       const id = entity?.id;
       const event = typeof id === "string" ? eventMapRef.current.get(id) : undefined;
@@ -1130,13 +1295,21 @@ export function MapPanel({
     const clearHover = () => setHover((prev) => (prev ? null : prev));
     canvas.addEventListener("pointerleave", clearHover);
 
+    let disposed = false;
+    let cleanupSpanishLabels: () => void = () => undefined;
+
     void setupBasemap(viewer);
+    void setupSpanishMapLabels(viewer).then((cleanup) => {
+      if (disposed) cleanup();
+      else cleanupSpanishLabels = cleanup;
+    });
     void loadCountryBorders(viewer);
     void loadPlateBoundaries(viewer);
     void loadActiveFaults(viewer);
     void loadVolcanoes(viewer);
 
     return () => {
+      disposed = true;
       cameraFlightSequenceRef.current += 1;
       if (selectionWaveTimerRef.current !== null) {
         window.clearInterval(selectionWaveTimerRef.current);
@@ -1144,6 +1317,7 @@ export function MapPanel({
       }
       stopSpin();
       stopSpinRef.current = null;
+      cleanupSpanishLabels();
       canvas.removeEventListener("pointerleave", clearHover);
       handler.destroy();
       viewer.destroy();

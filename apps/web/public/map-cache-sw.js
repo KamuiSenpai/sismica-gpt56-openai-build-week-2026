@@ -1,4 +1,4 @@
-const TILE_CACHE_NAME = "sismica-map-tiles-v1";
+const TILE_CACHE_NAME = "sismica-map-tiles-v2";
 const DATA_CACHE_NAME = "sismica-map-data-v1";
 const CACHE_PREFIX = "sismica-map-";
 const MAX_TILE_ENTRIES = 800;
@@ -7,6 +7,7 @@ const PREFETCH_CONCURRENCY = 6;
 const PRECACHE_MESSAGE = "PRECACHE_MAP_TILES";
 const STATIC_MAP_PATHS = [
   "/data/countries.geojson",
+  "/data/map-labels-es.json",
   "/data/plate-boundaries-typed.geojson",
   "/data/gem_active_faults.geojson",
   "/data/volcanoes.geojson"
@@ -17,7 +18,7 @@ let tileWritesSinceTrim = 0;
 function isCartoTile(url) {
   return (
     /^[a-d]\.basemaps\.cartocdn\.com$/.test(url.hostname) &&
-    /^\/rastertiles\/dark_(?:nolabels|only_labels)\/\d+\/\d+\/\d+(?:@2x)?\.png$/.test(url.pathname)
+    /^\/rastertiles\/dark_nolabels\/\d+\/\d+\/\d+\.png$/.test(url.pathname)
   );
 }
 

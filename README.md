@@ -164,4 +164,6 @@ Generated evidence is written to the ignored `output/build-week/` directory for 
 
 SISMICA consumes external seismic and geospatial sources. Availability, accuracy and usage terms remain the responsibility of each provider. The application is informational and does not replace official earthquake or tsunami authorities.
 
+Map text is rendered from the Spanish name fields in Natural Earth `v5.1.2`; CARTO/OpenStreetMap is used only as the label-free raster background. The public-domain label catalog is reproducible with `node apps/web/public/data/fetch_map_labels_es.mjs`.
+
 No software license has been granted in this repository. Third-party data, map assets, audio and service names retain their respective rights and terms.

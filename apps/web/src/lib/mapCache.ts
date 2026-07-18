@@ -32,11 +32,11 @@ function tileCoordinates(latitude: number, longitude: number, zoom: number): { x
   };
 }
 
-function cartoTileUrls(zoom: number, x: number, y: number): [string, string] {
+function cartoBaseTileUrl(zoom: number, x: number, y: number): string {
   const subdomain = CARTO_SUBDOMAINS[(x + y + zoom) % CARTO_SUBDOMAINS.length];
   const root = `https://${subdomain}.basemaps.cartocdn.com/rastertiles`;
 
-  return [`${root}/dark_nolabels/${zoom}/${x}/${y}.png`, `${root}/dark_only_labels/${zoom}/${x}/${y}@2x.png`];
+  return `${root}/dark_nolabels/${zoom}/${x}/${y}.png`;
 }
 
 export function buildMapOverviewPrecacheUrls(maximumZoom = 2): string[] {
@@ -47,7 +47,7 @@ export function buildMapOverviewPrecacheUrls(maximumZoom = 2): string[] {
     const tileCount = 2 ** zoom;
     for (let x = 0; x < tileCount; x += 1) {
       for (let y = 0; y < tileCount; y += 1) {
-        urls.push(...cartoTileUrls(zoom, x, y));
+        urls.push(cartoBaseTileUrl(zoom, x, y));
       }
     }
   }
@@ -75,8 +75,7 @@ export function buildMapAreaPrecacheUrls(
       for (let offsetY = -safeRadius; offsetY <= safeRadius; offsetY += 1) {
         const x = wrap(center.x + offsetX, tileCount);
         const y = clamp(center.y + offsetY, 0, tileCount - 1);
-        urls.add(cartoTileUrls(zoom, x, y)[0]);
-        urls.add(cartoTileUrls(zoom, x, y)[1]);
+        urls.add(cartoBaseTileUrl(zoom, x, y));
       }
     }
   }
