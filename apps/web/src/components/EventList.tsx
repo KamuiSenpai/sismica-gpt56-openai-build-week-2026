@@ -126,6 +126,7 @@ export function EventList({ events, selectedEventId, onSelect }: EventListProps)
       <div className="event-feed" style={feedStyle}>
         {events.map((event) => {
           const status = getEventStatusBadge(event.status);
+          const place = getEventPlace(event.title);
           return (
             <button
               key={event.eventId}
@@ -137,13 +138,13 @@ export function EventList({ events, selectedEventId, onSelect }: EventListProps)
             >
               <span className="feed-source-mark">{SOURCE_MARK_LABEL[event.source]}</span>
               <span className="feed-event-copy">
-                <strong style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <strong title={place}>
                   <CountryFlag
                     event={event}
                     className="feed-flag"
                     style={{ width: "18px", height: "13px", borderRadius: "2px", objectFit: "cover" }}
                   />
-                  {getEventPlace(event.title)}
+                  <span className="feed-event-place">{place}</span>
                 </strong>
                 <small>{formatUtcDateTime(event.eventTimeUtc)} UTC</small>
               </span>

@@ -2073,7 +2073,7 @@ export function MapPanel({
 
       <div
         className="map-legend legend-intensity"
-        style={{ width: "auto", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "5px 24px" }}
+        style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "5px 24px" }}
       >
         <div style={{ display: "grid", gap: "5px" }}>
           <span className="legend-title">Intensidad MMI (Color)</span>
