@@ -55,6 +55,7 @@ import {
   type CoastalAttentionLayer,
   type EventHaloLayer
 } from "../lib/mapActivity";
+import { precacheMapArea } from "../lib/mapCache";
 import {
   estimatedIntensity,
   formatDepth,
@@ -814,14 +815,20 @@ async function setupBasemap(viewer: Viewer): Promise<void> {
   // para que los nombres se lean con claridad sobre el globo oscuro.
   const labelLayer = viewer.imageryLayers.addImageryProvider(
     new UrlTemplateImageryProvider({
-      url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png",
+      url: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}@2x.png",
       subdomains: "abcd",
       maximumLevel: 20,
+      // Carto entrega 512 px, pero cada tesela conserva una huella logica de 256 px.
+      // Asi Cesium mantiene el nivel de zoom y usa la densidad extra para texto nitido.
+      tileWidth: 256,
+      tileHeight: 256,
+      enablePickFeatures: false,
       credit: "(c) OpenStreetMap contributors (c) CARTO"
     })
   );
-  labelLayer.brightness = 1.7;
-  labelLayer.contrast = 1.25;
+  labelLayer.brightness = 1.45;
+  labelLayer.contrast = 1.35;
+  labelLayer.gamma = 0.9;
 }
 
 async function loadCountryBorders(viewer: Viewer): Promise<void> {
@@ -1208,6 +1215,14 @@ export function MapPanel({
     collection.resumeEvents();
     initializedRef.current = true;
   }, [events, soundEnabled]);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
+    const event = events.find((candidate) => candidate.eventId === selectedEventId);
+    if (!event) return;
+
+    void precacheMapArea(event.latitude, event.longitude);
+  }, [events, selectedEventId]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
