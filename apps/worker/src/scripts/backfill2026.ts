@@ -579,10 +579,8 @@ async function fetchNoaaProducts(
         .map(async ([capUrl, source]): Promise<AuxiliaryRecord<TsunamiProduct> | null> => {
           try {
             const xml = await fetchXml(capUrl);
-            return {
-              item: parseNoaaCap(xml, source, capUrl),
-              rawPayload: xml
-            };
+            const item = parseNoaaCap(xml, source, capUrl);
+            return item ? { item, rawPayload: xml } : null;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.warn(`NOAA skip ${capUrl}: ${message}`);

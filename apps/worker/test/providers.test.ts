@@ -40,6 +40,7 @@ import { parseNoaaCap } from "../src/providers/noaaProvider.js";
 import { normalizeOvsicoriRecord, parseOvsicoriMarkers } from "../src/providers/ovsicoriProvider.js";
 import { normalizeSgcFeature } from "../src/providers/sgcProvider.js";
 import { normalizeSsnItem } from "../src/providers/ssnProvider.js";
+import { isRetryableSourceStatus, parseOptionalJson } from "../src/providers/http.js";
 import { isAssociationCandidate, sourcePriority } from "../src/services/eventAssociationService.js";
 import {
   normalizeBmkgLocationText,
@@ -1085,9 +1086,37 @@ test("parsea producto CAP-TSU de NOAA", () => {
     </alert>`;
   const product = parseNoaaCap(xml, "NOAA_PTWC", "https://www.tsunami.gov/");
 
+  assert.ok(product);
   assert.equal(product.identifier, "PHEB-test");
   assert.equal(product.center, "PTWC");
   assert.equal(product.areaDescription, "Pacific Ocean");
+});
+
+test("omite CAP NOAA valido sin producto informativo", () => {
+  const xml = `<?xml version="1.0"?>
+    <alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+      <identifier>PHEB-update</identifier>
+      <sender>ntwc@noaa.gov</sender>
+      <sent>2026-07-17T17:01:41Z</sent>
+      <status>Actual</status>
+      <msgType>Update</msgType>
+      <source>PTWC</source>
+    </alert>`;
+
+  assert.equal(parseNoaaCap(xml, "NOAA_PTWC", "https://www.tsunami.gov/"), null);
+  assert.throws(
+    () => parseNoaaCap("<alert><status>Actual</status></alert>", "NOAA_PTWC", "https://www.tsunami.gov/"),
+    /Invalid NOAA_PTWC CAP payload/
+  );
+});
+
+test("interpreta respuestas vacias como ausencia de datos y limita reintentos a fallos transitorios", () => {
+  assert.equal(parseOptionalJson("  \n"), null);
+  assert.deepEqual(parseOptionalJson('{"features":[]}'), { features: [] });
+  assert.throws(() => parseOptionalJson("{"), SyntaxError);
+  assert.equal(isRetryableSourceStatus(429), true);
+  assert.equal(isRetryableSourceStatus(503), true);
+  assert.equal(isRetryableSourceStatus(404), false);
 });
 
 test("aplica prioridad regional a Peru y Venezuela", () => {

@@ -1,7 +1,7 @@
 import { type DisasterContext } from "@sismica/shared";
 
 import { env } from "../config/env.js";
-import { fetchJson } from "./http.js";
+import { fetchOptionalJson } from "./http.js";
 import { assertShape, gdacsResponseSchema } from "./schemas.js";
 import { type AuxiliaryProvider } from "./types.js";
 
@@ -62,7 +62,8 @@ export const gdacsProvider: AuxiliaryProvider<DisasterContext> = {
       todate,
       pagesize: "100"
     });
-    const payload = await fetchJson<GdacsResponse>(`${env.gdacsApiUrl}?${params.toString()}`);
+    const payload = await fetchOptionalJson<GdacsResponse>(`${env.gdacsApiUrl}?${params.toString()}`);
+    if (!payload) return [];
     assertShape(gdacsResponseSchema, payload, "GDACS");
     return (payload.features ?? []).flatMap((feature) => {
       const item = normalizeGdacsFeature(feature);

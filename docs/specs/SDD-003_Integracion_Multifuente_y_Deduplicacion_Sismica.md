@@ -44,15 +44,15 @@ sismico, impacto de desastre y productos de tsunami.
 
 ## Fuentes y contratos externos
 
-| Codigo | Dominio | Canal | Estado de acceso | Frecuencia objetivo |
-| --- | --- | --- | --- | --- |
-| `USGS` | catalogo global | GeoJSON Summary/FDSN | API publica documentada | 60 s |
-| `EMSC` | catalogo global | FDSN JSON; WebSocket opcional | API publica CC BY 4.0 | 60 s |
-| `IGP` | catalogo Peru | endpoint JSON del portal CENSIS | publico, no versionado | 120 s |
-| `FUNVISIS` | catalogo Venezuela | GeoJSON `maravilla.json` | publico oficial sobre HTTP | 120 s |
-| `GDACS` | impacto | API GeoJSON | API publica documentada | 360 s |
-| `NOAA_PTWC` | tsunami | CAP-TSU XML | producto publico oficial | 120 s |
-| `NOAA_NTWC` | tsunami | CAP-TSU XML | producto publico oficial | 120 s |
+| Codigo      | Dominio            | Canal                           | Estado de acceso           | Frecuencia objetivo |
+| ----------- | ------------------ | ------------------------------- | -------------------------- | ------------------- |
+| `USGS`      | catalogo global    | GeoJSON Summary/FDSN            | API publica documentada    | 60 s                |
+| `EMSC`      | catalogo global    | FDSN JSON; WebSocket opcional   | API publica CC BY 4.0      | 60 s                |
+| `IGP`       | catalogo Peru      | endpoint JSON del portal CENSIS | publico, no versionado     | 120 s               |
+| `FUNVISIS`  | catalogo Venezuela | GeoJSON `maravilla.json`        | publico oficial sobre HTTP | 120 s               |
+| `GDACS`     | impacto            | API GeoJSON                     | API publica documentada    | 360 s               |
+| `NOAA_PTWC` | tsunami            | CAP-TSU XML                     | producto publico oficial   | 120 s               |
+| `NOAA_NTWC` | tsunami            | CAP-TSU XML                     | producto publico oficial   | 120 s               |
 
 ### Endpoints aprobados
 
@@ -81,11 +81,21 @@ GDACS aporta nivel y puntaje de impacto, paises afectados y enlace de reporte.
 Se asocia a un evento canonico cuando existe coincidencia, pero no crea una
 copia visible del sismo.
 
+Una respuesta HTTP `204 No Content` de la busqueda oficial representa una
+consulta valida sin contextos disponibles. El worker debe cerrar la ejecucion
+como exitosa con cero registros y no intentar interpretar un cuerpo JSON vacio.
+
 ### Productos NOAA
 
 Los mensajes CAP de tsunami se almacenan como productos independientes con
 centro emisor, vigencia, severidad, certeza, descripcion y enlace oficial. No
 se convierten en eventos sismicos.
+
+Un documento CAP puede conservar identificador, emisor y fecha sin incluir un
+bloque `info`. Ese documento es valido como mensaje de control o actualizacion,
+pero no contiene un producto presentable: el worker debe omitirlo y cerrar la
+ejecucion como exitosa con cero registros. Un XML malformado o sin cabecera CAP
+minima continua siendo un error de fuente.
 
 ## Modelo normalizado de evento
 
@@ -137,10 +147,10 @@ coincidencia admisible, se crea un nuevo evento canonico.
 
 ### Preferencia de fuente
 
-| Zona | Orden de preferencia |
-| --- | --- |
-| Peru | IGP, USGS, EMSC, FUNVISIS |
-| Venezuela | FUNVISIS, USGS, EMSC, IGP |
+| Zona            | Orden de preferencia      |
+| --------------- | ------------------------- |
+| Peru            | IGP, USGS, EMSC, FUNVISIS |
+| Venezuela       | FUNVISIS, USGS, EMSC, IGP |
 | Resto del mundo | USGS, EMSC, IGP, FUNVISIS |
 
 La zona se determina inicialmente por limites geograficos conservadores. La
@@ -183,6 +193,9 @@ Una ejecucion por fuente con estado, conteos y error aislado.
 5. Las actualizaciones relevantes se notifican como `event.updated`.
 6. Los payloads externos se conservan para auditoria.
 7. Los limites temporales evitan descargar historicos completos en cada ciclo.
+8. Las consultas GET se reintentan una vez ante error de transporte, timeout,
+   `408`, `425`, `429` o `5xx`. Errores de esquema, parseo y respuestas `4xx`
+   permanentes no se reintentan ni se ocultan.
 
 ## API
 
@@ -228,6 +241,8 @@ Una ejecucion por fuente con estado, conteos y error aislado.
 7. GDACS y NOAA se persisten en tablas y endpoints separados.
 8. El mapa no duplica marcadores por proveedor.
 9. Typecheck, build, validacion funcional y tests unitarios finalizan sin error.
+10. GDACS `204` y CAP NOAA valido sin `info` terminan como exito con cero
+    registros, sin ocultar payloads realmente invalidos.
 
 ## Plan de validacion
 
@@ -251,16 +266,17 @@ Una ejecucion por fuente con estado, conteos y error aislado.
 6. Parser CAP NOAA.
 7. Calculo de prioridad regional.
 8. Reglas limite de deduplicacion.
+9. Respuesta GDACS sin contenido y CAP NOAA valido sin producto presentable.
 
 ## Matriz de trazabilidad
 
-| Requisito | Implementacion | Evidencia |
-| --- | --- | --- |
-| Catalogo multi-fuente | `apps/worker/src/providers` | ejecuciones reales por fuente |
-| Evento canonico unico | servicio de asociacion + PostGIS | prueba de duplicidad |
-| Trazabilidad | `event_source_refs` | consulta de detalle API |
-| Peru oficial | adaptador IGP + prioridad regional | evento IGP asociado |
-| Venezuela oficial | adaptador FUNVISIS + prioridad regional | evento FUNVISIS asociado |
-| Impacto | adaptador y tabla GDACS | `/api/disasters/active` |
-| Tsunami | parser y tabla NOAA | `/api/tsunami/active` |
-| Continuidad parcial | orquestacion aislada | prueba de fuente caida |
+| Requisito             | Implementacion                          | Evidencia                     |
+| --------------------- | --------------------------------------- | ----------------------------- |
+| Catalogo multi-fuente | `apps/worker/src/providers`             | ejecuciones reales por fuente |
+| Evento canonico unico | servicio de asociacion + PostGIS        | prueba de duplicidad          |
+| Trazabilidad          | `event_source_refs`                     | consulta de detalle API       |
+| Peru oficial          | adaptador IGP + prioridad regional      | evento IGP asociado           |
+| Venezuela oficial     | adaptador FUNVISIS + prioridad regional | evento FUNVISIS asociado      |
+| Impacto               | adaptador y tabla GDACS                 | `/api/disasters/active`       |
+| Tsunami               | parser y tabla NOAA                     | `/api/tsunami/active`         |
+| Continuidad parcial   | orquestacion aislada                    | prueba de fuente caida        |

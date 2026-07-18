@@ -40,3 +40,22 @@ duration: 327.3346 ms
 
 Conforme. Los normalizadores y reglas puras criticas de la integracion
 multi-fuente superan la ejecucion automatizada.
+
+## Revalidacion del 18 de julio de 2026
+
+Se agregaron casos para:
+
+1. Omitir un CAP NOAA valido sin bloque `info`.
+2. Rechazar una cabecera CAP sin identificador ni fecha.
+3. Interpretar un cuerpo JSON vacio como ausencia de datos.
+4. Reintentar solo estados transitorios y no un `404` permanente.
+
+Resultados posteriores al ajuste:
+
+```text
+npm test -w apps/worker: 54/54
+npm run verify: codigo 0
+API: 55/55
+Web: 125/125
+Build: aprobado en todos los workspaces
+```

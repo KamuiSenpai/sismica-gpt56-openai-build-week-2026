@@ -44,15 +44,18 @@ function isoOrNull(value: string | undefined): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-export function parseNoaaCap(xml: string, source: NoaaSource, fallbackUrl: string): TsunamiProduct {
+export function parseNoaaCap(xml: string, source: NoaaSource, fallbackUrl: string): TsunamiProduct | null {
   const parsed = parser.parse(xml) as { alert?: CapAlert };
   const alert = parsed.alert;
-  const info = Array.isArray(alert?.info) ? alert?.info[0] : alert?.info;
   const identifier = alert?.identifier;
   const sentAtUtc = isoOrNull(alert?.sent);
-  if (!identifier || !sentAtUtc || !info?.event) {
+  if (!identifier || !sentAtUtc) {
     throw new Error(`Invalid ${source} CAP payload`);
   }
+
+  const info = Array.isArray(alert.info) ? alert.info[0] : alert.info;
+  if (!info) return null;
+  if (!info.event) throw new Error(`Invalid ${source} CAP payload`);
 
   const areas = Array.isArray(info.area) ? info.area : info.area ? [info.area] : [];
   return {
@@ -72,7 +75,11 @@ export function parseNoaaCap(xml: string, source: NoaaSource, fallbackUrl: strin
     headline: info.headline || null,
     description: info.description || null,
     instruction: info.instruction || null,
-    areaDescription: areas.map((area) => area.areaDesc).filter(Boolean).join("; ") || null,
+    areaDescription:
+      areas
+        .map((area) => area.areaDesc)
+        .filter(Boolean)
+        .join("; ") || null,
     sourceUrl: info.web || fallbackUrl
   };
 }
@@ -82,7 +89,8 @@ function createNoaaProvider(code: NoaaSource, url: string): AuxiliaryProvider<Ts
     code: code as OperationalSourceCode,
     async fetchItems() {
       const xml = await fetchXml(url);
-      return [{ item: parseNoaaCap(xml, code, url), rawPayload: xml }];
+      const item = parseNoaaCap(xml, code, url);
+      return item ? [{ item, rawPayload: xml }] : [];
     }
   };
 }
