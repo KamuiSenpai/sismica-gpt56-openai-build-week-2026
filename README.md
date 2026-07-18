@@ -13,7 +13,7 @@ OpenAI Build Week 2026 submission by [KamuiSenpai](https://github.com/KamuiSenpa
 
 </div>
 
-![SISMICA multi-source seismic monitor focused on an event near Oaxaca, Mexico](docs/assets/sismica-monitor-2026-07-18.png)
+![SISMICA multi-source seismic monitor focused on an event near Oaxaca, Mexico at 90 percent browser zoom](docs/assets/sismica-monitor-2026-07-18-zoom-90.png)
 
 > Current reference captured on July 18, 2026 at `1920x1080` with browser zoom at `90%`, using the local API and PostgreSQL dataset without route interception. It validates the operational UI, not consumption of the OpenAI API.
 
