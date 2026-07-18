@@ -210,7 +210,7 @@ for ($i = 0; $i -lt 60; $i++) {
   if (Test-Port -Port 5173) { break }
   Start-Sleep -Seconds 1
 }
-Start-Process "http://localhost:5173/?monitor=1"
+Start-Process "http://localhost:5173/"
 
 Write-Host "`nListo. Cada servicio corre en su propia ventana." -ForegroundColor Cyan
 Write-Host "Motor neural activo: $selectedVoiceLabel" -ForegroundColor Cyan

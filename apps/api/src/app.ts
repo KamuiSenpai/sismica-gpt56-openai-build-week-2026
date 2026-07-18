@@ -395,7 +395,7 @@ export function createApp(streamBroker: StreamBroker) {
     } catch (error) {
       if (error instanceof TtsBusyError) {
         response.setHeader("Retry-After", "1");
-        response.status(429).json({ error: error.message });
+        response.status(429).json({ error: error.message, code: "tts_busy" });
         return;
       }
       if (error instanceof TtsUnavailableError) {

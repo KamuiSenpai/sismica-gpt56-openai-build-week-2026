@@ -393,6 +393,7 @@ export default function App() {
 
   useBroadcastDirector({
     mode: directorMode,
+    paused: tourPaused,
     voiceEnabled,
     voiceEngine,
     events,

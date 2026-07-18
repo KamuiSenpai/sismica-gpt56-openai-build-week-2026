@@ -315,7 +315,7 @@ const VOICE_OWNER_LEASE_MS = 12_000;
 const VOICE_OWNER_HEARTBEAT_MS = 4_000;
 type VoiceOwnerLease = { tabId: string; expiresAt: number };
 type VoiceLeaseWindow = Window & {
-  __sismicaVoiceLeaseRuntime?: { tabId: string; intervalId: number };
+  __sismicaVoiceLeaseRuntime?: { tabId: string; intervalId: number; cleanup?: () => void };
 };
 const voiceLeaseWindow = typeof window === "undefined" ? null : (window as VoiceLeaseWindow);
 const VOICE_TAB_ID =
@@ -398,6 +398,10 @@ function writeVoiceLease(expiresAt: number): boolean {
 
 function claimVoiceLease(): boolean {
   if (!voiceLeaseWindow) return true;
+  if (document.visibilityState === "hidden") {
+    ownsVoiceLease = false;
+    return false;
+  }
   const now = Date.now();
   const lease = readVoiceLease();
   if (lease?.tabId === VOICE_TAB_ID) return writeVoiceLease(now + VOICE_OWNER_LEASE_MS);
@@ -417,14 +421,16 @@ async function claimRemoteVoiceLease(): Promise<void> {
 }
 
 function releaseVoiceLease(): void {
-  if (!voiceLeaseWindow || !ownsVoiceLease) return;
+  if (!voiceLeaseWindow) return;
+  let ownsStoredLease = false;
   try {
-    if (readVoiceLease()?.tabId === VOICE_TAB_ID) localStorage.removeItem(VOICE_OWNER_KEY);
+    ownsStoredLease = readVoiceLease()?.tabId === VOICE_TAB_ID;
+    if (ownsStoredLease) localStorage.removeItem(VOICE_OWNER_KEY);
   } catch {
     // localStorage no disponible: la concesion vive solo en esta pestana.
   }
   ownsVoiceLease = false;
-  if (ownsRemoteVoiceLease) releaseVoiceOutput(VOICE_TELEMETRY_CLIENT_ID);
+  if (ownsRemoteVoiceLease || ownsStoredLease) releaseVoiceOutput(VOICE_TELEMETRY_CLIENT_ID);
   ownsRemoteVoiceLease = false;
 }
 
@@ -434,12 +440,35 @@ function isVoiceOutputOwner(): boolean {
 
 if (voiceLeaseWindow) {
   const previousRuntime = voiceLeaseWindow.__sismicaVoiceLeaseRuntime;
-  if (previousRuntime) window.clearInterval(previousRuntime.intervalId);
+  if (previousRuntime) {
+    window.clearInterval(previousRuntime.intervalId);
+    previousRuntime.cleanup?.();
+  }
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      releaseVoiceLease();
+      return;
+    }
+    if (voiceEnabled && claimVoiceLease()) void claimRemoteVoiceLease();
+  };
+  const handlePageHide = () => releaseVoiceLease();
   const intervalId = window.setInterval(() => {
+    if (document.visibilityState === "hidden") {
+      releaseVoiceLease();
+      return;
+    }
     if (voiceEnabled && claimVoiceLease()) void claimRemoteVoiceLease();
   }, VOICE_OWNER_HEARTBEAT_MS);
-  voiceLeaseWindow.__sismicaVoiceLeaseRuntime = { tabId: VOICE_TAB_ID, intervalId };
-  window.addEventListener("pagehide", releaseVoiceLease);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  window.addEventListener("pagehide", handlePageHide);
+  voiceLeaseWindow.__sismicaVoiceLeaseRuntime = {
+    tabId: VOICE_TAB_ID,
+    intervalId,
+    cleanup: () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+    }
+  };
 }
 
 function canonicalizeEditorialText(value: string): string {

@@ -5,6 +5,7 @@ import { type SeismicEvent } from "@sismica/shared";
 
 import {
   canRotateBroadcastHost,
+  DIRECTOR_EVENT_DWELL_MS,
   HOST_ROTATION_INTERVAL_MS,
   HOST_ROTATION_POLL_MS,
   pickNextTourEvent,
@@ -92,4 +93,8 @@ test("host rotation waits until the complete voice message has finished", () => 
   assert.equal(canRotateBroadcastHost(1_000, dueAt, true), false);
   assert.equal(canRotateBroadcastHost(1_500, dueAt, true), false);
   assert.equal(canRotateBroadcastHost(1_500, dueAt, false), true);
+});
+
+test("director keeps each focused event visible long enough to avoid frantic camera changes", () => {
+  assert.equal(DIRECTOR_EVENT_DWELL_MS, 24_000);
 });

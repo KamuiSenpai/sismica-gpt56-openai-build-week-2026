@@ -53,6 +53,14 @@ type PendingBlobRequest = {
 const blobCache = new Map<string, Blob>();
 const inFlightBlobRequests = new Map<string, PendingBlobRequest>();
 
+export function shouldRetryChatterboxRequest(
+  engine: NeuralEngine,
+  status: number,
+  errorCode: string | null
+): boolean {
+  return engine === "chatterbox" && status === 429 && errorCode === "tts_busy";
+}
+
 function cacheKey(engine: NeuralEngine, text: string, voice?: string): string {
   return `${engine}|${voice ?? "default"}|${text}`;
 }
@@ -97,11 +105,15 @@ async function requestNeuralBlob(
       body: JSON.stringify({ text: request.text, voice: request.voice }),
       signal
     });
-    if (response.status !== 429 || engine !== "chatterbox") {
-      if (!response.ok) {
-        throw new Error(`TTS ${engine} respondio ${response.status}`);
-      }
-      return response.blob();
+    if (response.ok) return response.blob();
+
+    let errorCode: string | null = null;
+    if (response.status === 429) {
+      const payload = (await response.json().catch(() => null)) as { code?: unknown } | null;
+      errorCode = typeof payload?.code === "string" ? payload.code : null;
+    }
+    if (!shouldRetryChatterboxRequest(engine, response.status, errorCode)) {
+      throw new Error(`TTS ${engine} respondio ${response.status}`);
     }
 
     await new Promise<void>((resolve, reject) => {

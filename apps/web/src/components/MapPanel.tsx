@@ -1303,8 +1303,10 @@ export function MapPanel({
         entity.billboard.image = new ConstantProperty(stationSymbol(station, selected));
         entity.billboard.scale = new ConstantProperty(selected ? 0.95 : 0.68);
         entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
-        entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.BOTTOM);
-        entity.billboard.heightReference = new ConstantProperty(HeightReference.CLAMP_TO_GROUND);
+        entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.CENTER);
+        // Las estaciones usan la coordenada geodesica fija del catalogo. Clampear cada
+        // billboard al terreno hace que Cesium lo recoloque mientras resuelve teselas.
+        entity.billboard.heightReference = new ConstantProperty(HeightReference.NONE);
         entity.billboard.disableDepthTestDistance = new ConstantProperty(0);
         entity.billboard.show = new ConstantProperty(stationsVisible);
       }

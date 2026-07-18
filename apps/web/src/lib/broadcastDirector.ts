@@ -37,6 +37,7 @@ export type BroadcastSegment = {
 
 export const HOST_ROTATION_INTERVAL_MS = 5 * 60_000;
 export const HOST_ROTATION_POLL_MS = 500;
+export const DIRECTOR_EVENT_DWELL_MS = 24_000;
 const RECAP_DUE_MIN = 60;
 const EDUCATION_DUE_MIN = 15;
 const EDUCATION_REPEAT_WINDOW_MS = 60 * 60_000;
@@ -292,6 +293,7 @@ export function pickNextTourEvent(
 
 export function useBroadcastDirector(params: {
   mode: DirectorMode;
+  paused: boolean;
   voiceEnabled: boolean;
   voiceEngine: VoiceEngine;
   events: SeismicEvent[];
@@ -299,7 +301,7 @@ export function useBroadcastDirector(params: {
   onFocusEvent: (eventId: string) => void;
   onSegment: (segment: BroadcastSegment) => void;
 }): void {
-  const { mode } = params;
+  const { mode, paused } = params;
 
   const eventsRef = useRef(params.events);
   eventsRef.current = params.events;
@@ -334,7 +336,7 @@ export function useBroadcastDirector(params: {
   }, []);
 
   useEffect(() => {
-    if (mode === "off") return;
+    if (mode === "off" || paused) return;
 
     const startedAt = Date.now();
     if (lastRecapAtRef.current === 0) lastRecapAtRef.current = startedAt;
@@ -435,7 +437,7 @@ export function useBroadcastDirector(params: {
       onFocusRef.current(event.eventId);
       onSegmentRef.current(payload);
       rememberEditorialLine(text);
-      airingUntilRef.current = Date.now() + delivery.minDurationMs;
+      airingUntilRef.current = Date.now() + Math.max(delivery.minDurationMs, DIRECTOR_EVENT_DWELL_MS);
       if (!voiceEnabledRef.current) return;
       prefetchSeismicNarration(event, true, {
         intro,
@@ -652,5 +654,5 @@ export function useBroadcastDirector(params: {
     }, 500);
 
     return () => window.clearInterval(intervalId);
-  }, [mode, queueRef]);
+  }, [mode, paused, queueRef]);
 }
