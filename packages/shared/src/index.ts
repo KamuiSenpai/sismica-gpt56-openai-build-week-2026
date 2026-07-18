@@ -62,6 +62,59 @@ export type SeismicEvent = {
   ingestedAt: string;
 };
 
+export type OfficialImpactLayerKind = "mmi" | "pga" | "pgv" | "dyfi";
+
+export type OfficialGeoJsonLayer = {
+  kind: OfficialImpactLayerKind;
+  unit: "MMI" | "% g" | "cm/s" | "CDI";
+  aggregationKm: number | null;
+  endpoint: string;
+  updatedAtUtc: string;
+};
+
+export type OfficialPagerCity = {
+  name: string;
+  latitude: number;
+  longitude: number;
+  population: number;
+  mmi: number;
+  intensityRoman: string;
+};
+
+export type OfficialPagerSummary = {
+  source: "USGS PAGER";
+  sourceUrl: string;
+  updatedAtUtc: string;
+  alertLevel: string | null;
+  maxMmi: number | null;
+  cities: OfficialPagerCity[];
+};
+
+export type OfficialShakeMapSummary = {
+  source: "USGS ShakeMap";
+  sourceUrl: string;
+  updatedAtUtc: string;
+  reviewStatus: string | null;
+  layers: Partial<Record<"mmi" | "pga" | "pgv", OfficialGeoJsonLayer>>;
+};
+
+export type OfficialDyfiSummary = {
+  source: "USGS DYFI";
+  sourceUrl: string;
+  updatedAtUtc: string;
+  responseCount: number | null;
+  maxCdi: number | null;
+  layer: OfficialGeoJsonLayer;
+};
+
+export type OfficialImpactSummary = {
+  eventId: string;
+  generatedAtUtc: string;
+  pager: OfficialPagerSummary | null;
+  shakeMap: OfficialShakeMapSummary | null;
+  dyfi: OfficialDyfiSummary | null;
+};
+
 export type EventSourceReference = {
   source: SourceCode;
   sourceEventId: string;

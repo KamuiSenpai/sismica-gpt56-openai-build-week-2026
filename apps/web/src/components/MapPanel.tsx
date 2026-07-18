@@ -3,6 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   type DisasterContext,
   type ExperimentalOrigin,
+  type OfficialGeoJsonLayer,
+  type OfficialImpactLayerKind,
+  type OfficialPagerCity,
+  type OfficialPagerSummary,
   type SeismicEvent,
   type SeismicPresenceSummary,
   type SeismicStation
@@ -25,17 +29,13 @@ import {
   HeadingPitchRange,
   HeightReference,
   HorizontalOrigin,
-  type ImageryLayer,
   Ion,
   JulianDate,
   LabelStyle,
   Math as CesiumMath,
-  PolygonHierarchy,
-  Rectangle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   SceneTransforms,
-  SingleTileImageryProvider,
   UrlTemplateImageryProvider,
   VerticalOrigin,
   Viewer,
@@ -44,6 +44,7 @@ import {
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
 import { useSeaLevelStationSeriesQuery } from "../hooks/queries";
+import { fetchOfficialImpactSummary, resolveApiEndpoint } from "../lib/api";
 import {
   computeCameraShot,
   computeInterEventTransitionPlan,
@@ -51,7 +52,6 @@ import {
   type CameraShot
 } from "../lib/cameraDirector";
 import { resolveCountryCode } from "../lib/countryGeocoder";
-import { buildEstimatedIntensityOverlay, type IntensityOverlayLayer } from "../lib/intensityOverlay";
 import {
   buildCoastalAttentionLayers,
   buildEventHaloLayers,
@@ -63,10 +63,18 @@ import {
   estimateMapZoom,
   selectNonOverlappingMapLabels,
   selectMapLabelCandidates,
+  type ProjectedMapLabel,
   type SpanishMapLabelCatalog,
   type SpanishMapLabelKind
 } from "../lib/mapLabels";
 import { resolveMapRenderScale } from "../lib/mapQuality";
+import {
+  buildSeismicSequence,
+  selectPrioritySeaLevelStations,
+  type PrioritySeaLevelStation,
+  type SeismicSequenceMember,
+  type SeismicSequenceSummary
+} from "../lib/officialImpactMap";
 import {
   estimatedIntensity,
   formatDepth,
@@ -126,16 +134,33 @@ const SEA_LEVEL_FIELD_PREFIX = "sea-level-field:";
 const SEA_LEVEL_PULSE_PREFIX = "sea-level-pulse:";
 const COASTAL_ZONE_PREFIX = "coastal-zone:";
 const EXPERIMENTAL_ORIGIN_PREFIX = "origin:";
-const ESTIMATED_SHAKEMAP_PREFIX = "estimated-shakemap:";
 const WAVE_PREFIX = "wave:";
 const MAP_LABEL_PREFIX = "map-label:";
+const PAGER_CITY_PREFIX = "pager-city:";
+const SEISMIC_SEQUENCE_PREFIX = "seismic-sequence:";
 
-type IntensityAreaIndicator = Pick<IntensityOverlayLayer, "mmi"> & {
-  radiusKm: IntensityOverlayLayer["radiusKm"] | null;
-  source: "official" | "estimated";
+type OfficialAreaIndicator = {
+  metric: OfficialImpactLayerKind;
+  value: number;
+  unit: OfficialGeoJsonLayer["unit"];
+  updatedAtUtc: string;
+  sourceUrl: string;
+  responseCount: number | null;
+  standardDeviation: number | null;
+  aggregationKm: number | null;
 };
 
-const INTENSITY_AREA_INDICATORS = new WeakMap<Entity, IntensityAreaIndicator>();
+const OFFICIAL_AREA_INDICATORS = new WeakMap<Entity, OfficialAreaIndicator>();
+
+type PagerCityIndicator = {
+  city: OfficialPagerCity;
+  pager: OfficialPagerSummary;
+};
+
+type SeismicSequenceIndicator = {
+  member: SeismicSequenceMember;
+  summary: SeismicSequenceSummary;
+};
 
 type ActiveFocusCameraState = {
   eventId: string;
@@ -191,111 +216,67 @@ const EXPERIMENTAL_ORIGIN_SYMBOL_CACHE = new Map<string, string>();
 const SEA_LEVEL_SYMBOL_CACHE = new Map<string, string>();
 const PRIORITY_GLOW_SYMBOL_CACHE = new Map<string, string>();
 
-type ShakeMapContents = Record<string, { url?: string }>;
-
-async function readPngDimensions(url: string): Promise<{ width: number; height: number }> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`ShakeMap image request failed: ${response.status}`);
-  const buffer = await response.arrayBuffer();
-  const view = new DataView(buffer);
-  if (view.byteLength < 24 || view.getUint32(0) !== 0x89504e47 || view.getUint32(4) !== 0x0d0a1a0a) {
-    throw new Error("ShakeMap image is not a valid PNG");
-  }
-  return { width: view.getUint32(16), height: view.getUint32(20) };
+function numericEntityProperty(entity: Entity, name: string): number | null {
+  const property = entity.properties?.[name];
+  const raw = property?.getValue(JulianDate.now());
+  const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isFinite(value) ? value : null;
 }
 
-function rectangleFromPngWorldFile(worldFile: string, width: number, height: number): Rectangle {
-  const values = worldFile
-    .trim()
-    .split(/\s+/)
-    .map((value) => Number(value));
-  if (values.length < 6 || values.some((value) => !Number.isFinite(value))) {
-    throw new Error("ShakeMap world file is invalid");
-  }
-
-  const [pixelWidth, rotationX, rotationY, pixelHeight, centerLon, centerLat] = values;
-  if (Math.abs(rotationX) > 0.000001 || Math.abs(rotationY) > 0.000001) {
-    throw new Error("ShakeMap rotated world files are not supported");
-  }
-
-  const west = centerLon - pixelWidth / 2;
-  const north = centerLat - pixelHeight / 2;
-  const east = west + pixelWidth * width;
-  const south = north + pixelHeight * height;
-
-  return Rectangle.fromDegrees(
-    Math.min(west, east),
-    Math.min(south, north),
-    Math.max(west, east),
-    Math.max(south, north)
-  );
-}
-
-async function addOfficialShakeMapImageLayer(
-  viewer: Viewer,
-  imageUrl: string,
-  worldFileUrl: string
-): Promise<ImageryLayer> {
-  const [dimensions, worldFileResponse] = await Promise.all([
-    readPngDimensions(imageUrl),
-    fetch(worldFileUrl)
-  ]);
-  if (!worldFileResponse.ok)
-    throw new Error(`ShakeMap world file request failed: ${worldFileResponse.status}`);
-
-  const rectangle = rectangleFromPngWorldFile(
-    await worldFileResponse.text(),
-    dimensions.width,
-    dimensions.height
-  );
-  const provider = new SingleTileImageryProvider({
-    url: imageUrl,
-    rectangle,
-    tileWidth: dimensions.width,
-    tileHeight: dimensions.height,
-    credit: "USGS ShakeMap"
-  });
-  const layer = viewer.imageryLayers.addImageryProvider(provider);
-  layer.alpha = 0.7;
-  layer.brightness = 1.06;
-  layer.contrast = 1.08;
-  layer.saturation = 1.08;
-  return layer;
-}
-
-function styleOfficialShakeMapDataSource(dataSource: GeoJsonDataSource): void {
+function styleOfficialImpactDataSource(
+  dataSource: GeoJsonDataSource,
+  layer: OfficialGeoJsonLayer,
+  sourceUrl: string,
+  responseCount: number | null
+): void {
   for (const entity of dataSource.entities.values) {
-    const valueProp = entity.properties?.value;
-    const value = valueProp ? parseFloat(valueProp.getValue(JulianDate.now())) : null;
+    const value = numericEntityProperty(entity, layer.kind === "dyfi" ? "cdi" : "value");
     if (value === null) continue;
 
-    const colorCss = intensityCssColor(value);
-    const cesiumColor = Color.fromCssColorString(colorCss).withAlpha(0.4);
-    INTENSITY_AREA_INDICATORS.set(entity, {
-      mmi: value,
-      radiusKm: null,
-      source: "official"
+    const baseColor =
+      layer.kind === "pga"
+        ? Color.fromCssColorString("#22d3ee")
+        : layer.kind === "pgv"
+          ? Color.fromCssColorString("#fbbf24")
+          : Color.fromCssColorString(intensityCssColor(value));
+    OFFICIAL_AREA_INDICATORS.set(entity, {
+      metric: layer.kind,
+      value,
+      unit: layer.unit,
+      updatedAtUtc: layer.updatedAtUtc,
+      sourceUrl,
+      responseCount: layer.kind === "dyfi" ? (numericEntityProperty(entity, "nresp") ?? responseCount) : null,
+      standardDeviation: layer.kind === "dyfi" ? numericEntityProperty(entity, "stddev") : null,
+      aggregationKm: layer.aggregationKm
     });
     if (entity.polygon) {
-      entity.polygon.material = new ColorMaterialProperty(cesiumColor);
+      entity.polygon.material = new ColorMaterialProperty(
+        baseColor.withAlpha(layer.kind === "dyfi" ? 0.34 : 0.18)
+      );
       entity.polygon.outline = new ConstantProperty(false);
     }
     if (entity.polyline) {
-      entity.polyline.material = new ColorMaterialProperty(cesiumColor);
-      entity.polyline.width = new ConstantProperty(2);
+      entity.polyline.material = new ColorMaterialProperty(
+        baseColor.withAlpha(layer.kind === "mmi" ? 0.78 : 0.72)
+      );
+      entity.polyline.width = new ConstantProperty(layer.kind === "mmi" ? 2.2 : 1.7);
+      entity.polyline.clampToGround = new ConstantProperty(true);
     }
   }
 }
 
-async function addOfficialShakeMapContourDataSource(
+async function addOfficialImpactDataSource(
   viewer: Viewer,
-  contourUrl: string
+  layer: OfficialGeoJsonLayer,
+  sourceUrl: string,
+  responseCount: number | null
 ): Promise<GeoJsonDataSource> {
-  const dataSource = await GeoJsonDataSource.load(contourUrl, {
+  const dataSource = await GeoJsonDataSource.load(resolveApiEndpoint(layer.endpoint), {
     clampToGround: true,
-    strokeWidth: 2
+    strokeWidth: layer.kind === "mmi" ? 2.2 : 1.7
   });
-  styleOfficialShakeMapDataSource(dataSource);
+  dataSource.name = `impacto-oficial-${layer.kind}`;
+  styleOfficialImpactDataSource(dataSource, layer, sourceUrl, responseCount);
   await viewer.dataSources.add(dataSource);
   return dataSource;
 }
@@ -403,47 +384,12 @@ function styleEntity(
   }
 }
 
-function renderEstimatedIntensityOverlay(viewer: Viewer, event: SeismicEvent): Entity[] {
-  const layers = buildEstimatedIntensityOverlay(event);
-  const entities: Entity[] = [];
-
-  for (const layer of layers) {
-    const fillColor = Color.fromCssColorString(layer.fillColor);
-    const strokeColor = Color.fromCssColorString(layer.strokeColor);
-    const entity = viewer.entities.add({
-      id: `${ESTIMATED_SHAKEMAP_PREFIX}${event.eventId}:${layer.label}`,
-      polygon: {
-        hierarchy: new PolygonHierarchy(
-          layer.points.map((point) => Cartesian3.fromDegrees(point.longitude, point.latitude))
-        ),
-        material: new ColorMaterialProperty(fillColor.withAlpha(layer.fillOpacity)),
-        outline: true,
-        outlineColor: strokeColor.withAlpha(layer.strokeOpacity),
-        heightReference: HeightReference.CLAMP_TO_GROUND,
-        zIndex: layer.zIndex
-      }
-    });
-    INTENSITY_AREA_INDICATORS.set(entity, {
-      mmi: layer.mmi,
-      radiusKm: layer.radiusKm,
-      source: "estimated"
-    });
-    entities.push(entity);
-  }
-
-  return entities;
-}
-
 function intensityAreaBandLabel(mmi: number): string {
   let selected = INTENSITY_BANDS[0];
   for (const band of INTENSITY_BANDS) {
     if (mmi >= band.mmi) selected = band;
   }
   return selected?.label ?? `MMI ${Math.round(mmi)}`;
-}
-
-function formatIntensityAreaRadius(radiusKm: number): string {
-  return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 0 }).format(radiusKm);
 }
 
 function disasterColor(level: string | null): Color {
@@ -611,14 +557,17 @@ function experimentalOriginScale(origin: ExperimentalOrigin): number {
   return 0.62 + magnitudeBoost * 0.18;
 }
 
-function seaLevelStationSymbol(station: SeaLevelStation, selected: boolean): string {
-  const key = `${station.status}:${selected ? "selected" : "idle"}`;
+function seaLevelStationSymbol(station: SeaLevelStation, selected: boolean, prioritized = false): string {
+  const key = `${station.status}:${selected ? "selected" : prioritized ? "prioritized" : "idle"}`;
   const cached = SEA_LEVEL_SYMBOL_CACHE.get(key);
   if (cached) return cached;
 
   const fill = SEA_LEVEL_STATION_COLORS[station.status];
-  const stroke = selected ? "#ffffff" : "#082032";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="7.5" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2.8 : 2}"/><path d="M5 16c1.25 0 1.25-.9 2.5-.9s1.25.9 2.5.9 1.25-.9 2.5-.9 1.25.9 2.5.9 1.25-.9 2.5-.9 1.25.9 2.5.9" fill="none" stroke="${stroke}" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+  const stroke = selected ? "#ffffff" : prioritized ? "#38bdf8" : "#082032";
+  const halo = prioritized
+    ? '<circle cx="13" cy="13" r="11" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.9"/>'
+    : "";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">${halo}<circle cx="13" cy="13" r="7.5" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2.8 : prioritized ? 2.5 : 2}"/><path d="M5 16c1.25 0 1.25-.9 2.5-.9s1.25.9 2.5.9 1.25-.9 2.5-.9 1.25.9 2.5.9 1.25-.9 2.5-.9 1.25.9 2.5.9" fill="none" stroke="${stroke}" stroke-width="1.7" stroke-linecap="round"/></svg>`;
   const symbol = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   SEA_LEVEL_SYMBOL_CACHE.set(key, symbol);
   return symbol;
@@ -869,6 +818,26 @@ type MapLabelVisual = {
   uppercase: boolean;
 };
 
+type PriorityMapLabel = {
+  id: string;
+  text: string;
+  latitude: number;
+  longitude: number;
+  color: string;
+  font: string;
+  fontSize: number;
+  outlineWidth: number;
+};
+
+type MapLabelsController = {
+  refresh: () => void;
+  cleanup: () => void;
+};
+
+type MapLabelCandidate =
+  | { kind: "priority"; label: PriorityMapLabel }
+  | { kind: "geographic"; label: SpanishMapLabelCatalog["labels"][number]; text: string };
+
 const MAP_LABEL_VISUALS: Record<SpanishMapLabelKind, MapLabelVisual> = {
   country: {
     color: Color.fromCssColorString("#dcecff"),
@@ -913,17 +882,20 @@ function isSpanishMapLabelCatalog(value: unknown): value is SpanishMapLabelCatal
   return catalog.language === "es" && Array.isArray(catalog.labels);
 }
 
-async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
+async function setupSpanishMapLabels(
+  viewer: Viewer,
+  getPriorityLabels: () => readonly PriorityMapLabel[]
+): Promise<MapLabelsController> {
   try {
     const response = await fetch("/data/map-labels-es.json");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const catalog: unknown = await response.json();
     if (!isSpanishMapLabelCatalog(catalog)) throw new Error("Catalogo de etiquetas invalido");
-    if (viewer.isDestroyed()) return () => undefined;
+    if (viewer.isDestroyed()) return { refresh: () => undefined, cleanup: () => undefined };
 
     const dataSource = new CustomDataSource("etiquetas-geograficas-es");
     await viewer.dataSources.add(dataSource);
-    if (viewer.isDestroyed()) return () => undefined;
+    if (viewer.isDestroyed()) return { refresh: () => undefined, cleanup: () => undefined };
 
     const measurementCanvas = document.createElement("canvas");
     const measurementContext = measurementCanvas.getContext("2d");
@@ -940,7 +912,7 @@ async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
       if (width <= 0 || height <= 0) return;
 
       const zoom = estimateMapZoom(viewer.camera.positionCartographic.height);
-      const candidates = selectMapLabelCandidates(catalog.labels, {
+      const geographicCandidates = selectMapLabelCandidates(catalog.labels, {
         zoom,
         bounds: {
           west: CesiumMath.toDegrees(rectangle.west),
@@ -951,64 +923,117 @@ async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
         maxCandidates: 550
       });
       const maximumLabels = CesiumMath.clamp(Math.floor((width * height) / 28_000), 24, 76);
-      const projected = candidates.flatMap((label) => {
-        const screenPosition = SceneTransforms.worldToWindowCoordinates(
-          viewer.scene,
-          Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000)
-        );
-        if (!screenPosition) return [];
+      const priorityProjected: ProjectedMapLabel<MapLabelCandidate>[] = getPriorityLabels().flatMap(
+        (label) => {
+          const screenPosition = SceneTransforms.worldToWindowCoordinates(
+            viewer.scene,
+            Cartesian3.fromDegrees(label.longitude, label.latitude, 6_000)
+          );
+          if (!screenPosition) return [];
+          if (measurementContext) measurementContext.font = label.font;
+          const metrics = measurementContext?.measureText(label.text);
+          const measuredHeight = metrics
+            ? metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+            : label.fontSize;
+          return [
+            {
+              value: { kind: "priority" as const, label },
+              x: screenPosition.x,
+              y: screenPosition.y,
+              width: Math.ceil(
+                (metrics?.width ?? label.text.length * label.fontSize * 0.6) + label.outlineWidth * 2
+              ),
+              height: Math.ceil(Math.max(label.fontSize, measuredHeight) + label.outlineWidth * 2)
+            }
+          ];
+        }
+      );
+      const geographicProjected: ProjectedMapLabel<MapLabelCandidate>[] = geographicCandidates.flatMap(
+        (label) => {
+          const screenPosition = SceneTransforms.worldToWindowCoordinates(
+            viewer.scene,
+            Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000)
+          );
+          if (!screenPosition) return [];
 
-        const visual = MAP_LABEL_VISUALS[label.kind];
-        const text = visual.uppercase ? label.name.toLocaleUpperCase("es") : label.name;
-        if (measurementContext) measurementContext.font = visual.font;
-        const metrics = measurementContext?.measureText(text);
-        const measuredHeight = metrics
-          ? metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
-          : visual.fontSize;
+          const visual = MAP_LABEL_VISUALS[label.kind];
+          const text = visual.uppercase ? label.name.toLocaleUpperCase("es") : label.name;
+          if (measurementContext) measurementContext.font = visual.font;
+          const metrics = measurementContext?.measureText(text);
+          const measuredHeight = metrics
+            ? metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+            : visual.fontSize;
 
-        return [
-          {
-            value: { label, text },
-            x: screenPosition.x,
-            y: screenPosition.y,
-            width: Math.ceil(
-              (metrics?.width ?? text.length * visual.fontSize * 0.6) + visual.outlineWidth * 2
-            ),
-            height: Math.ceil(Math.max(visual.fontSize, measuredHeight) + visual.outlineWidth * 2)
-          }
-        ];
-      });
-      const visible = selectNonOverlappingMapLabels(projected, {
-        viewportWidth: width,
-        viewportHeight: height,
-        maxLabels: maximumLabels,
-        minimumGap: zoom < 3 ? 12 : 9,
-        viewportPadding: 8
-      });
+          return [
+            {
+              value: { kind: "geographic" as const, label, text },
+              x: screenPosition.x,
+              y: screenPosition.y,
+              width: Math.ceil(
+                (metrics?.width ?? text.length * visual.fontSize * 0.6) + visual.outlineWidth * 2
+              ),
+              height: Math.ceil(Math.max(visual.fontSize, measuredHeight) + visual.outlineWidth * 2)
+            }
+          ];
+        }
+      );
+      const visible = selectNonOverlappingMapLabels<MapLabelCandidate>(
+        [...priorityProjected, ...geographicProjected],
+        {
+          viewportWidth: width,
+          viewportHeight: height,
+          maxLabels: maximumLabels,
+          minimumGap: zoom < 3 ? 12 : 9,
+          viewportPadding: 8
+        }
+      );
 
-      const signature = visible.map(({ value }) => value.label.id).join("|");
+      const signature = visible
+        .map(({ value }) =>
+          value.kind === "priority" ? `${value.label.id}:${value.label.text}` : value.label.id
+        )
+        .join("|");
       if (signature === lastSignature) return;
       lastSignature = signature;
 
       dataSource.entities.suspendEvents();
       dataSource.entities.removeAll();
       for (const { value } of visible) {
-        const { label, text } = value;
-        const visual = MAP_LABEL_VISUALS[label.kind];
-        dataSource.entities.add({
-          id: `${MAP_LABEL_PREFIX}${label.id}`,
-          position: Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000),
-          label: {
-            text,
-            font: visual.font,
-            fillColor: visual.color,
-            outlineColor: Color.BLACK.withAlpha(0.92),
-            outlineWidth: visual.outlineWidth,
-            style: LabelStyle.FILL_AND_OUTLINE,
-            horizontalOrigin: HorizontalOrigin.CENTER,
-            verticalOrigin: VerticalOrigin.CENTER
-          }
-        });
+        if (value.kind === "priority") {
+          const { label } = value;
+          dataSource.entities.add({
+            id: label.id,
+            position: Cartesian3.fromDegrees(label.longitude, label.latitude, 6_000),
+            label: {
+              text: label.text,
+              font: label.font,
+              fillColor: Color.fromCssColorString(label.color),
+              outlineColor: Color.BLACK.withAlpha(0.96),
+              outlineWidth: label.outlineWidth,
+              style: LabelStyle.FILL_AND_OUTLINE,
+              horizontalOrigin: HorizontalOrigin.CENTER,
+              verticalOrigin: VerticalOrigin.CENTER,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY
+            }
+          });
+        } else {
+          const { label, text } = value;
+          const visual = MAP_LABEL_VISUALS[label.kind];
+          dataSource.entities.add({
+            id: `${MAP_LABEL_PREFIX}${label.id}`,
+            position: Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000),
+            label: {
+              text,
+              font: visual.font,
+              fillColor: visual.color,
+              outlineColor: Color.BLACK.withAlpha(0.92),
+              outlineWidth: visual.outlineWidth,
+              style: LabelStyle.FILL_AND_OUTLINE,
+              horizontalOrigin: HorizontalOrigin.CENTER,
+              verticalOrigin: VerticalOrigin.CENTER
+            }
+          });
+        }
       }
       dataSource.entities.resumeEvents();
       viewer.scene.requestRender();
@@ -1020,17 +1045,20 @@ async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
     void document.fonts.ready.then(refresh);
     refresh();
 
-    return () => {
-      removeMoveListener();
-      window.removeEventListener("resize", refresh);
-      window.clearInterval(refreshTimer);
-      if (!viewer.isDestroyed() && viewer.dataSources.contains(dataSource)) {
-        viewer.dataSources.remove(dataSource, true);
+    return {
+      refresh,
+      cleanup: () => {
+        removeMoveListener();
+        window.removeEventListener("resize", refresh);
+        window.clearInterval(refreshTimer);
+        if (!viewer.isDestroyed() && viewer.dataSources.contains(dataSource)) {
+          viewer.dataSources.remove(dataSource, true);
+        }
       }
     };
   } catch (error) {
     console.warn("No se pudieron cargar las etiquetas geograficas en espanol.", error);
-    return () => undefined;
+    return { refresh: () => undefined, cleanup: () => undefined };
   }
 }
 
@@ -1155,11 +1183,17 @@ export function MapPanel({
   const stationMapRef = useRef<Map<string, SeismicStation>>(new Map());
   const fixedStationPositionRef = useRef<Map<string, FixedStationPosition>>(new Map());
   const seaLevelStationMapRef = useRef<Map<string, SeaLevelStation>>(new Map());
+  const prioritySeaLevelStationMapRef = useRef<Map<string, PrioritySeaLevelStation>>(new Map());
   const seaLevelSnapshotRef = useRef<Record<string, SeaLevelSnapshotEntry>>({});
   const experimentalOriginMapRef = useRef<Map<string, ExperimentalOrigin>>(new Map());
   const disasterMapRef = useRef<Map<string, DisasterContext>>(new Map());
   const coastalZoneMapRef = useRef<Map<string, CoastalAttentionLayer>>(new Map());
   const eventHaloMapRef = useRef<Map<string, EventHaloLayer>>(new Map());
+  const pagerCityMapRef = useRef<Map<string, PagerCityIndicator>>(new Map());
+  const sequenceMapRef = useRef<Map<string, SeismicSequenceIndicator>>(new Map());
+  const pagerPriorityLabelsRef = useRef<PriorityMapLabel[]>([]);
+  const sequencePriorityLabelsRef = useRef<PriorityMapLabel[]>([]);
+  const mapLabelRefreshRef = useRef<(() => void) | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const selectedIdRef = useRef<string | null>(selectedEventId);
@@ -1174,10 +1208,18 @@ export function MapPanel({
     | { kind: "event"; event: SeismicEvent; x: number; y: number }
     | { kind: "disaster"; context: DisasterContext; x: number; y: number }
     | { kind: "station"; station: SeismicStation; x: number; y: number }
-    | { kind: "sea-level"; station: SeaLevelStation; x: number; y: number }
+    | {
+        kind: "sea-level";
+        station: SeaLevelStation;
+        priorityDistanceKm: number | null;
+        x: number;
+        y: number;
+      }
     | { kind: "origin"; origin: ExperimentalOrigin; x: number; y: number }
     | { kind: "coastal-zone"; layer: CoastalAttentionLayer; x: number; y: number }
-    | { kind: "intensity-area"; indicator: IntensityAreaIndicator; x: number; y: number }
+    | { kind: "pager-city"; indicator: PagerCityIndicator; x: number; y: number }
+    | { kind: "sequence"; indicator: SeismicSequenceIndicator; x: number; y: number }
+    | { kind: "official-area"; indicator: OfficialAreaIndicator; x: number; y: number }
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
@@ -1248,7 +1290,8 @@ export function MapPanel({
           eventMapRef.current.has(id) ||
           coastalZoneMapRef.current.has(id) ||
           stationMapRef.current.has(id) ||
-          seaLevelStationMapRef.current.has(id)
+          seaLevelStationMapRef.current.has(id) ||
+          sequenceMapRef.current.has(id)
         );
       });
       if (!defined(picked) || !(picked.id instanceof Entity) || typeof picked.id.id !== "string") return;
@@ -1268,6 +1311,9 @@ export function MapPanel({
       } else if (seaLevelStationMapRef.current.has(picked.id.id)) {
         setSelectedStationId(null);
         setSelectedSeaLevelStationId(picked.id.id);
+      } else if (sequenceMapRef.current.has(picked.id.id)) {
+        const indicator = sequenceMapRef.current.get(picked.id.id);
+        if (indicator) onSelectRef.current(indicator.member.event.eventId);
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
@@ -1282,14 +1328,16 @@ export function MapPanel({
           stationMapRef.current.has(id) ||
           seaLevelStationMapRef.current.has(id) ||
           experimentalOriginMapRef.current.has(id) ||
-          coastalZoneMapRef.current.has(id)
+          coastalZoneMapRef.current.has(id) ||
+          pagerCityMapRef.current.has(id) ||
+          sequenceMapRef.current.has(id)
         );
       });
       const contextual = candidates.find(
         (candidate) =>
           candidate.id instanceof Entity &&
           !candidate.id.id.startsWith(MAP_LABEL_PREFIX) &&
-          (INTENSITY_AREA_INDICATORS.has(candidate.id) || Boolean(candidate.id.properties?.volcanoName))
+          (OFFICIAL_AREA_INDICATORS.has(candidate.id) || Boolean(candidate.id.properties?.volcanoName))
       );
       const picked = primary ?? contextual;
       const entity = defined(picked) && picked.id instanceof Entity ? picked.id : undefined;
@@ -1298,9 +1346,13 @@ export function MapPanel({
       const context = typeof id === "string" ? disasterMapRef.current.get(id) : undefined;
       const station = typeof id === "string" ? stationMapRef.current.get(id) : undefined;
       const seaLevelStation = typeof id === "string" ? seaLevelStationMapRef.current.get(id) : undefined;
+      const prioritySeaLevelStation =
+        typeof id === "string" ? prioritySeaLevelStationMapRef.current.get(id) : undefined;
       const origin = typeof id === "string" ? experimentalOriginMapRef.current.get(id) : undefined;
       const coastalLayer = typeof id === "string" ? coastalZoneMapRef.current.get(id) : undefined;
-      const intensityArea = entity ? INTENSITY_AREA_INDICATORS.get(entity) : undefined;
+      const pagerCity = typeof id === "string" ? pagerCityMapRef.current.get(id) : undefined;
+      const sequence = typeof id === "string" ? sequenceMapRef.current.get(id) : undefined;
+      const officialArea = entity ? OFFICIAL_AREA_INDICATORS.get(entity) : undefined;
 
       const rect = canvas.getBoundingClientRect();
       if (event) {
@@ -1331,6 +1383,7 @@ export function MapPanel({
         setHover({
           kind: "sea-level",
           station: seaLevelStation,
+          priorityDistanceKm: prioritySeaLevelStation?.distanceKm ?? null,
           x: rect.left + movement.endPosition.x,
           y: rect.top + movement.endPosition.y
         });
@@ -1351,10 +1404,26 @@ export function MapPanel({
           y: rect.top + movement.endPosition.y
         });
         canvas.style.cursor = "pointer";
-      } else if (intensityArea) {
+      } else if (pagerCity) {
         setHover({
-          kind: "intensity-area",
-          indicator: intensityArea,
+          kind: "pager-city",
+          indicator: pagerCity,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "help";
+      } else if (sequence) {
+        setHover({
+          kind: "sequence",
+          indicator: sequence,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "pointer";
+      } else if (officialArea) {
+        setHover({
+          kind: "official-area",
+          indicator: officialArea,
           x: rect.left + movement.endPosition.x,
           y: rect.top + movement.endPosition.y
         });
@@ -1382,9 +1451,16 @@ export function MapPanel({
     let cleanupSpanishLabels: () => void = () => undefined;
 
     void setupBasemap(viewer);
-    void setupSpanishMapLabels(viewer).then((cleanup) => {
-      if (disposed) cleanup();
-      else cleanupSpanishLabels = cleanup;
+    void setupSpanishMapLabels(viewer, () => [
+      ...pagerPriorityLabelsRef.current,
+      ...sequencePriorityLabelsRef.current
+    ]).then((controller) => {
+      if (disposed) controller.cleanup();
+      else {
+        mapLabelRefreshRef.current = controller.refresh;
+        cleanupSpanishLabels = controller.cleanup;
+        controller.refresh();
+      }
     });
     void loadCountryBorders(viewer);
     void loadPlateBoundaries(viewer);
@@ -1403,6 +1479,7 @@ export function MapPanel({
       qualityResizeObserver.disconnect();
       window.removeEventListener("resize", refreshMapQuality);
       cleanupSpanishLabels();
+      mapLabelRefreshRef.current = null;
       canvas.removeEventListener("pointerleave", clearHover);
       handler.destroy();
       viewer.destroy();
@@ -1437,7 +1514,8 @@ export function MapPanel({
           entity.id.startsWith(DISASTER_PREFIX) ||
           entity.id.startsWith(STATION_PREFIX) ||
           entity.id.startsWith(SEA_LEVEL_STATION_PREFIX) ||
-          entity.id.startsWith(EXPERIMENTAL_ORIGIN_PREFIX))
+          entity.id.startsWith(EXPERIMENTAL_ORIGIN_PREFIX) ||
+          entity.id.startsWith(SEISMIC_SEQUENCE_PREFIX))
       ) {
         continue;
       }
@@ -1481,6 +1559,87 @@ export function MapPanel({
     if (!event) return;
 
     void precacheMapArea(event.latitude, event.longitude);
+  }, [events, selectedEventId]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    for (const entity of [...viewer.entities.values]) {
+      if (typeof entity.id === "string" && entity.id.startsWith(SEISMIC_SEQUENCE_PREFIX)) {
+        viewer.entities.remove(entity);
+      }
+    }
+    sequenceMapRef.current = new Map();
+    sequencePriorityLabelsRef.current = [];
+
+    const sequence = buildSeismicSequence(events, selectedEventId);
+    if (!sequence) {
+      mapLabelRefreshRef.current?.();
+      return;
+    }
+
+    const indicators = new Map<string, SeismicSequenceIndicator>();
+    const principalId = `${SEISMIC_SEQUENCE_PREFIX}principal:${sequence.principal.event.eventId}`;
+    const principalColor = Color.fromCssColorString("#38bdf8");
+    viewer.entities.add({
+      id: principalId,
+      position: Cartesian3.fromDegrees(sequence.principal.event.longitude, sequence.principal.event.latitude),
+      ellipse: {
+        semiMajorAxis: 24_000,
+        semiMinorAxis: 24_000,
+        height: 0,
+        fill: false,
+        outline: true,
+        outlineColor: principalColor.withAlpha(0.94),
+        outlineWidth: 3
+      }
+    });
+    indicators.set(principalId, { member: sequence.principal, summary: sequence });
+
+    for (const member of sequence.posterior) {
+      const id = `${SEISMIC_SEQUENCE_PREFIX}posterior:${member.event.eventId}`;
+      viewer.entities.add({
+        id,
+        position: Cartesian3.fromDegrees(member.event.longitude, member.event.latitude),
+        ellipse: {
+          semiMajorAxis: 12_000,
+          semiMinorAxis: 12_000,
+          height: 0,
+          fill: false,
+          outline: true,
+          outlineColor: Color.fromCssColorString("#fbbf24").withAlpha(0.82),
+          outlineWidth: 2
+        }
+      });
+      indicators.set(id, { member, summary: sequence });
+    }
+    sequenceMapRef.current = indicators;
+    sequencePriorityLabelsRef.current = [
+      {
+        id: principalId,
+        text: `Evento principal · 6 h: ${sequence.count6h} · 24 h: ${sequence.count24h}`,
+        latitude: sequence.principal.event.latitude,
+        longitude: sequence.principal.event.longitude,
+        color: "#bae6fd",
+        font: '700 12px "Bahnschrift Condensed", "Arial Narrow", sans-serif',
+        fontSize: 12,
+        outlineWidth: 4
+      }
+    ];
+    mapLabelRefreshRef.current?.();
+
+    return () => {
+      if (!viewerRef.current || viewerRef.current.isDestroyed()) return;
+      for (const entity of [...viewerRef.current.entities.values]) {
+        if (typeof entity.id === "string" && entity.id.startsWith(SEISMIC_SEQUENCE_PREFIX)) {
+          viewerRef.current.entities.remove(entity);
+        }
+      }
+      sequenceMapRef.current = new Map();
+      sequencePriorityLabelsRef.current = [];
+      mapLabelRefreshRef.current?.();
+    };
   }, [events, selectedEventId]);
 
   useEffect(() => {
@@ -1591,6 +1750,14 @@ export function MapPanel({
     const viewer = viewerRef.current;
     if (!viewer) return;
 
+    const selectedEvent =
+      (selectedEventId ? events.find((event) => event.eventId === selectedEventId) : null) ?? null;
+    const priorityStations = selectPrioritySeaLevelStations(selectedEvent, seaLevelStations);
+    const priorityMap = new Map(
+      priorityStations.map((entry) => [`${SEA_LEVEL_STATION_PREFIX}${entry.station.stationCode}`, entry])
+    );
+    prioritySeaLevelStationMapRef.current = priorityMap;
+
     const previousSnapshot = seaLevelSnapshotRef.current;
     const moves = detectSeaLevelRecentMoves(seaLevelStations, previousSnapshot);
     setSeaLevelRecentMoves(moves.slice(0, 8));
@@ -1630,8 +1797,9 @@ export function MapPanel({
 
       if (entity.billboard) {
         const selected = id === selectedSeaLevelStationId;
-        entity.billboard.image = new ConstantProperty(seaLevelStationSymbol(station, selected));
-        entity.billboard.scale = new ConstantProperty(selected ? 0.88 : 0.62);
+        const prioritized = priorityMap.has(id);
+        entity.billboard.image = new ConstantProperty(seaLevelStationSymbol(station, selected, prioritized));
+        entity.billboard.scale = new ConstantProperty(selected ? 0.88 : prioritized ? 0.82 : 0.62);
         entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
         entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.CENTER);
         entity.billboard.heightReference = new ConstantProperty(HeightReference.CLAMP_TO_GROUND);
@@ -1639,7 +1807,7 @@ export function MapPanel({
         entity.billboard.show = new ConstantProperty(seaLevelStationsVisible);
       }
     }
-  }, [seaLevelStations, seaLevelStationsVisible, selectedSeaLevelStationId]);
+  }, [events, seaLevelStations, seaLevelStationsVisible, selectedEventId, selectedSeaLevelStationId]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -1962,100 +2130,104 @@ export function MapPanel({
     const viewer = viewerRef.current;
     if (!viewer || !selectedEventId) return;
 
-    const event = eventMapRef.current.get(selectedEventId);
-    if (!event) return;
-    const selectedEvent = event;
+    const selectedEvent = eventMapRef.current.get(selectedEventId);
+    if (!selectedEvent) return;
 
-    let activeDataSource: GeoJsonDataSource | null = null;
-    let activeImageryLayer: ImageryLayer | null = null;
-    let estimatedEntities = renderEstimatedIntensityOverlay(viewer, selectedEvent);
+    const controller = new AbortController();
+    const activeDataSources: GeoJsonDataSource[] = [];
     let isCancelled = false;
 
-    const removeEstimatedEntities = () => {
-      if (!viewerRef.current || viewerRef.current.isDestroyed()) return;
-      for (const entity of estimatedEntities) {
-        viewerRef.current.entities.remove(entity);
-      }
-      estimatedEntities = [];
+    const clearPagerCities = () => {
+      pagerCityMapRef.current = new Map();
+      pagerPriorityLabelsRef.current = [];
+      mapLabelRefreshRef.current?.();
     };
+    clearPagerCities();
 
-    async function fetchAndRenderOfficialShakeMap() {
-      if (selectedEvent.source !== "USGS" || !selectedEvent.detailUrl) return;
+    async function fetchAndRenderOfficialImpact(activeEvent: SeismicEvent) {
+      if (activeEvent.source !== "USGS") return;
+      const summary = await fetchOfficialImpactSummary(activeEvent.eventId, controller.signal);
+      if (isCancelled || !summary || !viewerRef.current || viewerRef.current.isDestroyed()) return;
 
-      try {
-        const res = await fetch(selectedEvent.detailUrl);
-        const data = (await res.json()) as {
-          properties?: {
-            products?: {
-              shakemap?: Array<{
-                contents?: Record<string, { url?: string }>;
-              }>;
-            };
-          };
-        };
-        if (isCancelled) return;
+      if (summary.pager) {
+        const cityMap = new Map<string, PagerCityIndicator>();
+        const labels = summary.pager.cities.map((city, index) => {
+          const id = `${PAGER_CITY_PREFIX}${activeEvent.eventId}:${index}`;
+          cityMap.set(id, { city, pager: summary.pager! });
+          return {
+            id,
+            text: `${city.name} · MMI ${city.mmi.toLocaleString("es-PE", {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1
+            })}`,
+            latitude: city.latitude,
+            longitude: city.longitude,
+            color: intensityCssColor(city.mmi),
+            font: '700 12px "Bahnschrift Condensed", "Arial Narrow", sans-serif',
+            fontSize: 12,
+            outlineWidth: 4
+          } satisfies PriorityMapLabel;
+        });
+        pagerCityMapRef.current = cityMap;
+        pagerPriorityLabelsRef.current = labels;
+        mapLabelRefreshRef.current?.();
+      }
 
-        const shakemapProduct = data.properties?.products?.shakemap?.[0];
-        if (!shakemapProduct) return;
-        const contents: ShakeMapContents = shakemapProduct.contents ?? {};
-        const contUrl = contents["download/cont_mi.json"]?.url ?? contents["download/cont_mmi.json"]?.url;
-        if (contUrl && viewerRef.current && !viewerRef.current.isDestroyed()) {
-          try {
-            const dataSource = await addOfficialShakeMapContourDataSource(viewerRef.current, contUrl);
-            if (isCancelled || !viewerRef.current || viewerRef.current.isDestroyed()) {
-              if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-                viewerRef.current.dataSources.remove(dataSource);
-              }
-              return;
-            }
-            activeDataSource = dataSource;
-            removeEstimatedEntities();
-            return;
-          } catch (error) {
-            console.warn("Failed to load official ShakeMap contour overlay", error);
-          }
+      const layers: Array<{
+        layer: OfficialGeoJsonLayer;
+        sourceUrl: string;
+        responseCount: number | null;
+      }> = [];
+      if (summary.shakeMap) {
+        for (const layer of Object.values(summary.shakeMap.layers)) {
+          if (layer) layers.push({ layer, sourceUrl: summary.shakeMap.sourceUrl, responseCount: null });
         }
+      }
+      if (summary.dyfi) {
+        layers.push({
+          layer: summary.dyfi.layer,
+          sourceUrl: summary.dyfi.sourceUrl,
+          responseCount: summary.dyfi.responseCount
+        });
+      }
 
-        const imageUrl = contents["download/intensity_overlay.png"]?.url;
-        const worldFileUrl = contents["download/intensity_overlay.pngw"]?.url;
-        if (imageUrl && worldFileUrl && viewerRef.current && !viewerRef.current.isDestroyed()) {
+      await Promise.all(
+        layers.map(async ({ layer, sourceUrl, responseCount }) => {
           try {
-            const imageryLayer = await addOfficialShakeMapImageLayer(
-              viewerRef.current,
-              imageUrl,
-              worldFileUrl
+            const dataSource = await addOfficialImpactDataSource(
+              viewerRef.current!,
+              layer,
+              sourceUrl,
+              responseCount
             );
             if (isCancelled || !viewerRef.current || viewerRef.current.isDestroyed()) {
               if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-                viewerRef.current.imageryLayers.remove(imageryLayer, true);
+                viewerRef.current.dataSources.remove(dataSource, true);
               }
               return;
             }
-            activeImageryLayer = imageryLayer;
-            return;
+            activeDataSources.push(dataSource);
           } catch (error) {
-            console.warn("Failed to load official ShakeMap image overlay", error);
+            console.warn(`No se pudo cargar la capa oficial ${layer.kind}.`, error);
           }
-        }
-
-        if (contUrl || imageUrl) {
-          removeEstimatedEntities();
-        }
-      } catch (error) {
-        console.warn("Failed to load shakemap for event", error);
-      }
+        })
+      );
     }
 
-    void fetchAndRenderOfficialShakeMap();
+    void fetchAndRenderOfficialImpact(selectedEvent).catch((error) => {
+      if (!isCancelled && !(error instanceof DOMException && error.name === "AbortError")) {
+        console.warn("No se pudieron cargar los productos oficiales del evento.", error);
+      }
+    });
 
     return () => {
       isCancelled = true;
-      removeEstimatedEntities();
-      if (activeImageryLayer && viewerRef.current && !viewerRef.current.isDestroyed()) {
-        viewerRef.current.imageryLayers.remove(activeImageryLayer, true);
-      }
-      if (activeDataSource && viewerRef.current && !viewerRef.current.isDestroyed()) {
-        viewerRef.current.dataSources.remove(activeDataSource);
+      controller.abort();
+      clearPagerCities();
+      if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+        for (const dataSource of activeDataSources) {
+          viewerRef.current.dataSources.remove(dataSource, true);
+        }
       }
     };
   }, [selectedEventId]);
@@ -2113,6 +2285,18 @@ export function MapPanel({
           <span>
             {hover.station.status.toUpperCase()} | lectura: {formatSeaLevelValue(hover.station)}
           </span>
+          {hover.priorityDistanceKm !== null ? (
+            <>
+              <span>
+                Estacion costera priorizada ·{" "}
+                {hover.priorityDistanceKm.toLocaleString("es-PE", {
+                  maximumFractionDigits: 0
+                })}{" "}
+                km del epicentro
+              </span>
+              <span>El indicador de la fuente no equivale a alerta ni confirma una ola.</span>
+            </>
+          ) : null}
           <span className="tt-source">UNESCO/IOC | sensor {hover.station.sensor ?? "N/D"}</span>
         </div>
       ) : null}
@@ -2145,22 +2329,85 @@ export function MapPanel({
         </div>
       ) : null}
 
-      {hover?.kind === "intensity-area" ? (
+      {hover?.kind === "pager-city" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>{hover.indicator.city.name}</strong>
+          <span>
+            Intensidad {hover.indicator.city.intensityRoman} · MMI{" "}
+            {hover.indicator.city.mmi.toLocaleString("es-PE", {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1
+            })}
+          </span>
+          <span>
+            Poblacion expuesta: {new Intl.NumberFormat("es-PE").format(hover.indicator.city.population)}
+          </span>
+          <span>Alerta PAGER: {hover.indicator.pager.alertLevel?.toUpperCase() ?? "N/D"}</span>
+          <span>Actualizado: {formatUtcDateTime(hover.indicator.pager.updatedAtUtc)} UTC</span>
+          <span className="tt-source">USGS PAGER oficial · no es un reporte local de danos</span>
+        </div>
+      ) : null}
+
+      {hover?.kind === "sequence" ? (
         <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
           <strong>
-            {hover.indicator.source === "official"
-              ? "Sacudida observada/modelada"
-              : "Área de sacudida estimada"}
+            {hover.indicator.member.role === "principal" ? "Evento principal" : "Actividad posterior"}
           </strong>
-          <span>{intensityAreaBandLabel(hover.indicator.mmi)}</span>
-          {hover.indicator.radiusKm !== null ? (
-            <span>Alcance aproximado: {formatIntensityAreaRadius(hover.indicator.radiusKm)} km</span>
-          ) : null}
-          <span className="tt-source">
-            {hover.indicator.source === "official"
-              ? "USGS ShakeMap oficial"
-              : "Modelo preliminar; priorice ShakeMap oficial si está disponible"}
+          <span>
+            {formatMagnitude(hover.indicator.member.event.magnitude)} ·{" "}
+            {formatUtcDateTime(hover.indicator.member.event.eventTimeUtc)} UTC
           </span>
+          {hover.indicator.member.role === "posterior" ? (
+            <span>
+              +
+              {hover.indicator.member.hoursAfterPrincipal.toLocaleString("es-PE", {
+                maximumFractionDigits: 1
+              })}{" "}
+              h ·{" "}
+              {hover.indicator.member.distanceKm.toLocaleString("es-PE", {
+                maximumFractionDigits: 0
+              })}{" "}
+              km del principal
+            </span>
+          ) : (
+            <span>
+              Actividad posterior: 6 h {hover.indicator.summary.count6h} · 24 h{" "}
+              {hover.indicator.summary.count24h}
+            </span>
+          )}
+          <span className="tt-source">Agrupacion temporal y espacial del mapa; no establece causalidad</span>
+        </div>
+      ) : null}
+
+      {hover?.kind === "official-area" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>
+            {hover.indicator.metric === "mmi"
+              ? "Intensidad ShakeMap oficial"
+              : hover.indicator.metric === "pga"
+                ? "Aceleracion maxima del suelo"
+                : hover.indicator.metric === "pgv"
+                  ? "Velocidad maxima del suelo"
+                  : "Concentracion de reportes sentidos DYFI"}
+          </strong>
+          <span>
+            {hover.indicator.metric === "mmi" ? `${intensityAreaBandLabel(hover.indicator.value)} · ` : ""}
+            {hover.indicator.unit}{" "}
+            {hover.indicator.value.toLocaleString("es-PE", {
+              maximumFractionDigits: 2
+            })}
+          </span>
+          {hover.indicator.metric === "dyfi" ? (
+            <>
+              <span>Respuestas agregadas: {hover.indicator.responseCount ?? "N/D"}</span>
+              <span>
+                Agregacion: {hover.indicator.aggregationKm ?? "N/D"} km · desviacion{" "}
+                {hover.indicator.standardDeviation ?? "N/D"}
+              </span>
+            </>
+          ) : null}
+          <span>Actualizado: {formatUtcDateTime(hover.indicator.updatedAtUtc)} UTC</span>
+          <span className="tt-source">USGS oficial · valores sin interpolacion local</span>
         </div>
       ) : null}
 
@@ -2317,7 +2564,11 @@ export function MapPanel({
         </span>
         <span className="legend-row">
           <i style={{ background: "linear-gradient(to right, #7aff93, #ff0000)", opacity: 0.8 }} />
-          ShakeMap / estimado
+          ShakeMap MMI / PGA / PGV
+        </span>
+        <span className="legend-row">
+          <i style={{ background: "linear-gradient(to right, #a5f3fc, #facc15)", opacity: 0.72 }} />
+          DYFI reportes sentidos
         </span>
         <span className="legend-section-separator" />
         <span className="legend-title">Capas dinamicas 2D</span>
@@ -2331,7 +2582,7 @@ export function MapPanel({
               background: "rgba(125,211,252,0.8)"
             }}
           />
-          Punto priorizado
+          Evento principal / actividad posterior
         </span>
         <span className="legend-row">
           <i

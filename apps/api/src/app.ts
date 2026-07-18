@@ -77,6 +77,11 @@ import {
   getYoutubeChatMessages,
   getYoutubeChatStatus
 } from "./services/youtubeChatRepository.js";
+import {
+  UsgsImpactLayerNotFoundError,
+  UsgsImpactService,
+  UsgsImpactUnavailableError
+} from "./services/usgsImpactService.js";
 
 function hasValidEngineToken(candidate: string | undefined): boolean {
   if (!env.seismicEngineToken || !candidate) return false;
@@ -110,6 +115,13 @@ export function createApp(streamBroker: StreamBroker) {
   >({
     max: 100,
     ttl: 5000 // 5 seconds micro-caching
+  });
+  const officialImpactLayerSchema = z.enum(["mmi", "pga", "pgv", "dyfi"]);
+  const usgsImpactService = new UsgsImpactService({
+    timeoutMs: env.usgsImpactTimeoutMs,
+    cacheTtlMs: env.usgsImpactCacheTtlMs,
+    maxDocumentBytes: env.usgsImpactMaxDocumentBytes,
+    maxGeoJsonBytes: env.usgsImpactMaxGeoJsonBytes
   });
 
   installSecurityMiddleware(app);
@@ -154,6 +166,53 @@ export function createApp(streamBroker: StreamBroker) {
 
       response.json(result);
     } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/events/:eventId/official-impact", async (request, response) => {
+    try {
+      const event = await getEventById(pool, request.params.eventId);
+      if (!event) {
+        response.status(404).json({ error: "Evento sismico no encontrado" });
+        return;
+      }
+      response.setHeader("Cache-Control", "public, max-age=30");
+      response.json(await usgsImpactService.getSummary(event));
+    } catch (error) {
+      if (error instanceof UsgsImpactUnavailableError) {
+        response.status(502).json({ error: error.message, code: "usgs_impact_unavailable" });
+        return;
+      }
+      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/events/:eventId/official-impact/:layer", async (request, response) => {
+    const layer = officialImpactLayerSchema.safeParse(request.params.layer);
+    if (!layer.success) {
+      response.status(404).json({ error: "Capa oficial no encontrada" });
+      return;
+    }
+    try {
+      const event = await getEventById(pool, request.params.eventId);
+      if (!event) {
+        response.status(404).json({ error: "Evento sismico no encontrado" });
+        return;
+      }
+      const geoJson = await usgsImpactService.getGeoJson(event, layer.data);
+      response.setHeader("Cache-Control", "public, max-age=60");
+      response.setHeader("Content-Type", "application/geo+json; charset=utf-8");
+      response.send(JSON.stringify(geoJson));
+    } catch (error) {
+      if (error instanceof UsgsImpactLayerNotFoundError) {
+        response.status(404).json({ error: error.message, code: "official_layer_not_found" });
+        return;
+      }
+      if (error instanceof UsgsImpactUnavailableError) {
+        response.status(502).json({ error: error.message, code: "usgs_impact_unavailable" });
+        return;
+      }
       response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
     }
   });

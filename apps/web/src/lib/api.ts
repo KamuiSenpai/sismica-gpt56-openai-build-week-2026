@@ -4,6 +4,7 @@ import {
   normalizeUsgsFeature,
   type DisasterContext,
   type ExperimentalOrigin,
+  type OfficialImpactSummary,
   type SeismicEvent,
   type SeismicPresenceSummary,
   type SeismicStation,
@@ -384,6 +385,27 @@ export async function fetchTopMagnitude(limit = 10): Promise<SeismicEvent[]> {
   } catch (error) {
     console.warn("Top de mayor magnitud no disponible.", error);
     return [];
+  }
+}
+
+export function resolveApiEndpoint(endpoint: string): string {
+  return new URL(endpoint, `${API_BASE_URL.replace(/\/$/u, "")}/`).toString();
+}
+
+export async function fetchOfficialImpactSummary(
+  eventId: string,
+  signal?: AbortSignal
+): Promise<OfficialImpactSummary | null> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/events/${encodeURIComponent(eventId)}/official-impact`,
+      { signal }
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as OfficialImpactSummary;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    return null;
   }
 }
 
