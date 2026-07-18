@@ -14,6 +14,18 @@ const SOURCES = {
   regions: "ne_10m_geography_regions_points.geojson"
 };
 
+// Natural Earth leaves a small set of marine and regional labels without NAME_ES.
+const SPANISH_NAME_OVERRIDES = {
+  "region:1159104901": "Isla Wright",
+  "marine:1159116643": "Bahía de Plenty",
+  "marine:1159118351": "Golfo de Olenek",
+  "marine:1159118925": "Bahía de Santa Elena",
+  "region:1159104983": "Cabo Fear",
+  "region:1159104675": "Cabo Howe Occidental",
+  "marine:1159119293": "Estrecho de Long Island",
+  "marine:1159119635": "Bahía Wynniatt"
+};
+
 function finiteNumber(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -263,7 +275,10 @@ const labels = [
       left.name.localeCompare(right.name, "es")
   );
 
-const uniqueLabels = [...new Map(labels.map((label) => [label.id, label])).values()];
+const uniqueLabels = [...new Map(labels.map((label) => [label.id, label])).values()].map((label) => ({
+  ...label,
+  name: SPANISH_NAME_OVERRIDES[label.id] ?? label.name
+}));
 const catalog = {
   version: 1,
   language: "es",

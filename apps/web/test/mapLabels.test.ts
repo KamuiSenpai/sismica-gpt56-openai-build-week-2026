@@ -4,10 +4,34 @@ import test from "node:test";
 
 import {
   estimateMapZoom,
+  selectNonOverlappingMapLabels,
   selectMapLabelCandidates,
   type SpanishMapLabel,
   type SpanishMapLabelCatalog
 } from "../src/lib/mapLabels";
+
+test("projected labels keep a real gap and discard text clipped by the viewport", () => {
+  const selected = selectNonOverlappingMapLabels(
+    [
+      { value: "prioridad", x: 100, y: 60, width: 120, height: 20 },
+      { value: "solapada", x: 165, y: 60, width: 90, height: 20 },
+      { value: "separada", x: 260, y: 60, width: 80, height: 20 },
+      { value: "cortada", x: 10, y: 20, width: 80, height: 20 }
+    ],
+    {
+      viewportWidth: 320,
+      viewportHeight: 120,
+      maxLabels: 10,
+      minimumGap: 10,
+      viewportPadding: 6
+    }
+  );
+
+  assert.deepEqual(
+    selected.map((label) => label.value),
+    ["prioridad", "separada"]
+  );
+});
 
 test("estimateMapZoom increases as the camera approaches the globe", () => {
   assert.equal(estimateMapZoom(40_075_016.686), 1);
@@ -91,6 +115,11 @@ test("generated Natural Earth catalog provides representative names in Spanish",
   for (const name of ["Estados Unidos", "Japón"]) assert.equal(countries.has(name), true);
   for (const name of ["Pekín", "Moscú", "Ciudad de México"]) assert.equal(cities.has(name), true);
   assert.equal(marine.has("océano pacífico"), true);
+
+  const namesById = new Map(catalog.labels.map((label) => [label.id, label.name]));
+  assert.equal(namesById.get("marine:1159116643"), "Bahía de Plenty");
+  assert.equal(namesById.get("marine:1159119293"), "Estrecho de Long Island");
+  assert.equal(namesById.get("region:1159104901"), "Isla Wright");
 
   for (const englishName of ["United States of America", "Japan"]) {
     assert.equal(countries.has(englishName), false);

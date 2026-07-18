@@ -51,7 +51,7 @@ import {
   type CameraShot
 } from "../lib/cameraDirector";
 import { resolveCountryCode } from "../lib/countryGeocoder";
-import { buildEstimatedIntensityOverlay } from "../lib/intensityOverlay";
+import { buildEstimatedIntensityOverlay, type IntensityOverlayLayer } from "../lib/intensityOverlay";
 import {
   buildCoastalAttentionLayers,
   buildEventHaloLayers,
@@ -61,11 +61,12 @@ import {
 import { precacheMapArea } from "../lib/mapCache";
 import {
   estimateMapZoom,
+  selectNonOverlappingMapLabels,
   selectMapLabelCandidates,
-  type SpanishMapLabel,
   type SpanishMapLabelCatalog,
   type SpanishMapLabelKind
 } from "../lib/mapLabels";
+import { resolveMapRenderScale } from "../lib/mapQuality";
 import {
   estimatedIntensity,
   formatDepth,
@@ -128,6 +129,13 @@ const EXPERIMENTAL_ORIGIN_PREFIX = "origin:";
 const ESTIMATED_SHAKEMAP_PREFIX = "estimated-shakemap:";
 const WAVE_PREFIX = "wave:";
 const MAP_LABEL_PREFIX = "map-label:";
+
+type IntensityAreaIndicator = Pick<IntensityOverlayLayer, "mmi"> & {
+  radiusKm: IntensityOverlayLayer["radiusKm"] | null;
+  source: "official" | "estimated";
+};
+
+const INTENSITY_AREA_INDICATORS = new WeakMap<Entity, IntensityAreaIndicator>();
 
 type ActiveFocusCameraState = {
   eventId: string;
@@ -263,6 +271,11 @@ function styleOfficialShakeMapDataSource(dataSource: GeoJsonDataSource): void {
 
     const colorCss = intensityCssColor(value);
     const cesiumColor = Color.fromCssColorString(colorCss).withAlpha(0.4);
+    INTENSITY_AREA_INDICATORS.set(entity, {
+      mmi: value,
+      radiusKm: null,
+      source: "official"
+    });
     if (entity.polygon) {
       entity.polygon.material = new ColorMaterialProperty(cesiumColor);
       entity.polygon.outline = new ConstantProperty(false);
@@ -410,10 +423,27 @@ function renderEstimatedIntensityOverlay(viewer: Viewer, event: SeismicEvent): E
         zIndex: layer.zIndex
       }
     });
+    INTENSITY_AREA_INDICATORS.set(entity, {
+      mmi: layer.mmi,
+      radiusKm: layer.radiusKm,
+      source: "estimated"
+    });
     entities.push(entity);
   }
 
   return entities;
+}
+
+function intensityAreaBandLabel(mmi: number): string {
+  let selected = INTENSITY_BANDS[0];
+  for (const band of INTENSITY_BANDS) {
+    if (mmi >= band.mmi) selected = band;
+  }
+  return selected?.label ?? `MMI ${Math.round(mmi)}`;
+}
+
+function formatIntensityAreaRadius(radiusKm: number): string {
+  return new Intl.NumberFormat("es-PE", { maximumFractionDigits: 0 }).format(radiusKm);
 }
 
 function disasterColor(level: string | null): Color {
@@ -822,6 +852,15 @@ async function setupBasemap(viewer: Viewer): Promise<void> {
   );
 }
 
+function applyMapRenderQuality(viewer: Viewer): void {
+  if (viewer.isDestroyed()) return;
+  const canvas = viewer.scene.canvas;
+  const scale = resolveMapRenderScale(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio);
+  viewer.useBrowserRecommendedResolution = false;
+  viewer.resolutionScale = scale.resolutionScale;
+  viewer.forceResize();
+}
+
 type MapLabelVisual = {
   color: Color;
   font: string;
@@ -874,18 +913,6 @@ function isSpanishMapLabelCatalog(value: unknown): value is SpanishMapLabelCatal
   return catalog.language === "es" && Array.isArray(catalog.labels);
 }
 
-function labelsOverlap(
-  left: { left: number; top: number; right: number; bottom: number },
-  right: { left: number; top: number; right: number; bottom: number }
-): boolean {
-  return !(
-    left.right < right.left ||
-    left.left > right.right ||
-    left.bottom < right.top ||
-    left.top > right.bottom
-  );
-}
-
 async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
   try {
     const response = await fetch("/data/map-labels-es.json");
@@ -898,6 +925,9 @@ async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
     await viewer.dataSources.add(dataSource);
     if (viewer.isDestroyed()) return () => undefined;
 
+    const measurementCanvas = document.createElement("canvas");
+    const measurementContext = measurementCanvas.getContext("2d");
+
     let lastSignature = "";
     const refresh = () => {
       if (viewer.isDestroyed()) return;
@@ -909,8 +939,9 @@ async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
       const height = canvas.clientHeight;
       if (width <= 0 || height <= 0) return;
 
+      const zoom = estimateMapZoom(viewer.camera.positionCartographic.height);
       const candidates = selectMapLabelCandidates(catalog.labels, {
-        zoom: estimateMapZoom(viewer.camera.positionCartographic.height),
+        zoom,
         bounds: {
           west: CesiumMath.toDegrees(rectangle.west),
           south: CesiumMath.toDegrees(rectangle.south),
@@ -919,46 +950,56 @@ async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
         },
         maxCandidates: 550
       });
-      const maximumLabels = CesiumMath.clamp(Math.floor((width * height) / 18_000), 28, 110);
-      const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = [];
-      const visible: SpanishMapLabel[] = [];
-
-      for (const label of candidates) {
+      const maximumLabels = CesiumMath.clamp(Math.floor((width * height) / 28_000), 24, 76);
+      const projected = candidates.flatMap((label) => {
         const screenPosition = SceneTransforms.worldToWindowCoordinates(
           viewer.scene,
           Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000)
         );
-        if (!screenPosition || screenPosition.x < 0 || screenPosition.y < 0) continue;
-        if (screenPosition.x > width || screenPosition.y > height) continue;
+        if (!screenPosition) return [];
 
         const visual = MAP_LABEL_VISUALS[label.kind];
-        const labelWidth = CesiumMath.clamp(label.name.length * visual.fontSize * 0.57, 34, 210);
-        const box = {
-          left: screenPosition.x - labelWidth / 2 - 5,
-          top: screenPosition.y - visual.fontSize / 2 - 4,
-          right: screenPosition.x + labelWidth / 2 + 5,
-          bottom: screenPosition.y + visual.fontSize / 2 + 4
-        };
-        if (occupied.some((existing) => labelsOverlap(existing, box))) continue;
+        const text = visual.uppercase ? label.name.toLocaleUpperCase("es") : label.name;
+        if (measurementContext) measurementContext.font = visual.font;
+        const metrics = measurementContext?.measureText(text);
+        const measuredHeight = metrics
+          ? metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+          : visual.fontSize;
 
-        occupied.push(box);
-        visible.push(label);
-        if (visible.length >= maximumLabels) break;
-      }
+        return [
+          {
+            value: { label, text },
+            x: screenPosition.x,
+            y: screenPosition.y,
+            width: Math.ceil(
+              (metrics?.width ?? text.length * visual.fontSize * 0.6) + visual.outlineWidth * 2
+            ),
+            height: Math.ceil(Math.max(visual.fontSize, measuredHeight) + visual.outlineWidth * 2)
+          }
+        ];
+      });
+      const visible = selectNonOverlappingMapLabels(projected, {
+        viewportWidth: width,
+        viewportHeight: height,
+        maxLabels: maximumLabels,
+        minimumGap: zoom < 3 ? 12 : 9,
+        viewportPadding: 8
+      });
 
-      const signature = visible.map((label) => label.id).join("|");
+      const signature = visible.map(({ value }) => value.label.id).join("|");
       if (signature === lastSignature) return;
       lastSignature = signature;
 
       dataSource.entities.suspendEvents();
       dataSource.entities.removeAll();
-      for (const label of visible) {
+      for (const { value } of visible) {
+        const { label, text } = value;
         const visual = MAP_LABEL_VISUALS[label.kind];
         dataSource.entities.add({
           id: `${MAP_LABEL_PREFIX}${label.id}`,
           position: Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000),
           label: {
-            text: visual.uppercase ? label.name.toLocaleUpperCase("es") : label.name,
+            text,
             font: visual.font,
             fillColor: visual.color,
             outlineColor: Color.BLACK.withAlpha(0.92),
@@ -976,6 +1017,7 @@ async function setupSpanishMapLabels(viewer: Viewer): Promise<() => void> {
     const removeMoveListener = viewer.camera.moveEnd.addEventListener(refresh);
     window.addEventListener("resize", refresh);
     const refreshTimer = window.setInterval(refresh, 1_500);
+    void document.fonts.ready.then(refresh);
     refresh();
 
     return () => {
@@ -1135,6 +1177,7 @@ export function MapPanel({
     | { kind: "sea-level"; station: SeaLevelStation; x: number; y: number }
     | { kind: "origin"; origin: ExperimentalOrigin; x: number; y: number }
     | { kind: "coastal-zone"; layer: CoastalAttentionLayer; x: number; y: number }
+    | { kind: "intensity-area"; indicator: IntensityAreaIndicator; x: number; y: number }
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
@@ -1163,7 +1206,8 @@ export function MapPanel({
       timeline: false,
       fullscreenButton: false,
       infoBox: false,
-      selectionIndicator: false
+      selectionIndicator: false,
+      useBrowserRecommendedResolution: false
     });
     viewerRef.current = viewer;
 
@@ -1176,6 +1220,12 @@ export function MapPanel({
     scene.fog.enabled = false;
     scene.highDynamicRange = false;
     scene.postProcessStages.bloom.enabled = false;
+
+    const refreshMapQuality = () => applyMapRenderQuality(viewer);
+    const qualityResizeObserver = new ResizeObserver(refreshMapQuality);
+    qualityResizeObserver.observe(containerRef.current);
+    window.addEventListener("resize", refreshMapQuality);
+    refreshMapQuality();
 
     viewer.camera.setView({
       destination: Cartesian3.fromDegrees(-40, 15, 32_000_000)
@@ -1191,9 +1241,16 @@ export function MapPanel({
     const handler = new ScreenSpaceEventHandler(canvas);
 
     handler.setInputAction((movement: ScreenSpaceEventHandler.PositionedEvent) => {
-      const picked = viewer.scene
-        .drillPick(movement.position, 12)
-        .find((candidate) => candidate.id instanceof Entity && !candidate.id.id.startsWith(MAP_LABEL_PREFIX));
+      const picked = viewer.scene.drillPick(movement.position, 12).find((candidate) => {
+        if (!(candidate.id instanceof Entity) || candidate.id.id.startsWith(MAP_LABEL_PREFIX)) return false;
+        const id = candidate.id.id;
+        return (
+          eventMapRef.current.has(id) ||
+          coastalZoneMapRef.current.has(id) ||
+          stationMapRef.current.has(id) ||
+          seaLevelStationMapRef.current.has(id)
+        );
+      });
       if (!defined(picked) || !(picked.id instanceof Entity) || typeof picked.id.id !== "string") return;
       if (eventMapRef.current.has(picked.id.id)) {
         setSelectedStationId(null);
@@ -1215,9 +1272,26 @@ export function MapPanel({
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     handler.setInputAction((movement: ScreenSpaceEventHandler.MotionEvent) => {
-      const picked = viewer.scene
-        .drillPick(movement.endPosition, 12)
-        .find((candidate) => candidate.id instanceof Entity && !candidate.id.id.startsWith(MAP_LABEL_PREFIX));
+      const candidates = viewer.scene.drillPick(movement.endPosition, 12);
+      const primary = candidates.find((candidate) => {
+        if (!(candidate.id instanceof Entity) || candidate.id.id.startsWith(MAP_LABEL_PREFIX)) return false;
+        const id = candidate.id.id;
+        return (
+          eventMapRef.current.has(id) ||
+          disasterMapRef.current.has(id) ||
+          stationMapRef.current.has(id) ||
+          seaLevelStationMapRef.current.has(id) ||
+          experimentalOriginMapRef.current.has(id) ||
+          coastalZoneMapRef.current.has(id)
+        );
+      });
+      const contextual = candidates.find(
+        (candidate) =>
+          candidate.id instanceof Entity &&
+          !candidate.id.id.startsWith(MAP_LABEL_PREFIX) &&
+          (INTENSITY_AREA_INDICATORS.has(candidate.id) || Boolean(candidate.id.properties?.volcanoName))
+      );
+      const picked = primary ?? contextual;
       const entity = defined(picked) && picked.id instanceof Entity ? picked.id : undefined;
       const id = entity?.id;
       const event = typeof id === "string" ? eventMapRef.current.get(id) : undefined;
@@ -1226,6 +1300,7 @@ export function MapPanel({
       const seaLevelStation = typeof id === "string" ? seaLevelStationMapRef.current.get(id) : undefined;
       const origin = typeof id === "string" ? experimentalOriginMapRef.current.get(id) : undefined;
       const coastalLayer = typeof id === "string" ? coastalZoneMapRef.current.get(id) : undefined;
+      const intensityArea = entity ? INTENSITY_AREA_INDICATORS.get(entity) : undefined;
 
       const rect = canvas.getBoundingClientRect();
       if (event) {
@@ -1276,6 +1351,14 @@ export function MapPanel({
           y: rect.top + movement.endPosition.y
         });
         canvas.style.cursor = "pointer";
+      } else if (intensityArea) {
+        setHover({
+          kind: "intensity-area",
+          indicator: intensityArea,
+          x: rect.left + movement.endPosition.x,
+          y: rect.top + movement.endPosition.y
+        });
+        canvas.style.cursor = "help";
       } else if (entity?.properties?.volcanoName) {
         setHover({
           kind: "volcano",
@@ -1317,6 +1400,8 @@ export function MapPanel({
       }
       stopSpin();
       stopSpinRef.current = null;
+      qualityResizeObserver.disconnect();
+      window.removeEventListener("resize", refreshMapQuality);
       cleanupSpanishLabels();
       canvas.removeEventListener("pointerleave", clearHover);
       handler.destroy();
@@ -2057,6 +2142,25 @@ export function MapPanel({
             {hover.layer.tsunami ? "Bandera de tsunami en fuente" : "Evento costero reciente"}
           </span>
           <span className="tt-source">Enfoque costero editorial</span>
+        </div>
+      ) : null}
+
+      {hover?.kind === "intensity-area" ? (
+        <div className="map-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+          <strong>
+            {hover.indicator.source === "official"
+              ? "Sacudida observada/modelada"
+              : "Área de sacudida estimada"}
+          </strong>
+          <span>{intensityAreaBandLabel(hover.indicator.mmi)}</span>
+          {hover.indicator.radiusKm !== null ? (
+            <span>Alcance aproximado: {formatIntensityAreaRadius(hover.indicator.radiusKm)} km</span>
+          ) : null}
+          <span className="tt-source">
+            {hover.indicator.source === "official"
+              ? "USGS ShakeMap oficial"
+              : "Modelo preliminar; priorice ShakeMap oficial si está disponible"}
+          </span>
         </div>
       ) : null}
 

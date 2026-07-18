@@ -36,6 +36,22 @@ type MapLabelSelectionOptions = {
   maxCandidates?: number;
 };
 
+export type ProjectedMapLabel<T> = {
+  value: T;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type MapLabelCollisionOptions = {
+  viewportWidth: number;
+  viewportHeight: number;
+  maxLabels: number;
+  minimumGap?: number;
+  viewportPadding?: number;
+};
+
 const EARTH_CIRCUMFERENCE_METERS = 40_075_016.686;
 const KIND_PRIORITY: Record<SpanishMapLabelKind, number> = {
   country: 0,
@@ -48,6 +64,58 @@ const KIND_PRIORITY: Record<SpanishMapLabelKind, number> = {
 function longitudeIsVisible(longitude: number, bounds: MapLabelBounds): boolean {
   if (bounds.west <= bounds.east) return longitude >= bounds.west && longitude <= bounds.east;
   return longitude >= bounds.west || longitude <= bounds.east;
+}
+
+function boxesOverlap(
+  left: { left: number; top: number; right: number; bottom: number },
+  right: { left: number; top: number; right: number; bottom: number }
+): boolean {
+  return !(
+    left.right <= right.left ||
+    left.left >= right.right ||
+    left.bottom <= right.top ||
+    left.top >= right.bottom
+  );
+}
+
+export function selectNonOverlappingMapLabels<T>(
+  candidates: readonly ProjectedMapLabel<T>[],
+  { viewportWidth, viewportHeight, maxLabels, minimumGap = 8, viewportPadding = 6 }: MapLabelCollisionOptions
+): ProjectedMapLabel<T>[] {
+  const safeMaximum = Math.max(0, Math.trunc(maxLabels));
+  if (safeMaximum === 0 || viewportWidth <= 0 || viewportHeight <= 0) return [];
+
+  const halfGap = Math.max(0, minimumGap) / 2;
+  const padding = Math.max(0, viewportPadding);
+  const occupied: Array<{ left: number; top: number; right: number; bottom: number }> = [];
+  const selected: ProjectedMapLabel<T>[] = [];
+
+  for (const candidate of candidates) {
+    if (![candidate.x, candidate.y, candidate.width, candidate.height].every(Number.isFinite)) continue;
+    if (candidate.width <= 0 || candidate.height <= 0) continue;
+
+    const box = {
+      left: candidate.x - candidate.width / 2 - halfGap,
+      top: candidate.y - candidate.height / 2 - halfGap,
+      right: candidate.x + candidate.width / 2 + halfGap,
+      bottom: candidate.y + candidate.height / 2 + halfGap
+    };
+    if (
+      box.left < padding ||
+      box.top < padding ||
+      box.right > viewportWidth - padding ||
+      box.bottom > viewportHeight - padding
+    ) {
+      continue;
+    }
+    if (occupied.some((existing) => boxesOverlap(existing, box))) continue;
+
+    occupied.push(box);
+    selected.push(candidate);
+    if (selected.length >= safeMaximum) break;
+  }
+
+  return selected;
 }
 
 export function estimateMapZoom(cameraHeightMeters: number): number {
