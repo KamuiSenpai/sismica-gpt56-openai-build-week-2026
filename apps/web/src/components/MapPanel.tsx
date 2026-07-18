@@ -30,7 +30,6 @@ import {
   Math as CesiumMath,
   PolygonHierarchy,
   Rectangle,
-  SceneTransforms,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   SingleTileImageryProvider,
@@ -969,9 +968,9 @@ export function MapPanel({
     | { kind: "volcano"; name: string; country: string; type: string; x: number; y: number }
     | null
   >(null);
-  const [stationsVisible, setStationsVisible] = useState(true);
-  const [seaLevelStationsVisible, setSeaLevelStationsVisible] = useState(true);
-  const [experimentalOriginsVisible, setExperimentalOriginsVisible] = useState(true);
+  const [stationsVisible] = useState(true);
+  const [seaLevelStationsVisible] = useState(true);
+  const [experimentalOriginsVisible] = useState(true);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [selectedSeaLevelStationId, setSelectedSeaLevelStationId] = useState<string | null>(null);
   const [seaLevelRecentMoves, setSeaLevelRecentMoves] = useState<SeaLevelRecentMove[]>([]);

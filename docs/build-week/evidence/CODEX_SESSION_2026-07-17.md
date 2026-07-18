@@ -35,8 +35,10 @@ Preparar commits nuevos entre el 17 y el 21 de julio de 2026, evidencia de sesio
 
 ## Evidencia de validacion
 
-- API: TypeScript correcto, ESLint correcto y 49/49 pruebas aprobadas.
+- API: TypeScript correcto y 49/49 pruebas aprobadas.
+- Worker: TypeScript correcto y 52/52 pruebas aprobadas.
 - Web: TypeScript correcto, build de Vite correcto y 107/107 pruebas aprobadas.
+- Repositorio: ESLint estricto sin advertencias y build de produccion aprobado.
 - Playwright: panel funcional a 1280 x 720 y 390 x 844.
 - Hallazgo Playwright 1: el recorrido podia cambiar el evento del dialogo; se congelo el evento solicitado.
 - Hallazgo Playwright 2: el dialogo heredaba un contexto de apilamiento bajo overlays; se movio a un portal React.

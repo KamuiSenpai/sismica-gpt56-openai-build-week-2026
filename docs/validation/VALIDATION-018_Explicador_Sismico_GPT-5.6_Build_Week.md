@@ -17,17 +17,17 @@ Resultado: implementacion local aprobada; llamada real a OpenAI pendiente por fa
 
 ## 3. Pruebas automatizadas
 
-| Comando                                     | Resultado                           |
-| ------------------------------------------- | ----------------------------------- |
-| `npm run typecheck -w apps/api`             | Aprobado                            |
-| `npm test -w apps/api`                      | 49/49 aprobadas                     |
-| `npx eslint` sobre archivos API modificados | Aprobado                            |
-| `npm run typecheck -w apps/web`             | Aprobado                            |
-| `npm test -w apps/web`                      | 107/107 aprobadas                   |
-| `npm run build -w apps/web`                 | Aprobado, 110 modulos transformados |
-| `npx eslint` sobre componentes web nuevos   | Aprobado                            |
+| Comando                   | Resultado                            |
+| ------------------------- | ------------------------------------ |
+| `npm run typecheck`       | Aprobado en todos los workspaces     |
+| `npm run lint`            | Aprobado, 0 errores y 0 advertencias |
+| `npm test -w apps/api`    | 49/49 aprobadas                      |
+| `npm test -w apps/worker` | 52/52 aprobadas                      |
+| `npm test -w apps/web`    | 107/107 aprobadas                    |
+| `npm run build`           | Aprobado, 110 modulos web            |
+| `npm run verify`          | Aprobado de extremo a extremo        |
 
-Para ejecutar la suite API se asignaron valores temporales de prueba a `YOUTUBE_CHAT_REFRESH_TOKEN` y `YOUTUBE_CHAT_CHANNEL_ID`, porque el `.env` operativo preexistente contiene esos campos vacios y el esquema historico los rechaza. No se modificaron ni mostraron credenciales reales.
+La validacion final se ejecuto sin credenciales temporales. Las variables opcionales vacias se normalizan como ausentes, por lo que copiar `.env.example` no activa ni bloquea integraciones deshabilitadas.
 
 ## 4. Cobertura GPT-5.6
 

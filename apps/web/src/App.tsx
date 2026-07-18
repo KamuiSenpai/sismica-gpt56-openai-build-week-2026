@@ -402,8 +402,8 @@ export default function App() {
   });
 
   useEffect(() => {
+    const timers = overlayTimersRef.current;
     return () => {
-      const timers = overlayTimersRef.current;
       if (timers.settle !== null) window.clearTimeout(timers.settle);
       if (timers.exit !== null) window.clearTimeout(timers.exit);
     };

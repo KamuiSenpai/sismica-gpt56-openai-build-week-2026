@@ -22,12 +22,17 @@ const booleanEnv = (fallback: boolean) =>
     if (typeof value === "string") return ["1", "true", "yes", "on"].includes(value.toLowerCase());
     return value;
   }, z.boolean().default(fallback));
+const optionalStringEnv = (minimumLength = 1) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().min(minimumLength).optional()
+  );
 const youtubeChatModeEnv = z.enum(["off", "dry-run", "live"]).default("off");
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   USGS_FEED_URL: urlEnv("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"),
-  CWA_AUTHORIZATION: z.string().min(1).optional(),
+  CWA_AUTHORIZATION: optionalStringEnv(),
   CWA_EARTHQUAKE_URL: urlEnv(
     "https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0016-002?format=JSON&limit=100"
   ),
@@ -81,17 +86,17 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => (value ?? "false").toLowerCase() === "true"),
-  SEISMIC_ENGINE_TOKEN: z.string().min(24).optional(),
+  SEISMIC_ENGINE_TOKEN: optionalStringEnv(24),
   SEISMIC_ENGINE_API_URL: urlEnv("http://localhost:3000"),
   SEISMIC_ENGINE_INTERVAL_MS: numberEnv(120000),
   SEISMIC_ENGINE_MAX_STATIONS: numberEnv(8),
   SEISMIC_ENGINE_MAX_EVENTS: numberEnv(6),
   YOUTUBE_CHAT_ENABLED: booleanEnv(false),
   YOUTUBE_CHAT_MODE: youtubeChatModeEnv,
-  YOUTUBE_CHAT_CLIENT_ID: z.string().min(1).optional(),
-  YOUTUBE_CHAT_CLIENT_SECRET: z.string().min(1).optional(),
-  YOUTUBE_CHAT_REFRESH_TOKEN: z.string().min(1).optional(),
-  YOUTUBE_CHAT_CHANNEL_ID: z.string().min(1).optional(),
+  YOUTUBE_CHAT_CLIENT_ID: optionalStringEnv(),
+  YOUTUBE_CHAT_CLIENT_SECRET: optionalStringEnv(),
+  YOUTUBE_CHAT_REFRESH_TOKEN: optionalStringEnv(),
+  YOUTUBE_CHAT_CHANNEL_ID: optionalStringEnv(),
   YOUTUBE_CHAT_MIN_INTERVAL_MS: numberEnv(12000),
   YOUTUBE_CHAT_MAX_EVENT_AGE_MINUTES: numberEnv(20),
   YOUTUBE_CHAT_MAX_QUEUE_SIZE: numberEnv(200),

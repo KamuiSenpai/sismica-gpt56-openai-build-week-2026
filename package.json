@@ -9,6 +9,8 @@
   "scripts": {
     "build": "npm run build -w packages/shared && npm run build -w apps/api && npm run build -w apps/worker && npm run build -w apps/web",
     "typecheck": "npm run build -w packages/shared && npm run typecheck -w apps/api && npm run typecheck -w apps/worker && npm run typecheck -w apps/web",
+    "test": "npm test -w apps/api && npm test -w apps/worker && npm test -w apps/web",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build",
     "dev:api": "npm run dev -w apps/api",
     "dev:web": "npm run dev -w apps/web",
     "dev:worker": "npm run dev -w apps/worker",
@@ -19,7 +21,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "prewarm:tts": "tsx scripts/prewarm-tts-cache.ts",
     "evidence:build-week": "node scripts/capture-build-week-evidence.mjs",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{ts,tsx,css,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,css,json,md}\"",

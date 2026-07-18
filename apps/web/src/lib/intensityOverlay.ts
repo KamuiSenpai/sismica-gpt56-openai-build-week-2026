@@ -31,7 +31,6 @@ const EARTH_RADIUS_KM = 6371.0088;
 const MIN_ESTIMATED_RADIUS_KM = 14;
 const MAX_ESTIMATED_RADIUS_KM = 820;
 const DEFAULT_POLYGON_POINT_COUNT = 128;
-const ESTIMATED_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const ESTIMATED_SHAKE_COLORS: Record<number, string> = {
   1: "#93cfe8",
   2: "#68b8dd",
@@ -196,7 +195,7 @@ function profileForLayer(baseProfile: number[], layerIndex: number, totalLayers:
   const contrast = clamp(1 - progress * 0.06, 0.9, 1);
   const tightening = clamp(1 - progress * 0.02, 0.95, 1);
 
-  return baseProfile.map((value, index) => {
+  return baseProfile.map((value) => {
     return clamp(1 + (value - 1) * contrast * tightening, 0.82, 1.2);
   });
 }

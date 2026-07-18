@@ -7,7 +7,7 @@
 | Commits dentro de la ventana  | Completo  | `dba5246`, `c8c8084`, `b560e14`           |
 | Sesion Codex identificada     | Completo  | `evidence/CODEX_SESSION_2026-07-17.md`    |
 | Integracion GPT-5.6 en codigo | Completo  | `POST /api/ai/explain-event`              |
-| Pruebas automatizadas         | Completo  | 49 API y 107 web                          |
+| Pruebas automatizadas         | Completo  | 49 API, 52 worker y 107 web               |
 | Validacion visual             | Completo  | Escritorio y movil con respuesta simulada |
 | Respuesta real `resp_...`     | Pendiente | Requiere `OPENAI_API_KEY`                 |
 | Video de demo                 | Pendiente | Grabar despues de la llamada real         |

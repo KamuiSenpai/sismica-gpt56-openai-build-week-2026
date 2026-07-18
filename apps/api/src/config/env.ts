@@ -21,6 +21,15 @@ const booleanEnv = (fallback: boolean) =>
     if (typeof value === "string") return ["1", "true", "yes", "on"].includes(value.toLowerCase());
     return value;
   }, z.boolean().default(fallback));
+const optionalStringEnv = (minimumLength = 1) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().min(minimumLength).optional()
+  );
+const optionalUrlEnv = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().url().optional()
+);
 const youtubeChatModeEnv = z.enum(["off", "dry-run", "live"]).default("off");
 
 const envSchema = z.object({
@@ -29,36 +38,36 @@ const envSchema = z.object({
   FRONTEND_ORIGIN: z.string().min(1).default("http://localhost:5173"),
   STREAM_CHANNEL: channelEnv("seismic_events_channel"),
   STATION_STREAM_CHANNEL: channelEnv("seismic_station_states_channel"),
-  SEISMIC_ENGINE_TOKEN: z.string().min(24).optional(),
+  SEISMIC_ENGINE_TOKEN: optionalStringEnv(24),
   // --- TTS neural local (Piper + proxy a XTTS-v2) ---
   TTS_ENABLED: booleanEnv(false),
-  PIPER_BINARY_PATH: z.string().min(1).optional(),
-  PIPER_VOICE_MODEL: z.string().min(1).optional(),
+  PIPER_BINARY_PATH: optionalStringEnv(),
+  PIPER_VOICE_MODEL: optionalStringEnv(),
   PIPER_USE_CUDA: booleanEnv(false),
   XTTS_ENABLED: booleanEnv(false),
-  XTTS_SERVICE_URL: z.string().url().optional(),
-  CHATTERBOX_SERVICE_URL: z.string().url().optional(),
-  TTS_CACHE_DIR: z.string().min(1).optional(),
+  XTTS_SERVICE_URL: optionalUrlEnv,
+  CHATTERBOX_SERVICE_URL: optionalUrlEnv,
+  TTS_CACHE_DIR: optionalStringEnv(),
   TTS_MAX_TEXT_LENGTH: numberEnv(600),
   // --- Narracion por IA (DeepSeek) ---
   DEEPSEEK_ENABLED: booleanEnv(false),
-  DEEPSEEK_API_KEY: z.string().min(1).optional(),
+  DEEPSEEK_API_KEY: optionalStringEnv(),
   DEEPSEEK_BASE_URL: z.string().url().default("https://api.deepseek.com"),
   DEEPSEEK_MODEL: z.string().min(1).default("deepseek-chat"),
   DEEPSEEK_MAX_TOKENS: numberEnv(120),
   DEEPSEEK_RATE_PER_MIN: numberEnv(30),
   // --- Build Week: explicador sismico con OpenAI Responses API ---
   OPENAI_ENABLED: booleanEnv(false),
-  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: optionalStringEnv(),
   OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
   OPENAI_MODEL: z.string().min(1).default("gpt-5.6"),
   OPENAI_TIMEOUT_MS: numberEnv(15000),
   YOUTUBE_CHAT_ENABLED: booleanEnv(false),
   YOUTUBE_CHAT_MODE: youtubeChatModeEnv,
-  YOUTUBE_CHAT_CLIENT_ID: z.string().min(1).optional(),
-  YOUTUBE_CHAT_CLIENT_SECRET: z.string().min(1).optional(),
-  YOUTUBE_CHAT_REFRESH_TOKEN: z.string().min(1).optional(),
-  YOUTUBE_CHAT_CHANNEL_ID: z.string().min(1).optional(),
+  YOUTUBE_CHAT_CLIENT_ID: optionalStringEnv(),
+  YOUTUBE_CHAT_CLIENT_SECRET: optionalStringEnv(),
+  YOUTUBE_CHAT_REFRESH_TOKEN: optionalStringEnv(),
+  YOUTUBE_CHAT_CHANNEL_ID: optionalStringEnv(),
   YOUTUBE_CHAT_MIN_INTERVAL_MS: numberEnv(12000),
   YOUTUBE_CHAT_MAX_EVENT_AGE_MINUTES: numberEnv(20),
   YOUTUBE_CHAT_MAX_QUEUE_SIZE: numberEnv(200),

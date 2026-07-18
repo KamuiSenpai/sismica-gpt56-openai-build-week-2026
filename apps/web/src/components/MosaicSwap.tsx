@@ -34,9 +34,11 @@ export function MosaicSwap({
   const [anim, setAnim] = useState<Anim | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const childrenRef = useRef(children);
+  const shownRef = useRef(shown);
   const prevKey = useRef(swapKey);
 
   childrenRef.current = children;
+  shownRef.current = shown;
 
   useEffect(() => {
     if (prevKey.current === swapKey) return;
@@ -46,8 +48,10 @@ export function MosaicSwap({
     const prefersReduced =
       typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-    const oldNode = shown; // lo que se estaba mostrando pasa a ser la capa saliente
-    setShown(childrenRef.current); // el contenido nuevo queda de base
+    const oldNode = shownRef.current; // lo que se estaba mostrando pasa a ser la capa saliente
+    const nextNode = childrenRef.current;
+    shownRef.current = nextNode;
+    setShown(nextNode); // el contenido nuevo queda de base
 
     if (!el || prefersReduced) {
       setAnim(null);
