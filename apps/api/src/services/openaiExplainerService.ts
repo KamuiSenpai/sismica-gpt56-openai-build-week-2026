@@ -1,27 +1,36 @@
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 import { env } from "../config/env.js";
 
-const nullableText = (max: number) => z.string().trim().max(max).nullable();
-
 export const eventExplanationRequestSchema = z
   .object({
-    eventId: z.string().trim().min(1).max(200),
-    source: z.string().trim().min(1).max(30),
-    title: z.string().trim().min(1).max(300),
-    magnitude: z.number().finite().nullable(),
-    magnitudeType: nullableText(20),
-    depthKm: z.number().finite().nullable(),
-    latitude: z.number().finite().min(-90).max(90),
-    longitude: z.number().finite().min(-180).max(180),
-    eventTimeUtc: z.string().datetime({ offset: true }),
-    status: nullableText(40),
-    tsunami: z.boolean(),
-    sourceUrl: z.string().url().max(1000).nullable()
+    eventId: z.string().trim().min(1).max(200)
   })
   .strict();
 
-export type EventExplanationRequest = z.infer<typeof eventExplanationRequestSchema>;
+export type GroundedEventExplanationInput = {
+  eventId: string;
+  source: string;
+  title: string;
+  magnitude: number | null;
+  magnitudeType: string | null;
+  depthKm: number | null;
+  latitude: number;
+  longitude: number;
+  eventTimeUtc: string;
+  status: string | null;
+  tsunami: boolean;
+  sources: string[];
+  references: Array<{
+    source: string;
+    sourceEventId: string;
+    magnitude: number | null;
+    eventTimeUtc: string;
+    updatedAtUtc: string | null;
+  }>;
+};
 
 export const eventExplanationSchema = z
   .object({
@@ -35,13 +44,30 @@ export const eventExplanationSchema = z
 
 export type EventExplanation = z.infer<typeof eventExplanationSchema>;
 
-export type EventExplanationResult = {
+export type OpenAiUsage = {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+};
+
+export type OpenAiProviderExplanationResult = {
   provider: "openai";
   model: string;
   responseId: string;
   generatedAtUtc: string;
   disclaimer: string;
+  usage: OpenAiUsage;
   explanation: EventExplanation;
+};
+
+export type EventExplanationResult = OpenAiProviderExplanationResult & {
+  cached: boolean;
+  grounding: {
+    eventId: string;
+    eventVersionUtc: string;
+    sourceCount: number;
+    inputSha256: string;
+  };
 };
 
 type OpenAiConfig = {
@@ -63,7 +89,12 @@ type ResponsesApiPayload = {
       refusal?: string;
     }>;
   }>;
-  error?: { message?: string };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+  };
+  error?: { code?: string; type?: string };
 };
 
 type ExplainDependencies = {
@@ -85,6 +116,7 @@ const RESPONSE_SCHEMA = {
   additionalProperties: false
 } as const;
 
+const PROMPT_VERSION = "2026-07-17.1";
 const SYSTEM_PROMPT = [
   "Actua como divulgador sismico para una audiencia general y responde en espanol claro.",
   "Usa exclusivamente los hechos incluidos en el JSON del usuario.",
@@ -93,6 +125,7 @@ const SYSTEM_PROMPT = [
   "No afirmes un mecanismo tectonico porque no forma parte de la entrada.",
   "Magnitud no equivale a intensidad o danos.",
   "tsunami=true es solo un indicador de la fuente, no una amenaza o alerta confirmada.",
+  "Las referencias representan reportes asociados, no observaciones independientes garantizadas.",
   "Las acciones deben ser generales y siempre remitir a autoridades locales y fuentes oficiales.",
   "Explica tambien que conclusiones no permiten los datos disponibles."
 ].join(" ");
@@ -101,14 +134,21 @@ export const OPENAI_EXPLAINER_DISCLAIMER =
   "Explicacion educativa generada por IA. No sustituye alertas ni instrucciones de autoridades oficiales.";
 
 export class OpenAiExplainerUnavailableError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code = "openai_unavailable",
+    readonly providerStatus: number | null = null
+  ) {
     super(message);
     this.name = "OpenAiExplainerUnavailableError";
   }
 }
 
 export class OpenAiExplainerResponseError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code = "openai_invalid_response"
+  ) {
     super(message);
     this.name = "OpenAiExplainerResponseError";
   }
@@ -129,7 +169,7 @@ function extractOutputText(payload: ResponsesApiPayload): string | null {
     if (item.type !== "message") continue;
     for (const content of item.content ?? []) {
       if (content.type === "refusal" || content.refusal) {
-        throw new OpenAiExplainerResponseError("GPT-5.6 rechazo generar la explicacion");
+        throw new OpenAiExplainerResponseError("GPT-5.6 rechazo generar la explicacion", "model_refusal");
       }
       if (content.type === "output_text" && content.text?.trim()) return content.text.trim();
     }
@@ -137,23 +177,62 @@ function extractOutputText(payload: ResponsesApiPayload): string | null {
   return null;
 }
 
+function providerError(status: number, payload: ResponsesApiPayload): OpenAiExplainerUnavailableError {
+  const providerCode = payload.error?.code ?? payload.error?.type ?? "unknown";
+  if (status === 401 || status === 403) {
+    return new OpenAiExplainerUnavailableError(
+      "OpenAI rechazo la autenticacion del servidor",
+      "openai_auth_failed",
+      status
+    );
+  }
+  if (status === 429) {
+    return new OpenAiExplainerUnavailableError(
+      "OpenAI no tiene cuota disponible o aplico un limite temporal",
+      providerCode === "insufficient_quota" ? "openai_insufficient_quota" : "openai_rate_limited",
+      status
+    );
+  }
+  if (status >= 500) {
+    return new OpenAiExplainerUnavailableError(
+      "OpenAI no esta disponible temporalmente",
+      "openai_provider_error",
+      status
+    );
+  }
+  return new OpenAiExplainerUnavailableError(
+    "OpenAI rechazo la solicitud del servidor",
+    "openai_request_rejected",
+    status
+  );
+}
+
+export function eventExplanationInputHash(input: GroundedEventExplanationInput): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ promptVersion: PROMPT_VERSION, input }))
+    .digest("hex");
+}
+
 export function isOpenAiExplainerConfigured(): boolean {
   return env.openaiEnabled && Boolean(env.openaiApiKey);
 }
 
 export async function explainSeismicEvent(
-  input: EventExplanationRequest,
+  input: GroundedEventExplanationInput,
   dependencies: ExplainDependencies = {}
-): Promise<EventExplanationResult> {
+): Promise<OpenAiProviderExplanationResult> {
   const config = dependencies.config ?? runtimeConfig();
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const now = dependencies.now ?? (() => new Date());
 
   if (!config.enabled) {
-    throw new OpenAiExplainerUnavailableError("OpenAI deshabilitado (OPENAI_ENABLED=false)");
+    throw new OpenAiExplainerUnavailableError(
+      "OpenAI deshabilitado (OPENAI_ENABLED=false)",
+      "openai_disabled"
+    );
   }
   if (!config.apiKey) {
-    throw new OpenAiExplainerUnavailableError("Falta OPENAI_API_KEY");
+    throw new OpenAiExplainerUnavailableError("Falta OPENAI_API_KEY", "openai_key_missing");
   }
 
   let response: Response;
@@ -184,10 +263,8 @@ export async function explainSeismicEvent(
       }),
       signal: AbortSignal.timeout(config.timeoutMs)
     });
-  } catch (error) {
-    throw new OpenAiExplainerUnavailableError(
-      `No se pudo contactar OpenAI: ${error instanceof Error ? error.message : "error de red"}`
-    );
+  } catch {
+    throw new OpenAiExplainerUnavailableError("No se pudo contactar OpenAI", "openai_network_error");
   }
 
   let payload: ResponsesApiPayload;
@@ -197,12 +274,7 @@ export async function explainSeismicEvent(
     throw new OpenAiExplainerResponseError(`OpenAI respondio ${response.status} sin JSON valido`);
   }
 
-  if (!response.ok) {
-    throw new OpenAiExplainerUnavailableError(
-      `OpenAI respondio ${response.status}${payload.error?.message ? `: ${payload.error.message}` : ""}`
-    );
-  }
-
+  if (!response.ok) throw providerError(response.status, payload);
   if (!payload.id?.trim()) {
     throw new OpenAiExplainerResponseError("OpenAI no devolvio response_id");
   }
@@ -230,6 +302,11 @@ export async function explainSeismicEvent(
     responseId: payload.id,
     generatedAtUtc: now().toISOString(),
     disclaimer: OPENAI_EXPLAINER_DISCLAIMER,
+    usage: {
+      inputTokens: payload.usage?.input_tokens ?? null,
+      outputTokens: payload.usage?.output_tokens ?? null,
+      totalTokens: payload.usage?.total_tokens ?? null
+    },
     explanation: explanation.data
   };
 }

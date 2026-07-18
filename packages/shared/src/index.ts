@@ -141,6 +141,7 @@ export type SeismicStation = {
   countryCode: string | null;
   latitude: number;
   longitude: number;
+  positionType: "fixed_catalog";
   elevationM: number | null;
   startTimeUtc: string | null;
   endTimeUtc: string | null;

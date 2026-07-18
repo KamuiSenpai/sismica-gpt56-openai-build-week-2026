@@ -19,6 +19,7 @@
     "db:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-db.ps1",
     "db:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-db.ps1",
     "db:migrate": "node scripts/migrate.mjs",
+    "analytics:refresh": "tsx scripts/refresh-seismic-presence.ts",
     "prewarm:tts": "tsx scripts/prewarm-tts-cache.ts",
     "evidence:build-week": "node scripts/capture-build-week-evidence.mjs",
     "lint": "eslint . --max-warnings=0",

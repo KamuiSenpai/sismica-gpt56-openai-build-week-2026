@@ -5,12 +5,15 @@ process.env.OPENAI_ENABLED = "false";
 
 const {
   eventExplanationRequestSchema,
+  eventExplanationInputHash,
   explainSeismicEvent,
   OpenAiExplainerResponseError,
   OpenAiExplainerUnavailableError
 } = await import("../src/services/openaiExplainerService.js");
 
-const request = {
+const request = { eventId: "IGP:2026-001" };
+
+const groundedInput = {
   eventId: "IGP:2026-001",
   source: "IGP",
   title: "M4.8 - Costa de Arequipa, Peru",
@@ -22,7 +25,16 @@ const request = {
   eventTimeUtc: "2026-07-17T19:30:00.000Z",
   status: "reviewed",
   tsunami: false,
-  sourceUrl: "https://ultimosismo.igp.gob.pe/"
+  sources: ["IGP"],
+  references: [
+    {
+      source: "IGP",
+      sourceEventId: "2026-001",
+      magnitude: 4.8,
+      eventTimeUtc: "2026-07-17T19:30:00.000Z",
+      updatedAtUtc: null
+    }
+  ]
 };
 
 const config = {
@@ -40,19 +52,24 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-test("eventExplanationRequestSchema acepta hechos sismicos completos", () => {
+test("eventExplanationRequestSchema acepta solo eventId", () => {
   assert.equal(eventExplanationRequestSchema.safeParse(request).success, true);
-  assert.equal(eventExplanationRequestSchema.safeParse({ ...request, latitude: 100 }).success, false);
+  assert.equal(eventExplanationRequestSchema.safeParse({ ...request, source: "IGP" }).success, false);
   assert.equal(eventExplanationRequestSchema.safeParse({ ...request, eventId: "" }).success, false);
+  assert.equal(eventExplanationInputHash(groundedInput), eventExplanationInputHash(groundedInput));
+  assert.notEqual(
+    eventExplanationInputHash(groundedInput),
+    eventExplanationInputHash({ ...groundedInput, magnitude: 4.9 })
+  );
 });
 
 test("explainSeismicEvent exige habilitacion y API key", async () => {
   await assert.rejects(
-    () => explainSeismicEvent(request, { config: { ...config, enabled: false } }),
+    () => explainSeismicEvent(groundedInput, { config: { ...config, enabled: false } }),
     OpenAiExplainerUnavailableError
   );
   await assert.rejects(
-    () => explainSeismicEvent(request, { config: { ...config, apiKey: undefined } }),
+    () => explainSeismicEvent(groundedInput, { config: { ...config, apiKey: undefined } }),
     OpenAiExplainerUnavailableError
   );
 });
@@ -86,7 +103,7 @@ test("explainSeismicEvent usa Responses API, GPT-5.6 y JSON Schema estricto", as
     });
   };
 
-  const result = await explainSeismicEvent(request, {
+  const result = await explainSeismicEvent(groundedInput, {
     config,
     fetchImpl,
     now: () => new Date("2026-07-17T20:00:00.000Z")
@@ -127,7 +144,7 @@ test("explainSeismicEvent rechaza salida vacia o fuera de esquema", async () => 
   const emptyFetch: typeof fetch = async () =>
     jsonResponse({ id: "resp_empty", model: "gpt-5.6", output: [] });
   await assert.rejects(
-    () => explainSeismicEvent(request, { config, fetchImpl: emptyFetch }),
+    () => explainSeismicEvent(groundedInput, { config, fetchImpl: emptyFetch }),
     OpenAiExplainerResponseError
   );
 
@@ -143,7 +160,7 @@ test("explainSeismicEvent rechaza salida vacia o fuera de esquema", async () => 
       ]
     });
   await assert.rejects(
-    () => explainSeismicEvent(request, { config, fetchImpl: invalidFetch }),
+    () => explainSeismicEvent(groundedInput, { config, fetchImpl: invalidFetch }),
     OpenAiExplainerResponseError
   );
 });
@@ -162,7 +179,7 @@ test("explainSeismicEvent detecta una negativa estructurada del modelo", async (
     });
 
   await assert.rejects(
-    () => explainSeismicEvent(request, { config, fetchImpl }),
+    () => explainSeismicEvent(groundedInput, { config, fetchImpl }),
     OpenAiExplainerResponseError
   );
 });

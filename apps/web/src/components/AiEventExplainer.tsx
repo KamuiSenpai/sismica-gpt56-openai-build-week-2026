@@ -186,6 +186,15 @@ export function AiEventExplainer({ event }: AiEventExplainerProps) {
                       <span>
                         GENERADO UTC <strong>{formatGeneratedAt(result.generatedAtUtc)}</strong>
                       </span>
+                      <span>
+                        DATOS <strong>BD CANONICA / {result.grounding.sourceCount} FUENTE(S)</strong>
+                      </span>
+                      <span>
+                        CACHE <strong>{result.cached ? "HIT" : "MISS"}</strong>
+                      </span>
+                      <span>
+                        INPUT SHA-256 <strong>{result.grounding.inputSha256.slice(0, 12)}...</strong>
+                      </span>
                     </footer>
                   </div>
                 ) : null}

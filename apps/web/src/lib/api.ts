@@ -113,6 +113,18 @@ export type EventExplanationResult = {
   responseId: string;
   generatedAtUtc: string;
   disclaimer: string;
+  cached: boolean;
+  usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+  };
+  grounding: {
+    eventId: string;
+    eventVersionUtc: string;
+    sourceCount: number;
+    inputSha256: string;
+  };
   explanation: {
     headline: string;
     overview: string;
@@ -382,20 +394,7 @@ export async function fetchEventExplanation(
   const response = await fetch(`${API_BASE_URL}/api/ai/explain-event`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      eventId: event.eventId,
-      source: event.source,
-      title: event.title,
-      magnitude: event.magnitude,
-      magnitudeType: event.magnitudeType,
-      depthKm: event.depthKm,
-      latitude: event.latitude,
-      longitude: event.longitude,
-      eventTimeUtc: event.eventTimeUtc,
-      status: event.status,
-      tsunami: event.tsunami,
-      sourceUrl: event.sourceUrl
-    }),
+    body: JSON.stringify({ eventId: event.eventId }),
     signal
   });
 

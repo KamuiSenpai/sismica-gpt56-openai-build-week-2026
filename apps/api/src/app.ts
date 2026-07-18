@@ -7,6 +7,12 @@ import { z } from "zod";
 import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
 import { parseEventsQuery } from "./lib/queryParams.js";
+import {
+  aiRateLimiter,
+  computeRateLimiter,
+  installSecurityMiddleware,
+  requireOperatorToken
+} from "./middleware/security.js";
 import { getActiveDisasters, getActiveTsunamiProducts } from "./services/contextRepository.js";
 import {
   getEventById,
@@ -54,10 +60,18 @@ import {
 import { decideNext, directorStateSchema } from "./services/directorService.js";
 import {
   eventExplanationRequestSchema,
+  eventExplanationInputHash,
   explainSeismicEvent,
+  type EventExplanationResult,
+  type GroundedEventExplanationInput,
   OpenAiExplainerResponseError,
   OpenAiExplainerUnavailableError
 } from "./services/openaiExplainerService.js";
+import {
+  getCachedEventExplanation,
+  recordEventExplanationFailure,
+  recordEventExplanationSuccess
+} from "./services/openaiExplanationRepository.js";
 import {
   enqueueYoutubeChatTestMessage,
   getYoutubeChatMessages,
@@ -98,6 +112,7 @@ export function createApp(streamBroker: StreamBroker) {
     ttl: 5000 // 5 seconds micro-caching
   });
 
+  installSecurityMiddleware(app);
   app.use(cors({ origin: env.frontendOrigin }));
   app.use(express.json({ limit: "2mb" }));
 
@@ -209,7 +224,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.get("/api/tts/runtime", (_request, response) => {
+  app.get("/api/tts/runtime", requireOperatorToken, (_request, response) => {
     response.json(getTtsRuntimeStats());
   });
 
@@ -235,7 +250,7 @@ export function createApp(streamBroker: StreamBroker) {
     response.json({ ok: true });
   });
 
-  app.get("/api/tts/telemetry", (request, response) => {
+  app.get("/api/tts/telemetry", requireOperatorToken, (request, response) => {
     const rawSince = typeof request.query.since === "string" ? Number(request.query.since) : 0;
     const since = Number.isFinite(rawSince) ? Math.max(0, Math.trunc(rawSince)) : 0;
     response.json({
@@ -244,7 +259,7 @@ export function createApp(streamBroker: StreamBroker) {
     });
   });
 
-  app.delete("/api/tts/telemetry", (_request, response) => {
+  app.delete("/api/tts/telemetry", requireOperatorToken, (_request, response) => {
     voiceTelemetry.length = 0;
     voiceTelemetrySequence = 0;
     response.json({ ok: true });
@@ -342,7 +357,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.post("/api/tts/engine", async (request, response) => {
+  app.post("/api/tts/engine", computeRateLimiter, async (request, response) => {
     const engine = voiceEngineSchema.safeParse(request.body?.engine);
     if (!engine.success) {
       response.status(400).json({ error: "Motor de voz invalido" });
@@ -360,7 +375,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.post("/api/tts", async (request, response) => {
+  app.post("/api/tts", computeRateLimiter, async (request, response) => {
     const engine = ttsEngineSchema.safeParse(request.query.engine);
     if (!engine.success) {
       response.status(400).json({ error: "El parametro 'engine' debe ser 'piper', 'xtts' o 'chatterbox'" });
@@ -391,7 +406,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.post("/api/narration", async (request, response) => {
+  app.post("/api/narration", computeRateLimiter, async (request, response) => {
     const parsed = narrationRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(400).json({ error: "Solicitud de narracion invalida", issues: parsed.error.issues });
@@ -404,28 +419,131 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.post("/api/ai/explain-event", async (request, response) => {
+  app.post("/api/ai/explain-event", aiRateLimiter, async (request, response) => {
     const parsed = eventExplanationRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(400).json({ error: "Solicitud de explicacion invalida", issues: parsed.error.issues });
       return;
     }
+    const requestedAt = new Date();
+    let auditContext:
+      | {
+          eventId: string;
+          eventVersionUtc: string;
+          requestedModel: string;
+          inputSha256: string;
+          requestId: string;
+          requestedAtUtc: string;
+          latencyMs: number;
+        }
+      | undefined;
     try {
-      response.json(await explainSeismicEvent(parsed.data));
+      const event = await getEventById(pool, parsed.data.eventId);
+      if (!event) {
+        response.status(404).json({
+          error: "Evento sismico no encontrado",
+          code: "event_not_found",
+          requestId: response.locals.requestId
+        });
+        return;
+      }
+      const references = await getEventReferences(pool, event.eventId);
+      const groundedInput: GroundedEventExplanationInput = {
+        eventId: event.eventId,
+        source: event.source,
+        title: event.title,
+        magnitude: event.magnitude,
+        magnitudeType: event.magnitudeType,
+        depthKm: event.depthKm,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        eventTimeUtc: event.eventTimeUtc,
+        status: event.status,
+        tsunami: event.tsunami,
+        sources: event.sources,
+        references: references.map((reference) => ({
+          source: reference.source,
+          sourceEventId: reference.sourceEventId,
+          magnitude: reference.magnitude,
+          eventTimeUtc: reference.eventTimeUtc,
+          updatedAtUtc: reference.updatedAtUtc
+        }))
+      };
+      const eventVersionUtc = event.updatedAtUtc ?? event.ingestedAt;
+      const inputSha256 = eventExplanationInputHash(groundedInput);
+      const cacheKey = {
+        eventId: event.eventId,
+        eventVersionUtc,
+        requestedModel: env.openaiModel,
+        inputSha256
+      };
+      const cached = await getCachedEventExplanation(pool, cacheKey);
+      if (cached) {
+        response.setHeader("X-OpenAI-Cache", "hit");
+        response.json(cached);
+        return;
+      }
+
+      auditContext = {
+        ...cacheKey,
+        requestId: response.locals.requestId as string,
+        requestedAtUtc: requestedAt.toISOString(),
+        latencyMs: 0
+      };
+      const providerResult = await explainSeismicEvent(groundedInput);
+      const result: EventExplanationResult = {
+        ...providerResult,
+        cached: false,
+        grounding: {
+          eventId: event.eventId,
+          eventVersionUtc,
+          sourceCount: Math.max(event.sourceCount, references.length),
+          inputSha256
+        }
+      };
+      auditContext.latencyMs = Date.now() - requestedAt.getTime();
+      await recordEventExplanationSuccess(pool, auditContext, result);
+      response.setHeader("X-OpenAI-Cache", "miss");
+      response.json(result);
     } catch (error) {
+      if (auditContext) {
+        auditContext.latencyMs = Date.now() - requestedAt.getTime();
+        const failure =
+          error instanceof OpenAiExplainerUnavailableError
+            ? { code: error.code, providerStatus: error.providerStatus }
+            : error instanceof OpenAiExplainerResponseError
+              ? { code: error.code, providerStatus: null }
+              : { code: "internal_error", providerStatus: null };
+        await recordEventExplanationFailure(pool, auditContext, failure).catch((auditError) => {
+          console.error("No se pudo auditar el fallo de OpenAI", auditError);
+        });
+      }
       if (error instanceof OpenAiExplainerUnavailableError) {
-        response.status(503).json({ error: error.message });
+        response.status(error.providerStatus === 429 ? 429 : 503).json({
+          error: error.message,
+          code: error.code,
+          requestId: response.locals.requestId
+        });
         return;
       }
       if (error instanceof OpenAiExplainerResponseError) {
-        response.status(502).json({ error: error.message });
+        response.status(502).json({
+          error: error.message,
+          code: error.code,
+          requestId: response.locals.requestId
+        });
         return;
       }
-      response.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+      console.error("Fallo interno del explicador OpenAI", error);
+      response.status(500).json({
+        error: "No se pudo generar la explicacion",
+        code: "internal_error",
+        requestId: response.locals.requestId
+      });
     }
   });
 
-  app.post("/api/segment", async (request, response) => {
+  app.post("/api/segment", computeRateLimiter, async (request, response) => {
     const parsed = segmentRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(400).json({ error: "Solicitud de segmento invalida", issues: parsed.error.issues });
@@ -438,7 +556,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.post("/api/segment/handoff", async (request, response) => {
+  app.post("/api/segment/handoff", computeRateLimiter, async (request, response) => {
     const parsed = handoffRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(400).json({ error: "Solicitud de relevo invalida", issues: parsed.error.issues });
@@ -451,7 +569,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.post("/api/director/decide", async (request, response) => {
+  app.post("/api/director/decide", computeRateLimiter, async (request, response) => {
     const parsed = directorStateSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(400).json({ error: "Estado del director invalido", issues: parsed.error.issues });
@@ -464,7 +582,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.get("/api/youtube/chat/status", async (_request, response) => {
+  app.get("/api/youtube/chat/status", requireOperatorToken, async (_request, response) => {
     try {
       response.json(await getYoutubeChatStatus(pool));
     } catch (error) {
@@ -472,7 +590,7 @@ export function createApp(streamBroker: StreamBroker) {
     }
   });
 
-  app.get("/api/youtube/chat/messages", async (request, response) => {
+  app.get("/api/youtube/chat/messages", requireOperatorToken, async (request, response) => {
     try {
       const raw = typeof request.query.limit === "string" ? Number(request.query.limit) : 50;
       const limit = Number.isFinite(raw) ? Math.min(200, Math.max(1, Math.trunc(raw))) : 50;

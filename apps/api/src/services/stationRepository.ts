@@ -41,6 +41,7 @@ function mapStation(row: StationRow): SeismicStation {
     countryCode: row.country_code,
     latitude: row.latitude,
     longitude: row.longitude,
+    positionType: "fixed_catalog",
     elevationM: row.elevation_m,
     startTimeUtc: row.start_time_utc?.toISOString() ?? null,
     endTimeUtc: row.end_time_utc?.toISOString() ?? null,

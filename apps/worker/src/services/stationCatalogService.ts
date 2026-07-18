@@ -20,13 +20,10 @@ async function upsertStations(records: StationCatalogRecord[], synchronizedAt: D
           )
           ON CONFLICT (station_id) DO UPDATE SET
             site_name = EXCLUDED.site_name,
-            latitude = EXCLUDED.latitude,
-            longitude = EXCLUDED.longitude,
             elevation_m = EXCLUDED.elevation_m,
             start_time_utc = EXCLUDED.start_time_utc,
             end_time_utc = EXCLUDED.end_time_utc,
             source_url = EXCLUDED.source_url,
-            geom = EXCLUDED.geom,
             raw_metadata = EXCLUDED.raw_metadata,
             metadata_updated_at = EXCLUDED.metadata_updated_at,
             updated_at = NOW()

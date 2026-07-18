@@ -78,6 +78,7 @@ import {
 } from "../lib/seaLevel";
 import { playSeismicWaveSound } from "../lib/seismicAudio";
 import { getActiveEventNarrationPlayback } from "../lib/seismicVoice";
+import { resolveFixedStationPosition, type FixedStationPosition } from "../lib/stationPosition";
 import { CountryFlag } from "./CountryFlag";
 import { MosaicSwap } from "./MosaicSwap";
 import { TopMagnitudeTable } from "./TopMagnitudeTable";
@@ -942,6 +943,7 @@ export function MapPanel({
   const viewerRef = useRef<Viewer | null>(null);
   const eventMapRef = useRef<Map<string, SeismicEvent>>(new Map());
   const stationMapRef = useRef<Map<string, SeismicStation>>(new Map());
+  const fixedStationPositionRef = useRef<Map<string, FixedStationPosition>>(new Map());
   const seaLevelStationMapRef = useRef<Map<string, SeaLevelStation>>(new Map());
   const seaLevelSnapshotRef = useRef<Record<string, SeaLevelSnapshotEntry>>({});
   const experimentalOriginMapRef = useRef<Map<string, ExperimentalOrigin>>(new Map());
@@ -1274,21 +1276,26 @@ export function MapPanel({
     for (const entity of [...viewer.entities.values]) {
       if (typeof entity.id === "string" && entity.id.startsWith(STATION_PREFIX) && !nextMap.has(entity.id)) {
         viewer.entities.remove(entity);
+        fixedStationPositionRef.current.delete(entity.id);
       }
     }
 
     for (const [id, station] of nextMap) {
+      const { position: fixedPosition, ignoredChange } = resolveFixedStationPosition(
+        fixedStationPositionRef.current,
+        id,
+        station
+      );
+      if (ignoredChange) {
+        console.warn(`Se ignoro un desplazamiento de la estacion fija ${station.stationId}.`);
+      }
       let entity = viewer.entities.getById(id);
       if (!entity) {
         entity = viewer.entities.add({
           id,
-          position: Cartesian3.fromDegrees(station.longitude, station.latitude),
+          position: Cartesian3.fromDegrees(fixedPosition.longitude, fixedPosition.latitude),
           billboard: {}
         });
-      } else {
-        entity.position = new ConstantPositionProperty(
-          Cartesian3.fromDegrees(station.longitude, station.latitude)
-        );
       }
 
       if (entity.billboard) {
@@ -1296,7 +1303,9 @@ export function MapPanel({
         entity.billboard.image = new ConstantProperty(stationSymbol(station, selected));
         entity.billboard.scale = new ConstantProperty(selected ? 0.95 : 0.68);
         entity.billboard.horizontalOrigin = new ConstantProperty(HorizontalOrigin.CENTER);
-        entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.CENTER);
+        entity.billboard.verticalOrigin = new ConstantProperty(VerticalOrigin.BOTTOM);
+        entity.billboard.heightReference = new ConstantProperty(HeightReference.CLAMP_TO_GROUND);
+        entity.billboard.disableDepthTestDistance = new ConstantProperty(0);
         entity.billboard.show = new ConstantProperty(stationsVisible);
       }
     }
@@ -1932,7 +1941,7 @@ export function MapPanel({
           >
             x
           </button>
-          <span className="station-detail-kicker">ESTACION EXPERIMENTAL</span>
+          <span className="station-detail-kicker">ESTACION GEOFON / POSICION FIJA DE CATALOGO</span>
           <strong>
             {selectedStation.networkCode}.{selectedStation.stationCode}
           </strong>

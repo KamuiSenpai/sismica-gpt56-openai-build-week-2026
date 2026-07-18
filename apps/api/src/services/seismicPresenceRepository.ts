@@ -8,6 +8,7 @@ import {
 } from "@sismica/shared";
 
 type EventLocationRow = {
+  event_id?: string;
   source: SourceCode;
   title: string;
 };
@@ -16,6 +17,7 @@ type CoverageRow = {
   total_records: number;
   start_year: number | null;
   end_year: number | null;
+  source_max_ingested_at: Date | null;
 };
 
 const CONTINENTS: Array<{ code: ContinentCode; name: string }> = [
@@ -375,7 +377,7 @@ const COUNTRY_KEYWORDS: Array<[string, string]> = [
   ["united states", "us"]
 ];
 
-function fallbackCountry(source: SourceCode, title: string): string | null {
+export function resolveSeismicCountry(source: SourceCode, title: string): string | null {
   const sourceCountry = SOURCE_COUNTRY[source];
   if (sourceCountry) return sourceCountry;
   const lower = title.toLowerCase();
@@ -393,40 +395,32 @@ function countryName(code: string): string {
   return COUNTRY_NAMES_ES[code] ?? code.toUpperCase();
 }
 
-export async function getSeismicPresenceSummary(pool: Pool): Promise<SeismicPresenceSummary> {
-  const [coverageResult, result] = await Promise.all([
-    pool.query<CoverageRow>(
-      `
-        SELECT
-          COUNT(*)::int AS total_records,
-          EXTRACT(YEAR FROM (MIN(event_time_utc) AT TIME ZONE 'UTC'))::int AS start_year,
-          EXTRACT(YEAR FROM (MAX(event_time_utc) AT TIME ZONE 'UTC'))::int AS end_year
-        FROM seismic_events
-      `
-    ),
-    pool.query<EventLocationRow>(
-      `
-      SELECT
-        source,
-        title
-      FROM seismic_events
-    `
-    )
-  ]);
+type PresenceAccumulator = {
+  byContinent: Map<ContinentCode, Map<string, number>>;
+  assignedRecords: number;
+};
 
-  const byContinent = new Map<ContinentCode, Map<string, number>>();
-  let assignedRecords = 0;
+function accumulateRows(accumulator: PresenceAccumulator, rows: Iterable<EventLocationRow>): void {
+  const { byContinent } = accumulator;
 
-  for (const row of result.rows) {
-    const country = fallbackCountry(row.source, row.title);
+  for (const row of rows) {
+    const country = resolveSeismicCountry(row.source, row.title);
     if (!country) continue;
     const continent = COUNTRY_CONTINENT[country];
     if (!continent) continue;
-    assignedRecords += 1;
+    accumulator.assignedRecords += 1;
     const countries = byContinent.get(continent) ?? new Map<string, number>();
     countries.set(country, (countries.get(country) ?? 0) + 1);
     byContinent.set(continent, countries);
   }
+}
+
+function buildSummary(
+  accumulator: PresenceAccumulator,
+  coverage: CoverageRow,
+  generatedAt: string
+): SeismicPresenceSummary {
+  const { assignedRecords, byContinent } = accumulator;
 
   const continents: ContinentSeismicPresence[] = CONTINENTS.map(({ code, name }) => {
     const countries = Array.from(byContinent.get(code)?.entries() ?? [])
@@ -446,16 +440,125 @@ export async function getSeismicPresenceSummary(pool: Pool): Promise<SeismicPres
     };
   });
 
-  const coverage = coverageResult.rows[0];
-  const totalRecords = coverage?.total_records ?? result.rows.length;
+  const totalRecords = coverage.total_records;
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     totalRecords,
     assignedRecords,
     unassignedRecords: totalRecords - assignedRecords,
-    startYear: coverage?.start_year ?? null,
-    endYear: coverage?.end_year ?? null,
+    startYear: coverage.start_year,
+    endYear: coverage.end_year,
     continents
   };
+}
+
+async function readMaterializedSummary(pool: Pool): Promise<SeismicPresenceSummary | null> {
+  const result = await pool.query<{ summary: SeismicPresenceSummary }>(
+    "SELECT summary FROM seismic_presence_materialized WHERE cache_key = 'global'"
+  );
+  return result.rows[0]?.summary ?? null;
+}
+
+export type SeismicPresenceRefreshResult = {
+  refreshed: boolean;
+  reason: "updated" | "current" | "locked";
+  totalRecords: number | null;
+};
+
+export async function refreshSeismicPresenceMaterialization(
+  pool: Pool,
+  options: { onlyIfStale?: boolean; batchSize?: number } = {}
+): Promise<SeismicPresenceRefreshResult> {
+  const client = await pool.connect();
+  const batchSize = Math.min(100_000, Math.max(1_000, options.batchSize ?? 50_000));
+  const lockName = "sismica:seismic-presence-materialization:v1";
+  let locked = false;
+  try {
+    const lockResult = await client.query<{ acquired: boolean }>(
+      "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired",
+      [lockName]
+    );
+    locked = Boolean(lockResult.rows[0]?.acquired);
+    if (!locked) return { refreshed: false, reason: "locked", totalRecords: null };
+
+    const coverageResult = await client.query<CoverageRow>(
+      `
+        SELECT
+          COUNT(*)::int AS total_records,
+          EXTRACT(YEAR FROM (MIN(event_time_utc) AT TIME ZONE 'UTC'))::int AS start_year,
+          EXTRACT(YEAR FROM (MAX(event_time_utc) AT TIME ZONE 'UTC'))::int AS end_year,
+          MAX(ingested_at) AS source_max_ingested_at
+        FROM seismic_events
+      `
+    );
+    const coverage = coverageResult.rows[0] ?? {
+      total_records: 0,
+      start_year: null,
+      end_year: null,
+      source_max_ingested_at: null
+    };
+
+    if (options.onlyIfStale) {
+      const cacheResult = await client.query<{ source_max_ingested_at: Date | null }>(
+        "SELECT source_max_ingested_at FROM seismic_presence_materialized WHERE cache_key = 'global'"
+      );
+      const cachedWatermark = cacheResult.rows[0]?.source_max_ingested_at?.getTime() ?? null;
+      const sourceWatermark = coverage.source_max_ingested_at?.getTime() ?? null;
+      if (cachedWatermark === sourceWatermark) {
+        return { refreshed: false, reason: "current", totalRecords: coverage.total_records };
+      }
+    }
+
+    const accumulator: PresenceAccumulator = { byContinent: new Map(), assignedRecords: 0 };
+    let lastEventId = "";
+    while (true) {
+      const batch = await client.query<Required<EventLocationRow>>(
+        `
+          SELECT event_id, source, title
+          FROM seismic_events
+          WHERE event_id > $1
+          ORDER BY event_id
+          LIMIT $2
+        `,
+        [lastEventId, batchSize]
+      );
+      if (batch.rows.length === 0) break;
+      accumulateRows(accumulator, batch.rows);
+      lastEventId = batch.rows[batch.rows.length - 1].event_id;
+    }
+
+    const generatedAt = new Date().toISOString();
+    const summary = buildSummary(accumulator, coverage, generatedAt);
+    await client.query(
+      `
+        INSERT INTO seismic_presence_materialized (
+          cache_key, generated_at, source_max_ingested_at, summary, updated_at
+        )
+        VALUES ('global', $1, $2, $3::jsonb, NOW())
+        ON CONFLICT (cache_key) DO UPDATE SET
+          generated_at = EXCLUDED.generated_at,
+          source_max_ingested_at = EXCLUDED.source_max_ingested_at,
+          summary = EXCLUDED.summary,
+          updated_at = NOW()
+      `,
+      [generatedAt, coverage.source_max_ingested_at, JSON.stringify(summary)]
+    );
+    return { refreshed: true, reason: "updated", totalRecords: coverage.total_records };
+  } finally {
+    if (locked) {
+      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockName]).catch(() => undefined);
+    }
+    client.release();
+  }
+}
+
+export async function getSeismicPresenceSummary(pool: Pool): Promise<SeismicPresenceSummary> {
+  const cached = await readMaterializedSummary(pool);
+  if (cached) return cached;
+
+  await refreshSeismicPresenceMaterialization(pool);
+  const materialized = await readMaterializedSummary(pool);
+  if (!materialized) throw new Error("El resumen de presencia sismica aun se esta materializando");
+  return materialized;
 }
