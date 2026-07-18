@@ -4,7 +4,7 @@ import test from "node:test";
 import { type SeismicEvent } from "@sismica/shared";
 
 import { broadcastPlace } from "../src/lib/broadcastPlace";
-import { getEventPlace } from "../src/lib/presentation";
+import { countryCode, getEventPlace } from "../src/lib/presentation";
 import {
   buildSeismicNarration,
   normalizeChatterboxText,
@@ -81,6 +81,17 @@ test("buildSeismicNarration appends inferred country for national-source titles"
     narration,
     "Sismo detectado en 112 kilometros al oeste de Caldera, Chile, de magnitud 2.6, a una profundidad de 28 kilometros."
   );
+});
+
+test("countryCode prioritizes the reported location over the national source network", () => {
+  const event = makeEvent({
+    source: "SGC",
+    title: "M5.2 - Cerca de la costa de Oaxaca, México",
+    latitude: 15.396,
+    longitude: -94.978
+  });
+
+  assert.equal(countryCode(event), "mx");
 });
 
 test("buildSeismicNarration can announce a newly detected quake", () => {

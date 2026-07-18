@@ -228,8 +228,6 @@ const COUNTRY_CODES: [string, string][] = [
 ];
 
 export function countryCode(event: SeismicEvent): string | null {
-  const bySource = SOURCE_COUNTRY[event.source];
-  if (bySource) return bySource;
   const place = getEventPlace(event.title).toLowerCase();
   const tail = place.split(",").pop()?.trim() ?? place;
   for (const [name, code] of COUNTRY_CODES) {
@@ -238,7 +236,7 @@ export function countryCode(event: SeismicEvent): string | null {
   for (const [name, code] of COUNTRY_CODES) {
     if (place.includes(name)) return code;
   }
-  return null;
+  return SOURCE_COUNTRY[event.source] ?? null;
 }
 
 // Nombre de pais en espanol por ISO2 (gobernanza: el pais siempre en un idioma).
