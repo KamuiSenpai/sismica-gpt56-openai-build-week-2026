@@ -337,6 +337,7 @@ export function useBroadcastDirector(params: {
 
   useEffect(() => {
     if (mode === "off" || paused) return;
+    let cancelled = false;
 
     const startedAt = Date.now();
     if (lastRecapAtRef.current === 0) lastRecapAtRef.current = startedAt;
@@ -379,6 +380,7 @@ export function useBroadcastDirector(params: {
     };
 
     const air = (segment: BroadcastSegment, eventId?: string) => {
+      if (cancelled) return false;
       if (mode === "v2" && segment.kind !== "en-vivo" && (queueRef.current?.length ?? 0) > 0) {
         traceDirectorEvent("skip-for-live-priority", {
           kind: segment.kind,
@@ -415,6 +417,7 @@ export function useBroadcastDirector(params: {
         intro,
         mode: narrationMode
       });
+      if (cancelled) return;
       if (mode === "v2" && kind !== "en-vivo" && (queueRef.current?.length ?? 0) > 0) {
         traceDirectorEvent("skip-event-for-live-priority", {
           kind,
@@ -558,6 +561,7 @@ export function useBroadcastDirector(params: {
     };
 
     const airNext = async () => {
+      if (cancelled) return;
       if (mode === "v2") {
         const state = computeState();
         const action = decideDirectorV2Action({
@@ -653,6 +657,9 @@ export function useBroadcastDirector(params: {
       });
     }, 500);
 
-    return () => window.clearInterval(intervalId);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, [mode, paused, queueRef]);
 }

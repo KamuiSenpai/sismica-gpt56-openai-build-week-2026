@@ -1936,6 +1936,14 @@ export function setSeismicVoiceEnabled(enabled: boolean): boolean {
   return browserReady || (voiceEngine !== "browser" && isEngineAvailable(voiceEngine));
 }
 
+export function cancelActiveSeismicNarration(): void {
+  narrationSeq += 1;
+  activeEventNarrationPlayback = null;
+  stopActiveBridge("immediate");
+  cancelNeuralNarration();
+  cancelBrowserNarration();
+}
+
 export { buildSeismicNarration };
 
 // La narracion de eventos en vivo mantiene hechos deterministas (lugar, magnitud,

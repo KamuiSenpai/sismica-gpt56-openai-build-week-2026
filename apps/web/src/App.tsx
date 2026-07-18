@@ -46,6 +46,8 @@ import { setSeismicAudioEnabled } from "./lib/seismicAudio";
 import { resumeAmbient, setAmbientEnabled, updateAmbientDrivers, type AmbientMode } from "./lib/ambientBed";
 import {
   activateVoiceEngine,
+  buildSeismicNarration,
+  cancelActiveSeismicNarration,
   getVoiceEngine,
   isEngineAvailable,
   isSeismicNarrationActive,
@@ -54,6 +56,7 @@ import {
   prefetchSeismicNarration,
   primeSeismicVoices,
   refreshTtsHealth,
+  resolveEventNarration,
   setSeismicVoiceEnabled,
   speakSeismicNarration,
   speakText,
@@ -308,6 +311,7 @@ export default function App() {
   const eventsRef = useRef(events);
   eventsRef.current = events;
   const pendingVoiceIntroRef = useRef<{ eventId: string; intro: string } | null>(null);
+  const manualFocusSequenceRef = useRef(0);
   // Cola de sismos EN VIVO que llegaron mientras la voz narraba: se anuncian al terminar.
   const pendingLiveQueueRef = useRef<SeismicEvent[]>([]);
   const promotedLiveAtRef = useRef<number | null>(null);
@@ -507,6 +511,43 @@ export default function App() {
   }, []);
 
   const toggleTour = useCallback(() => setTourPaused((paused) => !paused), []);
+  const handleManualEventSelect = useCallback(
+    (eventId: string) => {
+      setSelectedEventId(eventId);
+      if (directorMode === "off") return;
+
+      const event = eventsRef.current.find((candidate) => candidate.eventId === eventId);
+      if (!event) return;
+
+      const sequence = ++manualFocusSequenceRef.current;
+      setTourPaused(true);
+      setOverlaySegment({
+        kind: "recorrido",
+        text: normalizeSpanishText(buildSeismicNarration(event)),
+        cue: fallbackSegmentCue("recorrido")
+      });
+      cancelActiveSeismicNarration();
+
+      void resolveEventNarration(event, { mode: "seguimiento" })
+        .then((resolved) => {
+          if (sequence !== manualFocusSequenceRef.current) return;
+
+          const packet = { ...resolved, text: normalizeSpanishText(resolved.text) };
+          setOverlaySegment({ kind: "recorrido", text: packet.text, cue: packet.cue });
+          if (voiceEnabled) {
+            speakSeismicNarration(event, true, {
+              force: true,
+              mode: "seguimiento",
+              resolved: packet
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          console.warn("No se pudo preparar la narracion del evento seleccionado.", error);
+        });
+    },
+    [directorMode, voiceEnabled]
+  );
   const toggleSound = useCallback(() => {
     const nextEnabled = !soundEnabled;
     setSoundEnabled(nextEnabled);
@@ -897,7 +938,7 @@ export default function App() {
           topMagnitude={topMagnitude}
           selectedEventId={selectedEventId}
           soundEnabled={soundEnabled}
-          onSelect={setSelectedEventId}
+          onSelect={handleManualEventSelect}
           tourPaused={tourPaused}
           onToggleTour={toggleTour}
         />
@@ -1032,7 +1073,7 @@ export default function App() {
         </section>
 
         <aside className="overlay-column overlay-right">
-          <EventList events={events} selectedEventId={selectedEventId} onSelect={setSelectedEventId} />
+          <EventList events={events} selectedEventId={selectedEventId} onSelect={handleManualEventSelect} />
         </aside>
 
         <footer className="monitor-footer">
