@@ -23,6 +23,9 @@ Preparar commits nuevos entre el 17 y el 21 de julio de 2026, evidencia de sesio
 | Backend        | Responses API, `gpt-5.6`, JSON Schema estricto, errores controlados y 5 pruebas nuevas | `471cc1d`             |
 | Interfaz       | Panel accionado por usuario con modelo, `response_id`, disclaimer y responsive design  | `6a98924`             |
 | Navegador      | Playwright desktop y movil; se corrigio evento cambiante y contexto de apilamiento     | Incluido en `6a98924` |
+| Hardening      | Grounding en BD, auditoria/cache OpenAI, rate limits y seguridad HTTP                  | `27c3cda`             |
+| Rendimiento    | Presencia sismica materializada: de ~7.3 s a ~13.5 ms                                  | `27c3cda`             |
+| Estaciones     | Coordenadas GEOFON fijas; SSE modifica estado, no posicion                             | `27c3cda`             |
 
 ## Decisiones asistidas por Codex
 
@@ -31,17 +34,21 @@ Preparar commits nuevos entre el 17 y el 21 de julio de 2026, evidencia de sesio
 - Aplicar Structured Outputs y volver a validar la respuesta con Zod.
 - No hacer llamadas automaticas: el usuario decide cuando consumir GPT-5.6.
 - Mostrar metadatos de OpenAI en la interfaz para que la integracion sea auditable.
+- No confiar en magnitud o coordenadas enviadas por el navegador; resolverlas desde PostgreSQL.
+- Separar estaciones fisicas fijas de origenes experimentales calculados.
 - Conservar el transcript local y compartirlo solo despues de una revision de privacidad.
 
 ## Evidencia de validacion
 
-- API: TypeScript correcto y 49/49 pruebas aprobadas.
+- API: TypeScript correcto y 51/51 pruebas aprobadas.
 - Worker: TypeScript correcto y 52/52 pruebas aprobadas.
-- Web: TypeScript correcto, build de Vite correcto y 107/107 pruebas aprobadas.
+- Web: TypeScript correcto, build de Vite correcto y 109/109 pruebas aprobadas.
 - Repositorio: ESLint estricto sin advertencias y build de produccion aprobado.
 - Playwright: panel funcional a 1280 x 720 y 390 x 844.
 - Hallazgo Playwright 1: el recorrido podia cambiar el evento del dialogo; se congelo el evento solicitado.
 - Hallazgo Playwright 2: el dialogo heredaba un contexto de apilamiento bajo overlays; se movio a un portal React.
+- Hallazgo Playwright 3: Helmet bloqueaba WAV entre los puertos 3000 y 5173; se habilito CORP `cross-origin` conservando CORS y el filtro de origen.
+- Validacion Playwright final: 1440 x 900, 0 errores de consola y audio/API con HTTP 200.
 
 ## Limites de esta ficha
 

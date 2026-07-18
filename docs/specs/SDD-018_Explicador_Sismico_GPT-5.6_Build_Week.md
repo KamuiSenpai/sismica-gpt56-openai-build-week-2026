@@ -24,6 +24,9 @@ La tarjeta operativa presenta magnitud, profundidad, coordenadas y metadatos tec
 - Structured Outputs mediante `text.format` y JSON Schema estricto.
 - Panel web accionado por el usuario para el evento seleccionado.
 - Metadatos visibles: proveedor, modelo, `response_id` y fecha de generacion.
+- Grounding exclusivo desde PostgreSQL a partir de `eventId`.
+- Cache por version del evento y auditoria de modelo, hash, tokens, latencia y estado.
+- Rate limit dedicado para proteger cuota y costos.
 - Pruebas sin consumo real de API mediante transporte simulado.
 - Evidencia reproducible de commits, sesion de Codex, pruebas y llamada real.
 
@@ -34,24 +37,11 @@ La tarjeta operativa presenta magnitud, profundidad, coordenadas y metadatos tec
 - Enviar a OpenAI claves, credenciales, datos personales o historiales de operadores.
 - Ocultar un fallo de configuracion mediante una respuesta que parezca generada por GPT-5.6.
 
-## 4. Contrato de entrada
+## 4. Contrato de entrada y grounding
 
-El backend acepta solamente los hechos necesarios del evento seleccionado:
+El contrato publico acepta exactamente `{ "eventId": string }`. Cualquier hecho sismico adicional enviado por el navegador se rechaza por el esquema Zod estricto.
 
-| Campo           | Tipo          | Regla                                        |
-| --------------- | ------------- | -------------------------------------------- |
-| `eventId`       | string        | Identificador interno, requerido             |
-| `source`        | string        | Fuente sismica, requerida                    |
-| `title`         | string        | Titulo entregado por la fuente               |
-| `magnitude`     | number o null | No equivale a intensidad ni danos            |
-| `magnitudeType` | string o null | Escala reportada, si existe                  |
-| `depthKm`       | number o null | Profundidad reportada                        |
-| `latitude`      | number        | Coordenada verificada                        |
-| `longitude`     | number        | Coordenada verificada                        |
-| `eventTimeUtc`  | string        | Fecha UTC reportada                          |
-| `status`        | string o null | Estado de revision de la fuente              |
-| `tsunami`       | boolean       | Indicador de la fuente, no alerta confirmada |
-| `sourceUrl`     | string o null | Referencia oficial para el usuario           |
+La API consulta `seismic_events` y `event_source_refs` para construir magnitud, profundidad, coordenadas, fecha, estado, indicador de tsunami y fuentes asociadas. La version se deriva de `updated_at_utc` o `ingested_at`, y la entrada se identifica con un hash SHA-256 que incluye la version del prompt.
 
 ## 5. Contrato de salida
 
@@ -70,6 +60,9 @@ El backend agrega de forma determinista:
 - `responseId`: identificador `resp_...` de OpenAI.
 - `generatedAtUtc`: fecha local de recepcion.
 - `disclaimer`: texto fijo que remite a autoridades y fuentes oficiales.
+- `usage`: tokens de entrada, salida y total reportados por OpenAI.
+- `cached`: indica si la explicacion ya existia para esa version del evento.
+- `grounding`: `eventId`, version, cantidad de fuentes y hash SHA-256 de entrada.
 
 ## 6. Reglas de seguridad factual
 
@@ -91,6 +84,8 @@ OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5.6
 OPENAI_TIMEOUT_MS=15000
+API_AI_RATE_LIMIT_MAX=10
+API_RATE_LIMIT_WINDOW_MS=60000
 ```
 
 La clave solo vive en `.env`, archivo excluido por Git. El estado por defecto es deshabilitado para evitar costos o llamadas accidentales.
@@ -98,12 +93,14 @@ La clave solo vive en `.env`, archivo excluido por Git. El estado por defecto es
 ## 8. Criterios de aceptacion
 
 1. Con OpenAI deshabilitado, el endpoint responde `503` y la interfaz explica que falta configuracion.
-2. Una entrada incompleta responde `400` con detalle de validacion.
+2. Una entrada incompleta o con hechos suministrados por el cliente responde `400`.
 3. Una respuesta simulada valida conserva `response_id`, modelo y todos los campos estructurados.
 4. Una respuesta vacia, rechazada o invalida no se muestra como contenido de GPT-5.6.
 5. El panel se reinicia cuando cambia el evento seleccionado y no realiza llamadas automaticas.
 6. `npm run typecheck`, pruebas API y build web finalizan correctamente.
 7. Una prueba manual con API key registra el `response_id` sin registrar ni versionar la clave.
+8. Una llamada repetida para la misma version usa cache y no vuelve a consumir OpenAI.
+9. Cada exito o fallo deja auditoria sin persistir la clave ni el prompt completo.
 
 ## 9. Evidencia de entrega
 

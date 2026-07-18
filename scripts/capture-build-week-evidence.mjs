@@ -18,6 +18,7 @@ Opciones:
   --api-url=http://localhost:3000  API local configurada con OPENAI_ENABLED=true
   --output=output/build-week       Carpeta local de evidencia (ignorada por Git)
   --session-id=<uuid>              Identificador de la sesion Codex revisada
+  --event-id=<id>                  Evento canonico; por defecto usa el mas reciente
   --skip-api                       Captura commits y manifiesto sin llamar a OpenAI
   --help                           Muestra esta ayuda
 
@@ -32,22 +33,8 @@ if (args.includes("--help")) {
 const apiUrl = option("api-url", "http://localhost:3000").replace(/\/$/, "");
 const outputDir = resolve(option("output", "output/build-week"));
 const sessionId = option("session-id", process.env.CODEX_SESSION_ID ?? null);
+const requestedEventId = option("event-id", null);
 const skipApi = args.includes("--skip-api");
-
-const sampleEvent = {
-  eventId: "BUILD-WEEK:peru-demo-001",
-  source: "IGP",
-  title: "M4.8 - Costa de Arequipa, Peru",
-  magnitude: 4.8,
-  magnitudeType: "mb",
-  depthKm: 38,
-  latitude: -16.4,
-  longitude: -73.1,
-  eventTimeUtc: "2026-07-17T19:30:00.000Z",
-  status: "reviewed",
-  tsunami: false,
-  sourceUrl: "https://ultimosismo.igp.gob.pe/"
-};
 
 function buildWeekCommits() {
   const output = execFileSync(
@@ -70,10 +57,20 @@ function buildWeekCommits() {
 }
 
 async function captureOpenAiResponse() {
+  let eventId = requestedEventId;
+  if (!eventId) {
+    const eventResponse = await fetch(`${apiUrl}/api/events?minMagnitude=3&hours=72&limit=1`);
+    const eventPayload = await eventResponse.json().catch(() => null);
+    eventId = eventPayload?.items?.[0]?.eventId ?? null;
+    if (!eventResponse.ok || !eventId) {
+      throw new Error("No se pudo seleccionar un evento canonico reciente para la evidencia");
+    }
+  }
+  const request = { eventId };
   const response = await fetch(`${apiUrl}/api/ai/explain-event`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(sampleEvent)
+    body: JSON.stringify(request)
   });
   const payload = await response.json().catch(() => null);
 
@@ -88,8 +85,11 @@ async function captureOpenAiResponse() {
   if (typeof payload.responseId !== "string" || !payload.responseId.startsWith("resp_")) {
     throw new Error("La respuesta no contiene un responseId real con prefijo resp_");
   }
+  if (payload?.grounding?.eventId !== eventId || typeof payload?.grounding?.inputSha256 !== "string") {
+    throw new Error("La respuesta no contiene evidencia de grounding canonico");
+  }
 
-  return payload;
+  return { request, response: payload };
 }
 
 async function main() {
@@ -100,7 +100,8 @@ async function main() {
     throw new Error("No se encontraron commits dentro de la ventana Build Week");
   }
 
-  const openaiResponse = skipApi ? null : await captureOpenAiResponse();
+  const openaiCapture = skipApi ? null : await captureOpenAiResponse();
+  const openaiResponse = openaiCapture?.response ?? null;
   const generatedAtUtc = new Date().toISOString();
   const manifest = {
     schemaVersion: 1,
@@ -141,7 +142,7 @@ async function main() {
     openaiResponse
       ? writeFile(
           resolve(outputDir, "openai-response.json"),
-          `${JSON.stringify({ request: sampleEvent, response: openaiResponse }, null, 2)}\n`,
+          `${JSON.stringify(openaiCapture, null, 2)}\n`,
           "utf8"
         )
       : Promise.resolve()

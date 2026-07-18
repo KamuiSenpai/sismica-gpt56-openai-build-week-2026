@@ -4,12 +4,12 @@
 
 | Evidencia                     | Estado    | Referencia                                         |
 | ----------------------------- | --------- | -------------------------------------------------- |
-| Commits dentro de la ventana  | Completo  | `5f15320`, `471cc1d`, `6a98924`                    |
+| Commits dentro de la ventana  | Completo  | `5f15320`, `471cc1d`, `6a98924`, `27c3cda`         |
 | Sesion Codex identificada     | Completo  | `evidence/CODEX_SESSION_2026-07-17.md`             |
 | Integracion GPT-5.6 en codigo | Completo  | `POST /api/ai/explain-event`                       |
-| Pruebas automatizadas         | Completo  | 49 API, 52 worker y 107 web                        |
+| Pruebas automatizadas         | Completo  | 51 API, 52 worker y 109 web                        |
 | Validacion visual             | Completo  | Escritorio y movil con respuesta simulada          |
-| Respuesta real `resp_...`     | Pendiente | Requiere `OPENAI_API_KEY`                          |
+| Respuesta real `resp_...`     | Pendiente | Requiere clave habilitada y cuota util             |
 | Video de demo                 | Pendiente | Grabar despues de la llamada real                  |
 | Repositorio remoto            | Completo  | `KamuiSenpai/sismica-gpt56-openai-build-week-2026` |
 
@@ -46,11 +46,11 @@ Con la API activa y configurada:
 node scripts/capture-build-week-evidence.mjs --session-id=019f71fa-c858-78a0-8d3f-d293510f8be8
 ```
 
-El comando crea bajo `output/build-week/`:
+El comando selecciona un evento canonico reciente, envia solamente su `eventId` y crea bajo `output/build-week/`:
 
 - `manifest.json`: sesion, commits y estado de verificacion.
 - `commits.json`: hashes y fechas dentro de la ventana.
-- `openai-response.json`: solicitud de muestra y respuesta real sin credenciales.
+- `openai-response.json`: `eventId`, grounding/hash y respuesta real sin credenciales.
 
 La carpeta esta ignorada por Git. Revisar los archivos antes de adjuntarlos o mover una version sanitizada a `docs/build-week/evidence/`.
 
