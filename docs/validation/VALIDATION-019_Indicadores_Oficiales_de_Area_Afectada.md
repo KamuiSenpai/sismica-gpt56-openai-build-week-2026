@@ -69,11 +69,37 @@ se alteraron datos ni se simulo una alerta para producir una captura artificial.
 - `output/playwright/official-impact-pager-shakemap-1920x1080.png`
 - `output/playwright/pager-city-hover-1920x1080.png`
 - `output/playwright/official-impact-dyfi-1920x1080.png`
+- `output/playwright/label-anchor-final-start.png`
+- `output/playwright/label-anchor-final-mid.png`
+- `output/playwright/label-anchor-final-end.png`
 
 Las capturas son evidencia local de validacion y no forman parte del bundle de
 produccion.
 
-## 6. Matriz de aceptacion
+## 6. Validacion de anclaje y operacion continua
+
+Se observo el recorrido automatico en tres momentos de una misma sesion de
+Chromium. Los nombres de ciudades y paises conservaron su coordenada y altura
+visual, el selector de colisiones no cambio durante el vuelo y Cesium no emitio
+errores de consola.
+
+Tambien se ejecuto un monitoreo continuo desde `14:25:12` hasta `14:55:43`
+hora de Lima, con 55 muestras:
+
+- los cuatro puertos permanecieron activos en todas las muestras;
+- la API y Chatterbox no tuvieron fallos de salud;
+- Chatterbox permanecio cargado en CUDA y paso de 3 a 31 sintesis;
+- las sintesis registradas terminaron con HTTP `200` y no hubo errores del
+  motor;
+- Vite respondio HTTP `200` por `localhost`/`::1`; el sondeo inicial a
+  `127.0.0.1` no era valido porque el servidor estaba enlazado solo a IPv6.
+
+El motor de voz genero audio correctamente. La salida multimedia predeterminada
+de Windows era `Realtek Digital Output (Realtek(R) Audio)`, sin silencio, pero
+con volumen maestro al 4 %, condicion que explica que el audio no se percibiera
+aunque Chatterbox estuviera operativo.
+
+## 7. Matriz de aceptacion
 
 | Criterio SDD-019                         | Estado               | Evidencia                             |
 | ---------------------------------------- | -------------------- | ------------------------------------- |
@@ -89,8 +115,10 @@ produccion.
 | Falla independiente por producto         | Aprobado             | Normalizacion anulable por producto   |
 | Estructura 2D sin cambios                | Aprobado             | Capturas de escritorio                |
 | Consola limpia tras el ajuste final      | Aprobado             | `0` errores, `0` advertencias en DYFI |
+| Nombres anclados durante vuelos          | Aprobado             | Tres capturas, `0` errores de Cesium  |
+| Operacion continua de Chatterbox         | Aprobado             | 55 muestras durante 30 minutos        |
 
-## 7. Resultado
+## 8. Resultado
 
 La implementacion satisface `SDD-019`. Los indicadores solo aparecen cuando el
 producto oficial correspondiente existe; la ausencia de producto no genera

@@ -132,6 +132,10 @@ La visualizacion conserva el mapa actual:
 - PGV usa lineas ambar sin relleno;
 - DYFI usa poligonos semitransparentes por CDI y borde fino;
 - las localidades PAGER entran primero al selector de colisiones;
+- todas las etiquetas se anclan a su coordenada sobre el terreno, sin altura
+  visual que pueda separarlas del mapa durante un vuelo;
+- el conjunto visible permanece estable mientras la camara se mueve y las
+  colisiones se recalculan al finalizar el movimiento;
 - las capas oficiales no desplazan ni redimensionan paneles existentes.
 
 ## 6. Seleccion de localidades PAGER
@@ -244,6 +248,8 @@ incorrecta.
 13. `npm run typecheck`, pruebas API/web y build web terminan correctamente.
 14. La validacion real incluye un evento con PAGER/ShakeMap, otro con DYFI y una
     comprobacion de ausencia de errores de consola en escritorio.
+15. Los nombres de ciudades y paises permanecen fijados a sus coordenadas y no
+    se recrean ni cambian de seleccion durante un vuelo de camara.
 
 ## 12. Riesgos y mitigaciones
 

@@ -901,8 +901,9 @@ async function setupSpanishMapLabels(
     const measurementContext = measurementCanvas.getContext("2d");
 
     let lastSignature = "";
+    let cameraMoving = false;
     const refresh = () => {
-      if (viewer.isDestroyed()) return;
+      if (viewer.isDestroyed() || cameraMoving) return;
       const rectangle = viewer.camera.computeViewRectangle(viewer.scene.globe.ellipsoid);
       if (!rectangle) return;
 
@@ -927,7 +928,7 @@ async function setupSpanishMapLabels(
         (label) => {
           const screenPosition = SceneTransforms.worldToWindowCoordinates(
             viewer.scene,
-            Cartesian3.fromDegrees(label.longitude, label.latitude, 6_000)
+            Cartesian3.fromDegrees(label.longitude, label.latitude)
           );
           if (!screenPosition) return [];
           if (measurementContext) measurementContext.font = label.font;
@@ -952,7 +953,7 @@ async function setupSpanishMapLabels(
         (label) => {
           const screenPosition = SceneTransforms.worldToWindowCoordinates(
             viewer.scene,
-            Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000)
+            Cartesian3.fromDegrees(label.longitude, label.latitude)
           );
           if (!screenPosition) return [];
 
@@ -1003,7 +1004,7 @@ async function setupSpanishMapLabels(
           const { label } = value;
           dataSource.entities.add({
             id: label.id,
-            position: Cartesian3.fromDegrees(label.longitude, label.latitude, 6_000),
+            position: Cartesian3.fromDegrees(label.longitude, label.latitude),
             label: {
               text: label.text,
               font: label.font,
@@ -1013,6 +1014,7 @@ async function setupSpanishMapLabels(
               style: LabelStyle.FILL_AND_OUTLINE,
               horizontalOrigin: HorizontalOrigin.CENTER,
               verticalOrigin: VerticalOrigin.CENTER,
+              heightReference: HeightReference.CLAMP_TO_GROUND,
               disableDepthTestDistance: Number.POSITIVE_INFINITY
             }
           });
@@ -1021,7 +1023,7 @@ async function setupSpanishMapLabels(
           const visual = MAP_LABEL_VISUALS[label.kind];
           dataSource.entities.add({
             id: `${MAP_LABEL_PREFIX}${label.id}`,
-            position: Cartesian3.fromDegrees(label.longitude, label.latitude, 3_000),
+            position: Cartesian3.fromDegrees(label.longitude, label.latitude),
             label: {
               text,
               font: visual.font,
@@ -1030,7 +1032,9 @@ async function setupSpanishMapLabels(
               outlineWidth: visual.outlineWidth,
               style: LabelStyle.FILL_AND_OUTLINE,
               horizontalOrigin: HorizontalOrigin.CENTER,
-              verticalOrigin: VerticalOrigin.CENTER
+              verticalOrigin: VerticalOrigin.CENTER,
+              heightReference: HeightReference.CLAMP_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY
             }
           });
         }
@@ -1039,18 +1043,23 @@ async function setupSpanishMapLabels(
       viewer.scene.requestRender();
     };
 
-    const removeMoveListener = viewer.camera.moveEnd.addEventListener(refresh);
+    const removeMoveStartListener = viewer.camera.moveStart.addEventListener(() => {
+      cameraMoving = true;
+    });
+    const removeMoveEndListener = viewer.camera.moveEnd.addEventListener(() => {
+      cameraMoving = false;
+      refresh();
+    });
     window.addEventListener("resize", refresh);
-    const refreshTimer = window.setInterval(refresh, 1_500);
     void document.fonts.ready.then(refresh);
     refresh();
 
     return {
       refresh,
       cleanup: () => {
-        removeMoveListener();
+        removeMoveStartListener();
+        removeMoveEndListener();
         window.removeEventListener("resize", refresh);
-        window.clearInterval(refreshTimer);
         if (!viewer.isDestroyed() && viewer.dataSources.contains(dataSource)) {
           viewer.dataSources.remove(dataSource, true);
         }

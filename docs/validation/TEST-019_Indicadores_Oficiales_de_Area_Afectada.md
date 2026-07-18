@@ -15,8 +15,9 @@ Pruebas ejecutadas el 18 de julio de 2026 despues de la validacion funcional de
 | `npm run build`           | Aprobado en todos los workspaces     |
 | `npm run verify`          | Aprobado de extremo a extremo        |
 
-El comando completo termino con codigo de salida `0` en `77.7 s`. El build web
-transformo 114 modulos y genero el bundle de produccion correctamente.
+La verificacion posterior a la correccion de anclaje termino con codigo de
+salida `0` en `100.2 s`. El build web transformo 114 modulos y genero el bundle
+de produccion correctamente.
 
 ## 2. Cobertura API
 
@@ -49,6 +50,8 @@ Casos cubiertos:
 
 La suite web completa conserva ademas las pruebas del motor de colisiones,
 etiquetas en espanol, nitidez HiDPI, precache y presupuesto 4K ya existentes.
+La validacion de navegador complementa estas pruebas con tres capturas durante
+el recorrido automatico y una consola sin errores de Cesium.
 
 ## 4. Verificacion de seguridad
 
