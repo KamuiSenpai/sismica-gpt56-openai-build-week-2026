@@ -4,7 +4,7 @@
 
 | Evidencia                     | Estado    | Referencia                                |
 | ----------------------------- | --------- | ----------------------------------------- |
-| Commits dentro de la ventana  | Completo  | `dba5246`, `c8c8084`, `b560e14`           |
+| Commits dentro de la ventana  | Completo  | `5f15320`, `471cc1d`, `6a98924`           |
 | Sesion Codex identificada     | Completo  | `evidence/CODEX_SESSION_2026-07-17.md`    |
 | Integracion GPT-5.6 en codigo | Completo  | `POST /api/ai/explain-event`              |
 | Pruebas automatizadas         | Completo  | 49 API, 52 worker y 107 web               |

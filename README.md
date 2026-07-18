@@ -23,6 +23,8 @@ SISMICA consolidates earthquake events from official and scientific feeds into a
 
 En espanol: SISMICA integra fuentes sismicas, normaliza los eventos y permite solicitar una explicacion prudente de un evento concreto mediante GPT-5.6.
 
+Development attribution: the project is led and authored by KamuiSenpai. AI-assisted work was performed primarily with ChatGPT/Codex (approximately 80%); Claude had a limited supporting role in earlier tasks and is not attributed as a Git co-author.
+
 ## Build Week focus
 
 | Requirement                      | Implementation                                                                 | Evidence                                                                                     |
@@ -34,10 +36,10 @@ En espanol: SISMICA integra fuentes sismicas, normaliza los eventos y permite so
 
 Core Build Week commits:
 
-- [`dba5246`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/dba5246): GPT-5.6 specification and acceptance criteria.
-- [`c8c8084`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/c8c8084): Responses API service, schema validation and tests.
-- [`b560e14`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/b560e14): user-facing explanation panel and responsive behavior.
-- [`ec747c7`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/ec747c7): evidence capture workflow and validation records.
+- [`5f15320`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/5f15320): GPT-5.6 specification and acceptance criteria.
+- [`471cc1d`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/471cc1d): Responses API service, schema validation and tests.
+- [`6a98924`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/6a98924): user-facing explanation panel and responsive behavior.
+- [`05555fc`](https://github.com/KamuiSenpai/sismica-gpt56-build-week/commit/05555fc): evidence capture workflow and validation records.
 
 ## GPT-5.6 integration
 

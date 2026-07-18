@@ -19,10 +19,10 @@ Preparar commits nuevos entre el 17 y el 21 de julio de 2026, evidencia de sesio
 
 | Corte          | Resultado                                                                              | Commit                |
 | -------------- | -------------------------------------------------------------------------------------- | --------------------- |
-| Especificacion | SDD-018 con alcance, esquema, seguridad factual y criterios de aceptacion              | `dba5246`             |
-| Backend        | Responses API, `gpt-5.6`, JSON Schema estricto, errores controlados y 5 pruebas nuevas | `c8c8084`             |
-| Interfaz       | Panel accionado por usuario con modelo, `response_id`, disclaimer y responsive design  | `b560e14`             |
-| Navegador      | Playwright desktop y movil; se corrigio evento cambiante y contexto de apilamiento     | Incluido en `b560e14` |
+| Especificacion | SDD-018 con alcance, esquema, seguridad factual y criterios de aceptacion              | `5f15320`             |
+| Backend        | Responses API, `gpt-5.6`, JSON Schema estricto, errores controlados y 5 pruebas nuevas | `471cc1d`             |
+| Interfaz       | Panel accionado por usuario con modelo, `response_id`, disclaimer y responsive design  | `6a98924`             |
+| Navegador      | Playwright desktop y movil; se corrigio evento cambiante y contexto de apilamiento     | Incluido en `6a98924` |
 
 ## Decisiones asistidas por Codex
 
