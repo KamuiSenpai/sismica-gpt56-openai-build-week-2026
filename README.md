@@ -13,9 +13,9 @@ OpenAI Build Week 2026 submission by [KamuiSenpai](https://github.com/KamuiSenpa
 
 </div>
 
-![SISMICA multi-source monitor](output/playwright/sismica-1920x1080.png)
+![SISMICA multi-source seismic monitor focused on an event near Oaxaca, Mexico](docs/assets/sismica-monitor-2026-07-18.png)
 
-> The image above shows the base seismic monitor. Simulated UI captures are not presented as proof of a real OpenAI API call.
+> Current reference captured on July 18, 2026 at `1920x1080` from the local API and PostgreSQL dataset, without route interception. It validates the operational UI, not consumption of the OpenAI API.
 
 ## Overview
 
@@ -24,6 +24,14 @@ SISMICA consolidates earthquake events from official and scientific feeds into a
 En espanol: SISMICA integra fuentes sismicas, normaliza los eventos y permite solicitar una explicacion prudente de un evento concreto mediante GPT-5.6.
 
 Development attribution: the project is led and authored by KamuiSenpai. AI-assisted work was performed primarily with ChatGPT/Codex (approximately 80%); Claude had a limited supporting role in earlier tasks and is not attributed as a Git co-author.
+
+## Current monitor highlights
+
+- Canonical multi-source feed with regional source preference, deduplication and links to official reports.
+- Cesium 3D globe with earthquakes, estimated intensity contours, plate boundaries, active faults, volcanoes, stations and coastal context.
+- Spanish geographic labels generated from Natural Earth and rendered with adaptive zoom and collision control over a label-free cached basemap.
+- Materialized historical analytics for country activity and the strongest earthquakes recorded since 2000.
+- Browser and local TTS controls, automated broadcast direction and an explicit GPT-5.6 explanation action for the selected event.
 
 ## Build Week focus
 
@@ -146,7 +154,7 @@ Run the same checks used by GitHub Actions:
 npm run verify
 ```
 
-The verification pipeline currently covers 51 API, 52 worker and 109 web tests, plus TypeScript, ESLint and production builds. The Build Week evidence collector can also record dated commits, canonical grounding and a real OpenAI `response_id` without reading or storing the API key:
+The verification pipeline currently covers 51 API, 52 worker and 118 web tests, plus TypeScript, ESLint and production builds. The Build Week evidence collector can also record dated commits, canonical grounding and a real OpenAI `response_id` without reading or storing the API key:
 
 ```powershell
 node scripts/capture-build-week-evidence.mjs --session-id=<codex-session-id>
